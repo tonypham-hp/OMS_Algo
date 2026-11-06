@@ -1,0 +1,40 @@
+const integerFormatter = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 })
+const percentFormatter = new Intl.NumberFormat('vi-VN', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})
+
+const pad = (value: number) => String(value).padStart(2, '0')
+
+/** 1000000 → "1.000.000" */
+export function formatNumber(value: number): string {
+  return integerFormatter.format(value)
+}
+
+/** 500 → "+500", -500 → "-500", 0 → "0" */
+export function formatSigned(value: number): string {
+  return value > 0 ? `+${formatNumber(value)}` : formatNumber(value)
+}
+
+/** 1.256 → "+1,26%" */
+export function formatPercent(value: number): string {
+  const text = `${percentFormatter.format(value)}%`
+  return value > 0 ? `+${text}` : text
+}
+
+/** 33000 → "09:10:00" */
+export function formatClock(secondsOfDay: number): string {
+  const total = Math.floor(secondsOfDay)
+  return `${pad(Math.floor(total / 3600))}:${pad(Math.floor((total % 3600) / 60))}:${pad(total % 60)}`
+}
+
+/** Ngày theo giờ máy, dạng YYYY-MM-DD. */
+export function toDateString(date: Date): string {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+/** "2026-11-06" → "06/11/2026" */
+export function formatDate(dateString: string): string {
+  const [year, month, day] = dateString.split('-')
+  return `${day}/${month}/${year}`
+}
