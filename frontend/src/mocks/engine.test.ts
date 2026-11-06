@@ -9,10 +9,9 @@ import type {
   SymbolQuote,
 } from '@/types'
 import { getSessionAt, isValidTick } from '@/utils/hose'
+import { getTwapTarget, getVwapTarget } from '@/utils/schedule'
 import {
   createOrderEngine,
-  getTwapTarget,
-  getVwapTarget,
   isChildLive,
   isConditionHit,
   type OrderEngine,

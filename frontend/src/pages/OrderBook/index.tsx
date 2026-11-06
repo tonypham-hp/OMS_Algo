@@ -1,11 +1,10 @@
 import { useState } from 'react'
+import { SessionLockNotice } from '@/components/SessionLockNotice'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { SESSION_LABELS } from '@/config/hose'
 import { useOrders, usePauseOrder, useResumeOrder } from '@/hooks/useOrders'
 import { usePermission } from '@/hooks/usePermission'
 import { useMarketStore } from '@/store/market.store'
 import type { ParentOrder } from '@/types'
-import { isModifyCancelAllowed } from '@/utils/hose'
 import { isRepriceRequired } from '@/utils/orderActions'
 import { CancelOrderDialog } from './CancelOrderDialog'
 import { EditOrderDialog } from './EditOrderDialog'
@@ -19,7 +18,6 @@ export default function OrderBook() {
   const pauseOrder = usePauseOrder()
   const resumeOrder = useResumeOrder()
   const hasPermission = usePermission()
-  const session = useMarketStore((state) => state.session)
   const quotes = useMarketStore((state) => state.quotes)
   const [filters, setFilters] = useState(EMPTY_FILTERS)
   const [editing, setEditing] = useState<ParentOrder | null>(null)
@@ -45,11 +43,7 @@ export default function OrderBook() {
           accounts={accounts}
         />
 
-        {!isModifyCancelAllowed(session) && (
-          <p role="status" className="rounded-md bg-amber-500/15 p-2 text-sm text-amber-300">
-            Đang trong {SESSION_LABELS[session]}: tạm khóa Sửa và Hủy lệnh theo luật HOSE.
-          </p>
-        )}
+        <SessionLockNotice />
         {actionError && (
           <p role="alert" className="text-destructive text-sm">
             {actionError}

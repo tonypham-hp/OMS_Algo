@@ -27,6 +27,16 @@ export function useOrder(parentOrderId: string) {
   })
 }
 
+export function useOrderDetail(parentOrderId: string) {
+  const username = useAuthStore((state) => state.user?.username)
+  return useQuery({
+    queryKey: [ORDERS_KEY, username, parentOrderId, 'detail'],
+    queryFn: () => ordersService.getOrderDetail(parentOrderId),
+    refetchInterval: ORDERS_REFETCH_MS,
+    retry: false,
+  })
+}
+
 export function useOrderNotifications(parentOrderId: string, enabled: boolean) {
   const username = useAuthStore((state) => state.user?.username)
   return useQuery({
