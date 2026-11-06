@@ -34,7 +34,7 @@ interface SimulatorOptions {
 
 /** Phần trạng thái cần lưu lại để tải lại trang không mất. */
 export type SimulatorState = Pick<MarketState, 'trading_date' | 'sim_seconds' | 'speed' | 'quotes'> & {
-  last_quote_seconds: number
+  quote_age_ms: number
   feed_stale: boolean
 }
 
@@ -141,8 +141,8 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
   let speed: SimSpeed = 1
   let quotes = symbols.map((item) => createInitialQuote(item.symbol, item.ref_price))
   let timer: ReturnType<typeof setInterval> | null = null
-  /** Giờ giả lập của lần cuối nhận được giá. */
-  let lastQuoteSeconds = simSeconds
+  /** Thời gian thật (mili giây) kể từ lần cuối nhận được giá. Cố ý không nhân với tốc độ tua. */
+  let quoteAgeMs = 0
   /** Đang bơm lỗi giá trễ: đồng hồ vẫn chạy nhưng không có giá mới. */
   let feedStale = false
 
@@ -150,7 +150,7 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
     return {
       trading_date: tradingDate,
       sim_seconds: simSeconds,
-      quote_age_seconds: simSeconds - lastQuoteSeconds,
+      quote_age_seconds: Math.floor(quoteAgeMs / 1000),
       session: getSessionAt(simSeconds),
       speed,
       quotes,
@@ -174,12 +174,13 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
     simSeconds = next
 
     if (feedStale) {
+      quoteAgeMs += elapsedMs
       quotes = quotes.map((quote) => ({ ...quote, tick_direction: 0 }))
       notify()
       return
     }
 
-    lastQuoteSeconds = simSeconds
+    quoteAgeMs = 0
     const session = getSessionAt(simSeconds)
     quotes = quotes.map((quote) => {
       if (isAuctionSession(previous) && session !== previous) return matchAuction(quote, random)
@@ -221,7 +222,7 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
     reset() {
       tradingDate = getStartDate()
       simSeconds = START_SECONDS
-      lastQuoteSeconds = simSeconds
+      quoteAgeMs = 0
       feedStale = false
       quotes = symbols.map((item) => createInitialQuote(item.symbol, item.ref_price))
       notify()
@@ -230,7 +231,7 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
     nextDay() {
       tradingDate = getNextTradingDate(tradingDate)
       simSeconds = START_SECONDS
-      lastQuoteSeconds = simSeconds
+      quoteAgeMs = 0
       quotes = quotes.map((quote) => createInitialQuote(quote.symbol, quote.last_price))
       notify()
     },
@@ -240,14 +241,14 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
         sim_seconds: simSeconds,
         speed,
         quotes,
-        last_quote_seconds: lastQuoteSeconds,
+        quote_age_ms: quoteAgeMs,
         feed_stale: feedStale,
       }
     },
     importState(state: SimulatorState) {
       tradingDate = state.trading_date
       simSeconds = state.sim_seconds
-      lastQuoteSeconds = state.last_quote_seconds
+      quoteAgeMs = state.quote_age_ms
       feedStale = state.feed_stale
       speed = state.speed
       quotes = state.quotes

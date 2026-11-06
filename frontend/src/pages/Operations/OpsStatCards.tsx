@@ -26,7 +26,7 @@ export function OpsStatCards({ overview }: { overview: OpsOverview }) {
         <Stat
           label="Độ trễ dữ liệu giá"
           value={`${formatNumber(overview.quote_age_seconds)} giây`}
-          note={overview.is_feed_stale ? 'Đang trễ, lệnh đang chạy bị tạm dừng' : 'Bình thường'}
+          note={overview.is_feed_stale ? 'Đang trễ, lệnh đang chạy bị tạm dừng' : 'Tính theo giây thật, trễ từ 5 giây'}
           isAlert={overview.is_feed_stale}
         />
       </div>

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { MarketState, NotificationType, OrderEventAction, SessionCode, StrategyParameter, SymbolQuote } from '@/types'
 import { getSessionAt } from '@/utils/hose'
-import { createOrderEngine, isChildLive, QUOTE_STALE_SECONDS, type OrderEngine } from './engine'
+import { getReopenBlock } from '@/utils/orderActions'
+import { createOrderEngine, isChildLive, MAX_DATA_DELAY, type OrderEngine } from './engine'
+import { createSeedData } from './seedOrders'
 import { createMarketSimulator } from './simulator'
 
 const TODAY = '2026-11-06'
@@ -40,8 +42,8 @@ const slice = (qty: number): StrategyParameter[] => [
 ]
 
 /** Iceberg giá thấp hơn thị trường: lệnh con được gửi nhưng không khớp, nên kết quả không phụ thuộc giá. */
-function setup(accountNo = ACCOUNT_A, limitPrice = 90_000) {
-  const engine = createOrderEngine({ random: () => 0 })
+function setup(accountNo = ACCOUNT_A, limitPrice = 90_000, random = () => 0) {
+  const engine = createOrderEngine({ random })
   let seconds = AT_1000
   engine.onMarketTick(marketAt(seconds))
   const place = (account = accountNo) =>
@@ -129,11 +131,39 @@ describe('TC-E2E-130 Core từ chối lệnh con', () => {
   })
 })
 
-describe('TC-E2E-141 mất ACK từ Core', () => {
+describe('TC-E2E-140 timeout trước khi Core tạo lệnh', () => {
+  it('TC-E2E-140 hủy Child UNKNOWN rồi sinh đúng 1 Child mới', () => {
+    const { engine, place, tick } = setup()
+    const id = place()
+    engine.injectTimeout(id, 'TIMEOUT_BEFORE_CORE')
+    tick(2)
+    expect(childStatuses(engine, id)).toEqual(['UNKNOWN'])
+    expect(hasEvent(engine, id, 'CHILD_UNKNOWN')).toBe(true)
+    expect(hasNotification(engine, id, 'CHILD_UNKNOWN')).toBe(true)
+    tick(3)
+    expect(engine.getChildren(id)).toHaveLength(1) // Chưa đối soát xong thì chưa được gửi lại.
+
+    tick(5)
+    expect(childStatuses(engine, id)).toEqual(['CANCELLED', 'ACKNOWLEDGED'])
+    expect(engine.getWorkingQty(id)).toBe(500)
+    expect(hasEvent(engine, id, 'RECOVERY')).toBe(true)
+    expect(hasNotification(engine, id, 'CHILD_RECOVERED')).toBe(true)
+  })
+
+  it.each([0, 0.49, 0.5, 0.99])('TC-E2E-140 kết cục cố định, không phụ thuộc số ngẫu nhiên (%s)', (value) => {
+    const { engine, place, tick } = setup(ACCOUNT_A, 90_000, () => value)
+    const id = place()
+    engine.injectTimeout(id, 'TIMEOUT_BEFORE_CORE')
+    tick(10)
+    expect(childStatuses(engine, id)).toEqual(['CANCELLED', 'ACKNOWLEDGED'])
+  })
+})
+
+describe('TC-E2E-141 timeout nhưng Core đã tạo lệnh', () => {
   it('TC-E2E-141 Child UNKNOWN vẫn tính là working, không gửi trùng trong lúc chờ', () => {
     const { engine, place, tick } = setup()
     const id = place()
-    engine.injectLostAck(id, true)
+    engine.injectTimeout(id, 'TIMEOUT_AFTER_CORE')
     tick(2)
 
     expect(childStatuses(engine, id)).toEqual(['UNKNOWN'])
@@ -144,10 +174,10 @@ describe('TC-E2E-141 mất ACK từ Core', () => {
     expect(engine.getChildren(id)).toHaveLength(1)
   })
 
-  it('TC-E2E-141 Core đã nhận: cùng Child về ACKNOWLEDGED, không có Child mới', () => {
+  it('TC-E2E-141 giữ Child, đối soát về ACKNOWLEDGED, không sinh Child mới', () => {
     const { engine, place, tick } = setup()
     const id = place()
-    engine.injectLostAck(id, true)
+    engine.injectTimeout(id, 'TIMEOUT_AFTER_CORE')
     tick(2)
     const before = engine.getChildren(id)[0]
     tick(8)
@@ -164,22 +194,18 @@ describe('TC-E2E-141 mất ACK từ Core', () => {
     expect(hasNotification(engine, id, 'CHILD_RECOVERED')).toBe(true)
   })
 
-  it('TC-E2E-141 Core chưa nhận: hủy Child rồi mới sinh đúng một Child mới', () => {
-    const { engine, place, tick } = setup()
+  it.each([0, 0.49, 0.5, 0.99])('TC-E2E-141 kết cục cố định, không phụ thuộc số ngẫu nhiên (%s)', (value) => {
+    const { engine, place, tick } = setup(ACCOUNT_A, 90_000, () => value)
     const id = place()
-    engine.injectLostAck(id, false)
+    engine.injectTimeout(id, 'TIMEOUT_AFTER_CORE')
     tick(10)
-
-    expect(childStatuses(engine, id)).toEqual(['CANCELLED', 'ACKNOWLEDGED'])
-    expect(engine.getWorkingQty(id)).toBe(500)
-    expect(hasEvent(engine, id, 'RECOVERY')).toBe(true)
-    expect(hasNotification(engine, id, 'CHILD_RECOVERED')).toBe(true)
+    expect(childStatuses(engine, id)).toEqual(['ACKNOWLEDGED'])
   })
 
   it('TC-E2E-141 Core đã nhận nhưng lệnh cha đã tạm dừng: hủy Child, không để lệnh sống trên lệnh dừng', () => {
     const { engine, place, tick } = setup()
     const id = place()
-    engine.injectLostAck(id, true)
+    engine.injectTimeout(id, 'TIMEOUT_AFTER_CORE')
     tick(2)
     engine.pauseOrder(id, 'tester')
     tick(6)
@@ -190,7 +216,7 @@ describe('TC-E2E-141 mất ACK từ Core', () => {
   it('TC-E2E-141 khớp tiếp sau đối soát: tổng KL không vượt total_qty', () => {
     const { engine, place, tick } = setup(ACCOUNT_A, 100_000)
     const id = place()
-    engine.injectLostAck(id, true)
+    engine.injectTimeout(id, 'TIMEOUT_AFTER_CORE')
     tick(60)
 
     const order = engine.getOrder(id)
@@ -238,12 +264,12 @@ describe('TC-E2E-180 dữ liệu giá trễ', () => {
     tick(2)
     expect(childStatuses(engine, id)).toEqual(['ACKNOWLEDGED'])
 
-    tick(1, QUOTE_STALE_SECONDS)
+    tick(1, MAX_DATA_DELAY)
     expect(engine.getOrder(id)).toMatchObject({ status: 'PAUSED_SYSTEM', reason_code: 'MARKET_DATA_STALE' })
     expect(childStatuses(engine, id)).toEqual(['CANCELLED'])
     expect(hasEvent(engine, id, 'PAUSE')).toBe(true)
     expect(hasNotification(engine, id, 'PARENT_PAUSED')).toBe(true)
-    tick(2, QUOTE_STALE_SECONDS)
+    tick(2, MAX_DATA_DELAY)
     expect(engine.getChildren(id)).toHaveLength(1)
 
     tick(1)
@@ -256,7 +282,7 @@ describe('TC-E2E-180 dữ liệu giá trễ', () => {
   it('TC-E2E-180 chưa tới ngưỡng thì chưa tạm dừng', () => {
     const { engine, place, tick } = setup()
     const id = place()
-    tick(1, QUOTE_STALE_SECONDS - 1)
+    tick(1, MAX_DATA_DELAY - 1)
     expect(engine.getOrder(id).status).toBe('ACTIVE')
   })
 
@@ -266,7 +292,7 @@ describe('TC-E2E-180 dữ liệu giá trễ', () => {
     tick(3)
     const executed = engine.getOrder(id).executed_qty
     expect(executed).toBeGreaterThan(0)
-    tick(1, QUOTE_STALE_SECONDS)
+    tick(1, MAX_DATA_DELAY)
     tick(1)
     expect(engine.getOrder(id).status).toBe('PARTIALLY_EXECUTED')
   })
@@ -277,7 +303,7 @@ describe('TC-E2E-180 dữ liệu giá trễ', () => {
     const byKill = place(ACCOUNT_B)
     engine.pauseOrder(byUser, 'tester')
     engine.activateKillSwitch({ scope: 'ACCOUNT', account_no: ACCOUNT_B }, 'vanhanh')
-    tick(1, QUOTE_STALE_SECONDS)
+    tick(1, MAX_DATA_DELAY)
     tick(1)
 
     expect(engine.getOrder(byUser).status).toBe('PAUSED_USER')
@@ -287,7 +313,7 @@ describe('TC-E2E-180 dữ liệu giá trễ', () => {
   it('TC-E2E-180 đồng hồ đã dừng ở cuối ngày vẫn chạy lại được khi có giá mới', () => {
     const { engine, place, tick } = setup()
     const id = place()
-    tick(1, QUOTE_STALE_SECONDS)
+    tick(1, MAX_DATA_DELAY)
     expect(engine.getOrder(id).status).toBe('PAUSED_SYSTEM')
 
     // Cùng giờ giả lập với nhịp trước: đồng hồ không nhích, nhưng đã có giá mới.
@@ -304,13 +330,196 @@ describe('TC-E2E-180 dữ liệu giá trễ', () => {
 
     simulator.tick(1000)
     simulator.tick(1000)
-    expect(simulator.getState().quote_age_seconds).toBe(20)
+    expect(simulator.getState().quote_age_seconds).toBe(2)
     expect(simulator.getState().quotes[0]).toEqual({ ...frozen, tick_direction: 0 })
 
     simulator.setFeedStale(false)
-    expect(simulator.getState().quote_age_seconds).toBe(20)
+    expect(simulator.getState().quote_age_seconds).toBe(2)
     simulator.tick(1000)
     expect(simulator.getState().quote_age_seconds).toBe(0)
+  })
+})
+
+describe('TC-E2E-180 ngưỡng MAX_DATA_DELAY tính bằng giây thật', () => {
+  it.each([1, 10, 60] as const)('TC-E2E-180 ở tốc độ x%s: trễ đúng sau 5 giây thật', (speed) => {
+    const simulator = createMarketSimulator({ random: () => 0, symbols: [{ symbol: 'FPT', ref_price: 100_000 }] })
+    const engine = createOrderEngine({ random: () => 0 })
+    simulator.setSpeed(speed)
+    simulator.subscribe((state) => engine.onMarketTick(state))
+    const id = engine.createOrder(
+      {
+        client_request_id: 'req',
+        account_no: ACCOUNT_A,
+        symbol: 'FPT',
+        side: 'BUY',
+        total_qty: 1_000,
+        limit_price: 90_000,
+        strategy_type: 'ICEBERG',
+        persistence_mode: 'DAY',
+        valid_to: null,
+        parameters: slice(500),
+      },
+      'tester',
+    ).parent_order_id
+    simulator.setFeedStale(true)
+
+    for (let second = 1; second < MAX_DATA_DELAY; second += 1) simulator.tick(1000)
+    expect(simulator.getState().quote_age_seconds).toBe(MAX_DATA_DELAY - 1)
+    expect(engine.getOrder(id).status).toBe('ACTIVE')
+
+    simulator.tick(1000)
+    expect(simulator.getState().quote_age_seconds).toBe(MAX_DATA_DELAY)
+    expect(engine.getOrder(id)).toMatchObject({ status: 'PAUSED_SYSTEM', reason_code: 'MARKET_DATA_STALE' })
+  })
+})
+
+describe('Vận hành mở lại lệnh PAUSED_SYSTEM', () => {
+  it('ghi RESUME kèm user_id và lý do, có Notification, lệnh chạy tiếp', () => {
+    const { engine, place, tick } = setup()
+    const id = place()
+    engine.injectRejectNext(id)
+    engine.injectRejectNext(id)
+    tick(3)
+    expect(engine.getOrder(id).reason_code).toBe('CHILD_REJECTED_REPEAT')
+
+    engine.reopenOrder(id, '  Đã kiểm tra với Core  ', 'vanhanh')
+
+    expect(engine.getOrder(id)).toMatchObject({ status: 'ACTIVE', reason_code: null })
+    expect(engine.getEvents(id).at(-1)).toMatchObject({
+      action: 'RESUME',
+      user_id: 'vanhanh',
+      old_value: 'PAUSED_SYSTEM',
+      new_value: 'ACTIVE',
+      reason: 'Đã kiểm tra với Core',
+    })
+    expect(engine.getNotifications(id).at(-1)).toMatchObject({ notification_type: 'PARENT_RESUMED' })
+    tick(2)
+    expect(engine.getChildren(id).at(-1)?.status).toBe('ACKNOWLEDGED')
+  })
+
+  it('đếm lại số lần từ chối: một lần từ chối sau khi mở lại chưa làm tạm dừng', () => {
+    const { engine, place, tick } = setup()
+    const id = place()
+    engine.injectRejectNext(id)
+    engine.injectRejectNext(id)
+    tick(3)
+    engine.reopenOrder(id, 'Đã xử lý', 'vanhanh')
+    engine.injectRejectNext(id)
+    tick(2)
+    expect(engine.getOrder(id).status).toBe('ACTIVE')
+  })
+
+  it('đã khớp một phần thì về PARTIALLY_EXECUTED', () => {
+    const { engine, place, tick } = setup(ACCOUNT_A, 100_000)
+    const id = place()
+    tick(3)
+    engine.activateKillSwitch({ scope: 'ALL' }, 'vanhanh')
+    engine.releaseKillSwitch({ scope: 'ALL' })
+    engine.reopenOrder(id, 'Đã xử lý', 'vanhanh')
+    expect(engine.getOrder(id).status).toBe('PARTIALLY_EXECUTED')
+  })
+
+  it.each(['', '   '])('bắt buộc có lý do (%j)', (reason) => {
+    const { engine, place } = setup()
+    const id = place()
+    engine.activateKillSwitch({ scope: 'ALL' }, 'vanhanh')
+    engine.releaseKillSwitch({ scope: 'ALL' })
+    expect(() => engine.reopenOrder(id, reason, 'vanhanh')).toThrow('lý do')
+    expect(engine.getOrder(id).status).toBe('PAUSED_SYSTEM')
+  })
+
+  it('kill switch còn bật thì không cho mở lại, gỡ rồi mới được', () => {
+    const { engine, place } = setup()
+    const id = place()
+    engine.activateKillSwitch({ scope: 'ACCOUNT', account_no: ACCOUNT_A }, 'vanhanh')
+    expect(() => engine.reopenOrder(id, 'Thử mở', 'vanhanh')).toThrow('Kill switch')
+
+    engine.releaseKillSwitch({ scope: 'ACCOUNT', account_no: ACCOUNT_A })
+    engine.reopenOrder(id, 'Đã hết sự cố', 'vanhanh')
+    expect(engine.getOrder(id).status).toBe('ACTIVE')
+  })
+
+  it('giá ngoài biên độ thì phải sửa giá, dữ liệu giá còn trễ thì chưa mở được', () => {
+    expect(getReopenBlock('PRICE_OUT_OF_BAND', false, false)).toContain('sửa giá')
+    expect(getReopenBlock('KILL_SWITCH', false, true)).toContain('còn trễ')
+    expect(getReopenBlock('KILL_SWITCH', true, false)).toContain('Kill switch')
+    expect(getReopenBlock(null, false, false)).toBeNull()
+
+    const { engine, place, tick } = setup()
+    const id = place()
+    engine.activateKillSwitch({ scope: 'ALL' }, 'vanhanh')
+    engine.releaseKillSwitch({ scope: 'ALL' })
+    tick(1, MAX_DATA_DELAY)
+    expect(() => engine.reopenOrder(id, 'Thử mở', 'vanhanh')).toThrow('còn trễ')
+  })
+
+  it('chỉ áp dụng cho lệnh PAUSED_SYSTEM', () => {
+    const { engine, place } = setup()
+    const id = place()
+    expect(() => engine.reopenOrder(id, 'Thử mở', 'vanhanh')).toThrow('hệ thống tạm dừng')
+    engine.pauseOrder(id, 'tester')
+    expect(() => engine.reopenOrder(id, 'Thử mở', 'vanhanh')).toThrow('hệ thống tạm dừng')
+  })
+
+  it('đường Tiếp tục của khách hàng vẫn bị chặn với PAUSED_SYSTEM', () => {
+    const { engine, place } = setup()
+    const id = place()
+    engine.activateKillSwitch({ scope: 'ALL' }, 'vanhanh')
+    engine.releaseKillSwitch({ scope: 'ALL' })
+    expect(() => engine.resumeOrder(id, 'khachhang')).toThrow()
+    expect(engine.getOrder(id).status).toBe('PAUSED_SYSTEM')
+  })
+})
+
+describe('Đối soát ngay Child UNKNOWN', () => {
+  it('lệnh mẫu VHM: Child UNKNOWN chưa có Core ID thì hủy, ghi RECOVERY kèm người thao tác, rồi mở lại được', () => {
+    const engine = createOrderEngine({ random: () => 0 })
+    engine.load(createSeedData(new Date(2026, 10, 6)))
+    engine.onMarketTick(marketAt(AT_1000))
+    const vhm = engine.listOrders().find((order) => order.symbol === 'VHM')?.parent_order_id ?? ''
+    const unknown = engine.getChildren(vhm).find((child) => child.status === 'UNKNOWN')
+    const executed = engine.getOrder(vhm).executed_qty
+    expect(unknown?.core_order_id).toBeNull()
+    expect(engine.getWorkingQty(vhm)).toBe(1_000)
+
+    engine.reconcileChildNow(unknown?.child_order_id ?? '', 'vanhanh')
+
+    expect(engine.getChildren(vhm).find((child) => child.child_order_id === unknown?.child_order_id)?.status).toBe('CANCELLED')
+    expect(engine.getWorkingQty(vhm)).toBe(0)
+    expect(engine.getOrder(vhm).executed_qty).toBe(executed)
+    expect(engine.getEvents(vhm).at(-1)).toMatchObject({ action: 'RECOVERY', user_id: 'vanhanh', new_value: 'CANCELLED' })
+    expect(hasNotification(engine, vhm, 'CHILD_RECOVERED')).toBe(true)
+
+    engine.reopenOrder(vhm, 'Đã đối soát với Core', 'vanhanh')
+    expect(engine.getOrder(vhm).status).toBe('PARTIALLY_EXECUTED')
+  })
+
+  it('TC-E2E-141 đối soát ngay theo đúng kết cục đã định, không chờ hết thời gian', () => {
+    const { engine, place, tick } = setup()
+    const id = place()
+    engine.injectTimeout(id, 'TIMEOUT_AFTER_CORE')
+    tick(2)
+    engine.reconcileChildNow(engine.getChildren(id)[0].child_order_id, 'vanhanh')
+    expect(childStatuses(engine, id)).toEqual(['ACKNOWLEDGED'])
+    tick(8)
+    expect(engine.getChildren(id)).toHaveLength(1) // Không đối soát lần hai khi hết thời gian.
+  })
+
+  it('TC-E2E-140 đối soát ngay: hủy Child và sinh đúng 1 Child mới', () => {
+    const { engine, place, tick } = setup()
+    const id = place()
+    engine.injectTimeout(id, 'TIMEOUT_BEFORE_CORE')
+    tick(2)
+    engine.reconcileChildNow(engine.getChildren(id)[0].child_order_id, 'vanhanh')
+    tick(8)
+    expect(childStatuses(engine, id)).toEqual(['CANCELLED', 'ACKNOWLEDGED'])
+  })
+
+  it('Child không còn UNKNOWN thì báo lỗi', () => {
+    const { engine, place, tick } = setup()
+    const id = place()
+    tick(2)
+    expect(() => engine.reconcileChildNow(engine.getChildren(id)[0].child_order_id, 'vanhanh')).toThrow('UNKNOWN')
   })
 })
 
@@ -353,7 +562,7 @@ describe('Kill switch', () => {
   it('Kill switch giữ Child UNKNOWN vì chưa biết Core đang giữ gì', () => {
     const { engine, place, tick } = setup()
     const id = place()
-    engine.injectLostAck(id, true)
+    engine.injectTimeout(id, 'TIMEOUT_AFTER_CORE')
     tick(2)
     engine.activateKillSwitch({ scope: 'ALL' }, 'vanhanh')
     expect(childStatuses(engine, id)).toEqual(['UNKNOWN'])
@@ -429,7 +638,7 @@ describe('tổng quan vận hành', () => {
     const unknown = place()
     const paused = place(ACCOUNT_B)
     engine.injectRejectNext(rejected)
-    engine.injectLostAck(unknown, true)
+    engine.injectTimeout(unknown, 'TIMEOUT_AFTER_CORE')
     tick(2)
     engine.activateKillSwitch({ scope: 'ACCOUNT', account_no: ACCOUNT_B }, 'vanhanh')
 
@@ -446,10 +655,10 @@ describe('tổng quan vận hành', () => {
 
   it('giá trễ có cảnh báo toàn hệ thống, không gắn với lệnh nào', () => {
     const { engine, tick } = setup()
-    tick(1, QUOTE_STALE_SECONDS)
+    tick(1, MAX_DATA_DELAY)
     const overview = engine.getOpsOverview()
     expect(overview.is_feed_stale).toBe(true)
-    expect(overview.quote_age_seconds).toBe(QUOTE_STALE_SECONDS)
+    expect(overview.quote_age_seconds).toBe(MAX_DATA_DELAY)
     expect(overview.alerts).toEqual([expect.objectContaining({ type: 'MARKET_DATA_STALE', parent_order_id: null })])
   })
 
@@ -465,7 +674,7 @@ describe('tổng quan vận hành', () => {
   it('lệnh bị kill switch không còn lỗi đang chờ, vì không bao giờ gửi lệnh con nữa', () => {
     const { engine, place } = setup()
     const id = place()
-    engine.injectLostAck(id, true)
+    engine.injectTimeout(id, 'TIMEOUT_AFTER_CORE')
     engine.activateKillSwitch({ scope: 'ALL' }, 'vanhanh')
     expect(engine.getOpsOverview().pending_faults).toEqual([])
   })
@@ -474,7 +683,7 @@ describe('tổng quan vận hành', () => {
     const { engine, place, tick } = setup()
     const id = place()
     engine.injectRejectNext(id)
-    tick(1, QUOTE_STALE_SECONDS)
+    tick(1, MAX_DATA_DELAY)
     expect(engine.getOpsOverview().pending_faults).toHaveLength(1)
 
     tick(3)
@@ -487,7 +696,7 @@ describe('lưu và nạp lại trạng thái bơm lỗi', () => {
   it('giữ lỗi đang chờ, đối soát đang chờ và kill switch', () => {
     const { engine, place, tick } = setup()
     const recovering = place(ACCOUNT_B)
-    engine.injectLostAck(recovering, true)
+    engine.injectTimeout(recovering, 'TIMEOUT_AFTER_CORE')
     tick(2)
     const waiting = place()
     engine.injectRejectNext(waiting)

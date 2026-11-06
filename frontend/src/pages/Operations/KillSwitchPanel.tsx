@@ -76,7 +76,7 @@ export function KillSwitchPanel({ orders, overview }: KillSwitchPanelProps) {
               </Button>
             </div>
           ))}
-          <p className="text-muted-foreground text-xs">Gỡ chỉ cho đặt lệnh mới. Lệnh đã bị dừng vẫn tạm dừng, chỉ còn hủy được.</p>
+          <p className="text-muted-foreground text-xs">Gỡ chỉ cho đặt lệnh mới. Lệnh đã bị dừng vẫn tạm dừng, vận hành phải mở lại từng lệnh.</p>
         </div>
       )}
       {release.error && (

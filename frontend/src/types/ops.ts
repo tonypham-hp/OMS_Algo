@@ -7,18 +7,23 @@ export interface OpsAlert {
   type: OpsAlertType
   /** null với cảnh báo toàn hệ thống (dữ liệu giá trễ): không có lệnh nào để mở. */
   parent_order_id: string | null
+  /** Có ở cảnh báo của lệnh con, để đối soát được ngay từ cảnh báo. */
+  child_order_id: string | null
   message: string
   time: string
 }
 
-export type PendingFaultType = 'REJECT' | 'LOST_ACK'
+/** TIMEOUT_BEFORE_CORE: Core chưa tạo lệnh (TC-E2E-140). TIMEOUT_AFTER_CORE: Core đã tạo lệnh (TC-E2E-141). */
+export type PendingFaultType = 'REJECT' | 'TIMEOUT_BEFORE_CORE' | 'TIMEOUT_AFTER_CORE'
 
 /** Lỗi đã bơm, chờ lệnh con tiếp theo của lệnh cha được gửi đi. */
 export interface PendingFault {
   parent_order_id: string
   type: PendingFaultType
-  /** Chỉ dùng cho LOST_ACK: Core thực ra đã nhận lệnh hay chưa, đối soát xong mới biết. */
-  core_received: boolean
+}
+
+export interface ReopenOrderRequest {
+  reason: string
 }
 
 export interface FaultTargetRequest {

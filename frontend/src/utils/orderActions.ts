@@ -38,6 +38,21 @@ export function isRepriceRequired(status: ParentOrderStatus, reasonCode: OrderRe
   return status === 'PAUSED_SYSTEM' && reasonCode === 'PRICE_OUT_OF_BAND'
 }
 
+/**
+ * Lý do vận hành chưa được mở lại lệnh PAUSED_SYSTEM. null là được phép. UI và API giả lập dùng chung hàm này.
+ * Giá ngoài biên độ phải sửa giá, vì mở lại nguyên giá cũ thì lệnh con sẽ sai biên độ.
+ */
+export function getReopenBlock(
+  reasonCode: OrderReasonCode | null,
+  isKillSwitched: boolean,
+  isFeedStale: boolean,
+): string | null {
+  if (isKillSwitched) return 'Kill switch còn bật, chưa mở lại được'
+  if (reasonCode === 'PRICE_OUT_OF_BAND') return 'Giá ngoài biên độ: phải sửa giá, không mở lại trực tiếp'
+  if (isFeedStale) return 'Dữ liệu giá còn trễ, chưa mở lại được'
+  return null
+}
+
 export interface OrderActionItem {
   action: OrderAction
   label: string

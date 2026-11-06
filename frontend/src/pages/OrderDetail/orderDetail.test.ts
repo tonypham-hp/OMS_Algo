@@ -355,6 +355,11 @@ describe('nhật ký', () => {
     expect(formatEventValue('KILL_SWITCH:ACCOUNT:058C123456', parentEvent)).toBe('Kill switch tài khoản 058C123456')
   })
 
+  it('mở lại lệnh ghi kèm lý do vận hành nhập', () => {
+    const event = { child_order_id: null, old_value: 'PAUSED_SYSTEM', new_value: 'ACTIVE', reason: 'Đã kiểm tra với Core' }
+    expect(formatEventChange(event)).toBe('Hệ thống tạm dừng → Đang hoạt động · Lý do: Đã kiểm tra với Core')
+  })
+
   it('lần khớp ghi KL, giá và mã khớp, định dạng kiểu Việt Nam', () => {
     const event = {
       child_order_id: 'C1',

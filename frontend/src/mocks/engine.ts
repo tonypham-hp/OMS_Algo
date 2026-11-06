@@ -36,7 +36,13 @@ import type {
 } from '@/types'
 import { formatDate, formatNumber } from '@/lib/format'
 import { isAuctionSession, parseTimeToSeconds, validatePrice } from '@/utils/hose'
-import { getAllowedActions, isRepriceRequired, isTerminalStatus, type OrderAction } from '@/utils/orderActions'
+import {
+  getAllowedActions,
+  getReopenBlock,
+  isRepriceRequired,
+  isTerminalStatus,
+  type OrderAction,
+} from '@/utils/orderActions'
 import { getTwapTarget, getVwapTarget } from '@/utils/schedule'
 
 const LOT = QTY_LOT_SIZE
@@ -47,8 +53,8 @@ const MAX_FILL_LOTS_PER_TICK = 5
 const MAX_CONSECUTIVE_REJECTS = 2
 /** Child UNKNOWN do mất ACK được đối soát sau từng này nhịp, tức khoảng 5 giây thật ở mọi tốc độ. */
 const RECOVERY_TICKS = 5
-/** Giá không đổi mới quá từng này giây giả lập thì coi là dữ liệu giá trễ. */
-export const QUOTE_STALE_SECONDS = 5
+/** Không có giá mới quá từng này giây thật thì coi là dữ liệu giá trễ, ở mọi tốc độ tua. */
+export const MAX_DATA_DELAY = 5
 
 const TERMINAL_CHILD_STATUSES: ReadonlySet<ChildOrderStatus> = new Set([
   'FILLED',
@@ -261,7 +267,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
     oldValue: string | null,
     newValue: string | null,
     userId = 'SYSTEM',
-    fillDetail?: FillDetail,
+    extra?: Pick<OrderEvent, 'fill_detail' | 'reason'>,
   ) {
     eventSequence += 1
     events.push({
@@ -274,15 +280,21 @@ export function createOrderEngine(options: EngineOptions = {}) {
       old_value: oldValue,
       new_value: newValue,
       event_time: nowIso(),
-      ...(fillDetail && { fill_detail: fillDetail }),
+      ...extra,
     })
   }
 
-  function setParentStatus(parent: ParentOrder, next: ParentOrderStatus, action: OrderEventAction, userId?: string) {
+  function setParentStatus(
+    parent: ParentOrder,
+    next: ParentOrderStatus,
+    action: OrderEventAction,
+    userId?: string,
+    reason?: string,
+  ) {
     const previous = parent.status
     parent.status = next
     parent.updated_at = nowIso()
-    logEvent(parent.parent_order_id, null, action, previous, next, userId)
+    logEvent(parent.parent_order_id, null, action, previous, next, userId, reason ? { reason } : undefined)
   }
 
   function setChildStatus(
@@ -294,7 +306,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
   ) {
     const previous = child.status
     child.status = next
-    logEvent(child.parent_order_id, child.child_order_id, action, previous, next, userId, fillDetail)
+    logEvent(child.parent_order_id, child.child_order_id, action, previous, next, userId, fillDetail && { fill_detail: fillDetail })
   }
 
   function notify(parentOrderId: string, type: NotificationType, message: string) {
@@ -454,16 +466,16 @@ export function createOrderEngine(options: EngineOptions = {}) {
       child.sent_at = nowIso()
       const fault = takePendingFault(parent)
       if (fault?.type === 'REJECT') rejectChild(parent, child)
-      else if (fault?.type === 'LOST_ACK') loseChildAck(parent, child, fault)
+      else if (fault) timeOutChild(parent, child, fault)
       else acknowledgeChild(parent, child, 'CHILD_SEND')
     }
   }
 
-  function acknowledgeChild(parent: ParentOrder, child: ChildOrder, action: OrderEventAction) {
+  function acknowledgeChild(parent: ParentOrder, child: ChildOrder, action: OrderEventAction, userId?: string) {
     coreSequence += 1
     child.core_order_id = `CORE-${String(coreSequence).padStart(6, '0')}`
     runtimeOf(parent).rejectStreak = 0
-    setChildStatus(child, 'ACKNOWLEDGED', action)
+    setChildStatus(child, 'ACKNOWLEDGED', action, userId)
   }
 
   function takePendingFault(parent: ParentOrder) {
@@ -486,13 +498,13 @@ export function createOrderEngine(options: EngineOptions = {}) {
     }
   }
 
-  /** Mất ACK: chưa biết Core có nhận hay không, nên vẫn tính là working để không gửi trùng. */
-  function loseChildAck(parent: ParentOrder, child: ChildOrder, fault: PendingFault) {
+  /** Timeout: chưa biết Core đã tạo lệnh hay chưa, nên vẫn tính là working để không gửi trùng. */
+  function timeOutChild(parent: ParentOrder, child: ChildOrder, fault: PendingFault) {
     setChildStatus(child, 'UNKNOWN', 'CHILD_UNKNOWN')
     pendingRecoveries.push({
       child_order_id: child.child_order_id,
       ticksLeft: RECOVERY_TICKS,
-      core_received: fault.core_received,
+      core_received: fault.type === 'TIMEOUT_AFTER_CORE',
     })
     notify(
       parent.parent_order_id,
@@ -514,13 +526,13 @@ export function createOrderEngine(options: EngineOptions = {}) {
    * Đối soát ra trạng thái thật. Core đã nhận thì vẫn là lệnh con đó, không gửi lại.
    * Core chưa nhận, hoặc lệnh cha đã ngừng chạy, thì hủy để giải phóng phần KL.
    */
-  function recoverChild(item: PendingRecovery) {
+  function recoverChild(item: Pick<PendingRecovery, 'child_order_id' | 'core_received'>, userId?: string) {
     const child = children.find((entry) => entry.child_order_id === item.child_order_id)
     if (child?.status !== 'UNKNOWN') return
     const parent = requireParent(child.parent_order_id)
     const isKept = item.core_received && isRunning(parent)
-    if (isKept) acknowledgeChild(parent, child, 'RECOVERY')
-    else reconcileUnknownChild(child.child_order_id)
+    if (isKept) acknowledgeChild(parent, child, 'RECOVERY', userId)
+    else reconcileUnknownChild(child.child_order_id, userId)
     notify(
       parent.parent_order_id,
       'CHILD_RECOVERED',
@@ -532,7 +544,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
 
   /** Giá trễ thì lệnh đang chạy phải dừng, vì quyết định theo giá cũ. Có giá mới thì chỉ chạy lại lệnh dừng vì lý do này. */
   function checkMarketData(state: MarketState) {
-    const isStale = state.quote_age_seconds >= QUOTE_STALE_SECONDS
+    const isStale = state.quote_age_seconds >= MAX_DATA_DELAY
     for (const parent of parents) {
       if (isStale && isRunning(parent)) {
         pauseBySystem(parent, 'MARKET_DATA_STALE', 'dữ liệu giá thị trường bị trễ.')
@@ -1179,11 +1191,45 @@ export function createOrderEngine(options: EngineOptions = {}) {
     setChildStatus(child, 'UNKNOWN', 'CHILD_UNKNOWN')
   }
   /** Đối soát xong: phần chưa khớp của Child UNKNOWN được giải phóng để sinh lại. */
-  function reconcileUnknownChild(childOrderId: string) {
+  function reconcileUnknownChild(childOrderId: string, userId?: string) {
     const child = children.find((item) => item.child_order_id === childOrderId)
     if (!child || child.status !== 'UNKNOWN') throw new EngineError('Không tìm thấy lệnh con UNKNOWN', 404)
-    setChildStatus(child, 'CANCELLED', 'RECOVERY')
+    setChildStatus(child, 'CANCELLED', 'RECOVERY', userId)
     settleParent(requireParent(child.parent_order_id))
+  }
+
+  /**
+   * Vận hành đối soát ngay, không chờ hết thời gian. Child đang chờ đối soát tự động thì theo kết cục đã định;
+   * Child khác (lệnh mẫu) coi là Core đã nhận khi có core_order_id.
+   */
+  function reconcileChildNow(childOrderId: string, userId: string) {
+    const child = children.find((item) => item.child_order_id === childOrderId)
+    if (child?.status !== 'UNKNOWN') throw new EngineError('Lệnh con này không còn ở trạng thái UNKNOWN', 404)
+    const pending = pendingRecoveries.find((item) => item.child_order_id === childOrderId)
+    pendingRecoveries = pendingRecoveries.filter((item) => item !== pending)
+    recoverChild({ child_order_id: childOrderId, core_received: pending?.core_received ?? child.core_order_id !== null }, userId)
+    return child
+  }
+
+  /** Vận hành mở lại lệnh PAUSED_SYSTEM: bắt buộc có lý do, ghi RESUME kèm người thao tác và lý do. */
+  function reopenOrder(parentOrderId: string, reason: string, userId: string) {
+    const parent = requireParent(parentOrderId)
+    if (parent.status !== 'PAUSED_SYSTEM') throw new EngineError('Chỉ mở lại được lệnh đang bị hệ thống tạm dừng')
+    const trimmed = reason.trim()
+    if (trimmed === '') throw new EngineError('Phải nhập lý do mở lại', 422)
+    const isStale = (market?.quote_age_seconds ?? 0) >= MAX_DATA_DELAY
+    const block = getReopenBlock(parent.reason_code, isKillSwitched(parent.account_no), isStale)
+    if (block) throw new EngineError(block)
+
+    const runtime = runtimeOf(parent)
+    runtime.lastVolume = null // Không tính bù KL của POV trong lúc tạm dừng.
+    runtime.povAccumulated = 0
+    runtime.rejectStreak = 0
+    parent.reason_code = null
+    setParentStatus(parent, parent.executed_qty > 0 ? 'PARTIALLY_EXECUTED' : 'ACTIVE', 'RESUME', userId, trimmed)
+    notify(parentOrderId, 'PARENT_RESUMED', `Lệnh ${parentOrderId} được ${userId} mở lại. Lý do: ${trimmed}`)
+    settleParent(parent)
+    return parent
   }
 
   function requireRunning(parentOrderId: string) {
@@ -1194,14 +1240,14 @@ export function createOrderEngine(options: EngineOptions = {}) {
 
   function injectRejectNext(parentOrderId: string) {
     const parent = requireRunning(parentOrderId)
-    pendingFaults.push({ parent_order_id: parentOrderId, type: 'REJECT', core_received: false })
+    pendingFaults.push({ parent_order_id: parentOrderId, type: 'REJECT' })
     return parent
   }
 
-  /** `coreReceived`: Core thực ra đã nhận lệnh chưa. Không truyền thì chọn ngẫu nhiên, để demo thấy cả hai kết cục. */
-  function injectLostAck(parentOrderId: string, coreReceived = random() < 0.5) {
+  /** TC-E2E-140: timeout trước khi Core tạo lệnh. TC-E2E-141: timeout nhưng Core đã tạo lệnh. */
+  function injectTimeout(parentOrderId: string, type: 'TIMEOUT_BEFORE_CORE' | 'TIMEOUT_AFTER_CORE') {
     const parent = requireRunning(parentOrderId)
-    pendingFaults.push({ parent_order_id: parentOrderId, type: 'LOST_ACK', core_received: coreReceived })
+    pendingFaults.push({ parent_order_id: parentOrderId, type })
     return parent
   }
 
@@ -1259,6 +1305,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
         alert_id: 'MARKET_DATA_STALE',
         type: 'MARKET_DATA_STALE',
         parent_order_id: null,
+        child_order_id: null,
         message: `Dữ liệu giá trễ ${formatNumber(market?.quote_age_seconds ?? 0)} giây.`,
         time: nowIso(),
       })
@@ -1272,6 +1319,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
           alert_id: `PAUSED-${parent.parent_order_id}`,
           type: 'PARENT_PAUSED_SYSTEM',
           parent_order_id: parent.parent_order_id,
+          child_order_id: null,
           message: reason ?? `Lệnh ${parent.parent_order_id} đang bị hệ thống tạm dừng.`,
           time: parent.updated_at,
         })
@@ -1284,6 +1332,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
           alert_id: child.child_order_id,
           type: isUnknown ? 'CHILD_UNKNOWN' : 'CHILD_REJECTED',
           parent_order_id: parent.parent_order_id,
+          child_order_id: child.child_order_id,
           message: `${parent.symbol}: lệnh con chu kỳ ${child.cycle_no} ${isUnknown ? 'mất phản hồi từ Core' : 'bị Core từ chối'}.`,
           time: child.sent_at ?? child.created_at,
         })
@@ -1300,7 +1349,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
       ]),
     ) as Record<ParentOrderStatus, number>
     const quoteAge = market?.quote_age_seconds ?? 0
-    const isStale = quoteAge >= QUOTE_STALE_SECONDS
+    const isStale = quoteAge >= MAX_DATA_DELAY
     return {
       status_counts,
       child_unknown: children.filter((child) => child.status === 'UNKNOWN').length,
@@ -1404,8 +1453,10 @@ export function createOrderEngine(options: EngineOptions = {}) {
     getRepriceFields,
     markChildUnknown,
     reconcileUnknownChild,
+    reconcileChildNow,
+    reopenOrder,
     injectRejectNext,
-    injectLostAck,
+    injectTimeout,
     injectDuplicateFill,
     activateKillSwitch,
     releaseKillSwitch,

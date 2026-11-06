@@ -10,7 +10,8 @@ import { isRunningStatus } from '@/utils/orderActions'
 
 const PENDING_LABELS: Record<PendingFaultType, string> = {
   REJECT: 'Core từ chối',
-  LOST_ACK: 'Mất ACK',
+  TIMEOUT_BEFORE_CORE: 'Timeout, Core chưa tạo lệnh',
+  TIMEOUT_AFTER_CORE: 'Timeout, Core đã tạo lệnh',
 }
 
 interface FaultInjectionPanelProps {
@@ -44,12 +45,28 @@ export function FaultInjectionPanel({ orders, overview }: FaultInjectionPanelPro
       run: () => run({ type: 'reject', parentOrderId: targetId }, `Đã bơm: Core sẽ từ chối lệnh con tiếp theo của ${targetId}.`),
     },
     {
-      code: 'TC-E2E-141',
-      title: 'Mất ACK từ Core',
-      expected: 'Child UNKNOWN, khoảng 5 giây sau đối soát ra trạng thái thật, không gửi trùng.',
+      code: 'TC-E2E-140',
+      title: 'Timeout trước khi Core tạo lệnh',
+      expected: 'Child UNKNOWN, khoảng 5 giây sau đối soát: hủy Child, sinh đúng 1 Child mới.',
       button: 'Bơm lỗi',
       needsOrder: true,
-      run: () => run({ type: 'lost-ack', parentOrderId: targetId }, `Đã bơm: lệnh con tiếp theo của ${targetId} sẽ mất ACK.`),
+      run: () =>
+        run(
+          { type: 'timeout-before-core', parentOrderId: targetId },
+          `Đã bơm: lệnh con tiếp theo của ${targetId} sẽ timeout, Core chưa tạo lệnh.`,
+        ),
+    },
+    {
+      code: 'TC-E2E-141',
+      title: 'Timeout nhưng Core đã tạo lệnh',
+      expected: 'Child UNKNOWN, khoảng 5 giây sau đối soát: giữ Child, về ACKNOWLEDGED, không sinh Child mới.',
+      button: 'Bơm lỗi',
+      needsOrder: true,
+      run: () =>
+        run(
+          { type: 'timeout-after-core', parentOrderId: targetId },
+          `Đã bơm: lệnh con tiếp theo của ${targetId} sẽ timeout, Core đã tạo lệnh.`,
+        ),
     },
     {
       code: 'TC-E2E-150',
@@ -68,14 +85,14 @@ export function FaultInjectionPanel({ orders, overview }: FaultInjectionPanelPro
       run: () =>
         overview.feed_fault_active
           ? run({ type: 'market-data', stale: false }, 'Đã có giá mới: các lệnh sẽ tự chạy lại ở nhịp kế tiếp.')
-          : run({ type: 'market-data', stale: true }, 'Đã ngừng cập nhật giá: sau 5 giây giả lập sẽ tính là trễ.'),
+          : run({ type: 'market-data', stale: true }, 'Đã ngừng cập nhật giá: sau 5 giây thật sẽ tính là trễ, ở mọi tốc độ.'),
     },
   ]
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex max-w-xl flex-col gap-1.5">
-        <Label htmlFor="fault_target">Lệnh áp dụng (TC-E2E-130, 141, 150)</Label>
+        <Label htmlFor="fault_target">Lệnh áp dụng (TC-E2E-130, 140, 141, 150)</Label>
         <Select value={targetId} onValueChange={setPickedId} disabled={running.length === 0}>
           <SelectTrigger id="fault_target" className="w-full">
             <SelectValue placeholder="Không có lệnh đang chạy" />

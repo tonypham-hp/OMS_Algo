@@ -32,6 +32,8 @@ export interface OrderEvent {
   event_time: string
   /** Ngoài ERD: chỉ có ở event FILL. old_value, new_value vẫn là trạng thái lệnh con trước và sau khi khớp. */
   fill_detail?: FillDetail
+  /** Ngoài ERD: lý do vận hành nhập khi mở lại lệnh PAUSED_SYSTEM. */
+  reason?: string
 }
 
 export type NotificationType =

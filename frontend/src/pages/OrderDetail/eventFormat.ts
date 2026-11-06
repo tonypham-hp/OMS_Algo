@@ -54,11 +54,12 @@ function formatFields(entries: Array<[string, unknown]>) {
 
 /** Nội dung một dòng nhật ký: lần khớp ghi KL, giá, mã khớp; các event khác ghi giá trị cũ → mới. */
 export function formatEventChange(
-  event: Pick<OrderEvent, 'child_order_id' | 'old_value' | 'new_value' | 'fill_detail'>,
+  event: Pick<OrderEvent, 'child_order_id' | 'old_value' | 'new_value' | 'fill_detail' | 'reason'>,
 ): string {
   const fill = event.fill_detail
   if (fill) return `Khớp ${formatNumber(fill.qty)} CP @ ${formatNumber(fill.price)} · ${fill.exchange_match_id}`
-  return `${formatEventValue(event.old_value, event)} → ${formatEventValue(event.new_value, event)}`
+  const change = `${formatEventValue(event.old_value, event)} → ${formatEventValue(event.new_value, event)}`
+  return event.reason ? `${change} · Lý do: ${event.reason}` : change
 }
 
 /** Đổi giá trị thô trong nhật ký (mã trạng thái, JSON, chuỗi của engine) thành tiếng Việt. */

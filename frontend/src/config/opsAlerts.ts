@@ -1,4 +1,11 @@
-import type { OpsAlertType } from '@/types'
+import type { OpsAlertType, OrderReasonCode } from '@/types'
+
+export const REASON_LABELS: Record<OrderReasonCode, string> = {
+  PRICE_OUT_OF_BAND: 'Giá ngoài biên độ',
+  CHILD_REJECTED_REPEAT: 'Core từ chối lặp lại',
+  MARKET_DATA_STALE: 'Dữ liệu giá trễ',
+  KILL_SWITCH: 'Kill switch',
+}
 
 const DANGER = 'bg-red-500/20 text-red-300'
 const WARNING = 'bg-amber-500/20 text-amber-300'

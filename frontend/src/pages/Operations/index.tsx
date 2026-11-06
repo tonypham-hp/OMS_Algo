@@ -5,6 +5,7 @@ import { FaultInjectionPanel } from './FaultInjectionPanel'
 import { KillSwitchPanel } from './KillSwitchPanel'
 import { OpsAlertList } from './OpsAlertList'
 import { OpsStatCards } from './OpsStatCards'
+import { PausedOrdersPanel } from './PausedOrdersPanel'
 
 export default function Operations() {
   const overview = useOpsOverview()
@@ -55,6 +56,16 @@ export default function Operations() {
               </CardContent>
             </Card>
           </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                <h2>Lệnh hệ thống tạm dừng</h2>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <PausedOrdersPanel orders={allOrders} overview={overview.data} />
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader>
               <CardTitle>

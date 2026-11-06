@@ -10,6 +10,7 @@ import type {
   OrderDetailData,
   OrderPriceField,
   ParentOrder,
+  ReopenOrderRequest,
   RepriceOrderRequest,
   UpdateOrderRequest,
 } from '@/types'
@@ -77,10 +78,24 @@ export const handlers = [
     return handleOps(request, () => orderEngine.injectRejectNext(parent_order_id))
   }),
 
-  http.post('*/api/ops/faults/lost-ack', async ({ request }) => {
+  http.post('*/api/ops/faults/timeout-before-core', async ({ request }) => {
     const { parent_order_id } = (await request.json()) as FaultTargetRequest
-    return handleOps(request, () => orderEngine.injectLostAck(parent_order_id))
+    return handleOps(request, () => orderEngine.injectTimeout(parent_order_id, 'TIMEOUT_BEFORE_CORE'))
   }),
+
+  http.post('*/api/ops/faults/timeout-after-core', async ({ request }) => {
+    const { parent_order_id } = (await request.json()) as FaultTargetRequest
+    return handleOps(request, () => orderEngine.injectTimeout(parent_order_id, 'TIMEOUT_AFTER_CORE'))
+  }),
+
+  http.post('*/api/ops/orders/:id/reopen', async ({ request, params }) => {
+    const { reason } = (await request.json()) as ReopenOrderRequest
+    return handleOps(request, (username) => orderEngine.reopenOrder(String(params.id), reason, username))
+  }),
+
+  http.post('*/api/ops/children/:id/reconcile', ({ request, params }) =>
+    handleOps(request, (username) => orderEngine.reconcileChildNow(String(params.id), username)),
+  ),
 
   http.post('*/api/ops/faults/duplicate-fill', async ({ request }) => {
     const { parent_order_id } = (await request.json()) as FaultTargetRequest

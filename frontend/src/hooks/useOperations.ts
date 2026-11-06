@@ -6,15 +6,17 @@ const OPS_KEY = 'ops'
 const OPS_REFETCH_MS = 1000
 
 export type FaultCommand =
-  | { type: 'reject' | 'lost-ack' | 'duplicate-fill'; parentOrderId: string }
+  | { type: 'reject' | 'timeout-before-core' | 'timeout-after-core' | 'duplicate-fill'; parentOrderId: string }
   | { type: 'market-data'; stale: boolean }
 
 function runFault(command: FaultCommand): Promise<unknown> {
   switch (command.type) {
     case 'reject':
       return opsService.injectReject(command.parentOrderId)
-    case 'lost-ack':
-      return opsService.injectLostAck(command.parentOrderId)
+    case 'timeout-before-core':
+      return opsService.injectTimeoutBeforeCore(command.parentOrderId)
+    case 'timeout-after-core':
+      return opsService.injectTimeoutAfterCore(command.parentOrderId)
     case 'duplicate-fill':
       return opsService.injectDuplicateFill(command.parentOrderId)
     case 'market-data':
@@ -49,6 +51,19 @@ export function useInjectFault() {
 export function useActivateKillSwitch() {
   const invalidate = useInvalidateOps()
   return useMutation({ mutationFn: opsService.activateKillSwitch, onSuccess: invalidate })
+}
+
+export function useReopenOrder() {
+  const invalidate = useInvalidateOps()
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => opsService.reopenOrder(id, { reason }),
+    onSuccess: invalidate,
+  })
+}
+
+export function useReconcileChild() {
+  const invalidate = useInvalidateOps()
+  return useMutation({ mutationFn: opsService.reconcileChild, onSuccess: invalidate })
 }
 
 export function useReleaseKillSwitch() {
