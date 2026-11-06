@@ -50,8 +50,9 @@ describe('lưu trạng thái giả lập', () => {
     ['JSON hỏng', '{khong-phai-json'],
     ['null', 'null'],
     ['sai phiên bản', JSON.stringify({ version: 999, market: {}, engine: {} })],
-    ['thiếu dữ liệu', JSON.stringify({ version: 1, market: { trading_date: '2026-11-06' }, engine: {} })],
-    ['sai kiểu', JSON.stringify({ version: 1, market: { trading_date: 1, sim_seconds: 'x', quotes: 1 }, engine: { parents: 1 } })],
+    ['bản lưu cũ', JSON.stringify({ version: 1, market: { trading_date: '2026-11-06', sim_seconds: 1, quotes: [] }, engine: {} })],
+    ['thiếu dữ liệu', JSON.stringify({ version: 2, market: { trading_date: '2026-11-06' }, engine: {} })],
+    ['sai kiểu', JSON.stringify({ version: 2, market: { trading_date: 1, sim_seconds: 'x', quotes: 1 }, engine: { parents: 1 } })],
   ])('dữ liệu hỏng (%s) trả về null để nạp lại dữ liệu mẫu', (_, raw) => {
     const storage = fakeStorage(raw)
     expect(loadSimState(() => storage)).toBeNull()

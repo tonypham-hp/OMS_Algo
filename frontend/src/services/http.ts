@@ -28,6 +28,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const message = (body as { message?: string } | null)?.message
     throw new ApiError(message ?? `Lỗi máy chủ (${response.status})`, response.status)
   }
+  // API của app luôn trả JSON. Phản hồi khác (ví dụ trang HTML) là lỗi, không phải "không có dữ liệu".
+  if (body === null) throw new ApiError('Phản hồi từ máy chủ không hợp lệ', response.status)
   return body as T
 }
 

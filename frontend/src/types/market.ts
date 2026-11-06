@@ -8,7 +8,10 @@ export interface SymbolQuote {
   ref_price: number
   ceiling_price: number
   floor_price: number
+  /** Giá khớp gần nhất. Trong ATO, ATC đứng yên cho tới lúc khớp định kỳ. */
   last_price: number
+  /** Giá dự kiến khớp, chỉ có trong phiên ATO, ATC. Ngoài hai phiên này là null. */
+  indicative_price: number | null
   last_qty: number
   total_volume: number
   bid_price: number

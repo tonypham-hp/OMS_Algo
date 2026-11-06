@@ -42,6 +42,7 @@ function quoteAt(last: number, totalVolume = 0): SymbolQuote {
     ceiling_price: 107_000,
     floor_price: 93_000,
     last_price: last,
+    indicative_price: null,
     last_qty: 100,
     total_volume: totalVolume,
     bid_price: last - 100,
@@ -511,18 +512,332 @@ describe('sinh lệnh con theo thuật toán', () => {
 })
 
 describe('phiên giao dịch', () => {
-  it.each([
-    ['ATO', hhmm(9, 5)],
-    ['nghỉ trưa', hhmm(12, 0)],
-    ['ATC', hhmm(14, 35)],
-  ])('%s: không sinh và không khớp lệnh con', (_, seconds) => {
+  it('nghỉ trưa: không sinh và không khớp lệnh con', () => {
     const engine = newEngine()
     const id = place(engine, 'ICEBERG', [intParam('slice_qty', 300)], { limit_price: 100_500 })
-    run(engine, 10, 100_000, seconds)
+    run(engine, 10, 100_000, hhmm(12, 0))
     expect(engine.getChildren(id)).toHaveLength(0)
     expect(engine.getOrder(id).executed_qty).toBe(0)
   })
+})
 
+describe('khớp định kỳ ATO, ATC', () => {
+  const OPEN_AUCTION = hhmm(9, 15)
+  const CLOSE_AUCTION = hhmm(14, 45)
+
+  function startInAto() {
+    const engine = createOrderEngine({ random: seededRandom(1) })
+    engine.onMarketTick(marketAt(hhmm(9, 10)))
+    return engine
+  }
+
+  it.each([
+    ['ATO', hhmm(9, 5)],
+    ['ATC', hhmm(14, 35)],
+  ])('trong %s: có gửi lệnh con nhưng chưa khớp dù đủ điều kiện giá', (_, seconds) => {
+    const engine = newEngine()
+    const id = place(engine, 'ICEBERG', [intParam('slice_qty', 300)], { limit_price: 100_500 })
+    run(engine, 10, 100_000, seconds)
+
+    expect(engine.getChildren(id)).toHaveLength(1)
+    expect(engine.getChildren(id)[0]).toMatchObject({ order_type: 'LO', status: 'ACKNOWLEDGED', filled_qty: 0 })
+    expect(engine.getOrder(id).executed_qty).toBe(0)
+    expect(engine.getExecutions(id)).toHaveLength(0)
+  })
+
+  it('09:15 khớp một lần tại giá định kỳ, khớp hết phần đủ điều kiện', () => {
+    const engine = startInAto()
+    const id = place(engine, 'ICEBERG', [intParam('slice_qty', 700)], { limit_price: 100_500 })
+    run(engine, 3, 100_000, hhmm(9, 10))
+
+    engine.onMarketTick(marketAt(OPEN_AUCTION, 100_200))
+    const executions = engine.getExecutions(id)
+    expect(executions).toHaveLength(1)
+    expect(executions[0]).toMatchObject({ price: 100_200, qty: 700 })
+    expect(engine.getChildren(id)[0].status).toBe('FILLED')
+    expect(engine.getOrder(id)).toMatchObject({ executed_qty: 700, status: 'PARTIALLY_EXECUTED' })
+  })
+
+  it('LO có giá kém hơn giá định kỳ thì không khớp, chờ tiếp ở phiên liên tục', () => {
+    const engine = startInAto()
+    const id = place(engine, 'ICEBERG', [intParam('slice_qty', 700)], { limit_price: 99_000 })
+    run(engine, 3, 100_000, hhmm(9, 10))
+
+    engine.onMarketTick(marketAt(OPEN_AUCTION, 100_200))
+    expect(engine.getExecutions(id)).toHaveLength(0)
+    expect(engine.getChildren(id)[0].status).toBe('ACKNOWLEDGED')
+    run(engine, 5, 100_200, OPEN_AUCTION)
+    expect(engine.getExecutions(id)).toHaveLength(0)
+    run(engine, 40, 98_900, OPEN_AUCTION + 10)
+    expect(engine.getExecutions(id).length).toBeGreaterThan(0)
+  })
+
+  it('chỉ khớp định kỳ một lần: nhịp lặp lại ở cùng thời điểm không chạy lại', () => {
+    const engine = startInAto()
+    const id = place(engine, 'ICEBERG', [intParam('slice_qty', 300)], { limit_price: 100_500 })
+    run(engine, 2, 100_000, hhmm(9, 10))
+    engine.onMarketTick(marketAt(OPEN_AUCTION, 100_000))
+    expect(engine.getExecutions(id)).toHaveLength(1)
+    expect(engine.getExecutions(id)[0].qty).toBe(300)
+
+    // Không còn là nhịp chuyển phiên: chỉ khớp dần theo luật phiên liên tục, tối đa 500 CP mỗi nhịp.
+    const other = place(engine, 'ICEBERG', [intParam('slice_qty', 1_000)], { limit_price: 100_500 })
+    engine.onMarketTick(marketAt(OPEN_AUCTION + 1, 100_000))
+    engine.onMarketTick(marketAt(OPEN_AUCTION + 2, 100_000))
+    expect(engine.getExecutions(other)[0].qty).toBeLessThanOrEqual(500)
+  })
+
+  it('phát lại cùng thời điểm (đổi tốc độ) không tính là một nhịp mới', () => {
+    const engine = startInAto()
+    const id = place(engine, 'ICEBERG', [intParam('slice_qty', 300)], { limit_price: 100_500 })
+    run(engine, 2, 100_000, hhmm(9, 10))
+    engine.onMarketTick(marketAt(OPEN_AUCTION, 100_000))
+    const executions = engine.getExecutions(id).length
+    const children = engine.getChildren(id).length
+
+    engine.onMarketTick(marketAt(OPEN_AUCTION, 100_000))
+    engine.onMarketTick(marketAt(OPEN_AUCTION, 100_000))
+    expect(engine.getExecutions(id)).toHaveLength(executions)
+    expect(engine.getChildren(id)).toHaveLength(children)
+    expect(engine.getChildren(id).at(-1)?.status).toBe('CREATED')
+  })
+
+  it('Stop không kích hoạt bằng giá cũ trong ATO, chờ giá thật ở phiên liên tục', () => {
+    const engine = startInAto()
+    const id = place(engine, 'STOP', [intParam('trigger_price', 100_000)])
+    run(engine, 3, 100_000, hhmm(9, 10))
+    expect(engine.getConditions(id)[0].status).toBe('ACTIVE')
+    expect(engine.getChildren(id)).toHaveLength(0)
+
+    engine.onMarketTick(marketAt(OPEN_AUCTION, 100_000))
+    expect(engine.getConditions(id)[0].status).toBe('TRIGGERED')
+    expect(engine.getChildren(id)[0].order_type).toBe('MTL')
+  })
+
+  it('Stop đã kích hoạt, vào ATC: hủy MTL còn sót, sinh lệnh ATC, khớp đúng 14:45', () => {
+    const engine = newEngine()
+    const id = place(engine, 'STOP', [intParam('trigger_price', 100_000)])
+    engine.onMarketTick(marketAt(hhmm(14, 29)))
+    engine.onMarketTick(marketAt(hhmm(14, 29) + 1))
+    expect(engine.getChildren(id)[0].order_type).toBe('MTL')
+    const filledBefore = engine.getOrder(id).executed_qty
+    expect(filledBefore).toBeLessThan(1_000)
+
+    engine.onMarketTick(marketAt(hhmm(14, 30)))
+    expect(engine.getChildren(id)[0].status).toBe('CANCELLED')
+    const atc = engine.getChildren(id)[1]
+    expect(atc).toMatchObject({ order_type: 'ATC', price: null, quantity: 1_000 - filledBefore })
+
+    run(engine, 10, 100_000, hhmm(14, 31))
+    expect(engine.getOrder(id).executed_qty).toBe(filledBefore)
+
+    engine.onMarketTick(marketAt(CLOSE_AUCTION, 100_300))
+    expect(engine.getChildren(id)[1].status).toBe('FILLED')
+    expect(engine.getExecutions(id).at(-1)).toMatchObject({ price: 100_300, qty: 1_000 - filledBefore })
+    expect(engine.getOrder(id)).toMatchObject({ executed_qty: 1_000, status: 'COMPLETED' })
+  })
+
+  it('Tiếp tục lệnh đã kích hoạt trong ATO: sinh lệnh ATO, khớp lúc 09:15', () => {
+    const engine = newEngine()
+    const id = place(engine, 'STOP', [intParam('trigger_price', 100_000)], {
+      persistence_mode: 'MULTI_SESSION',
+      valid_to: '2026-12-31',
+    })
+    run(engine, 1)
+    engine.pauseOrder(id, 'tester')
+    engine.onMarketTick(marketAt(hhmm(14, 45)))
+    const nextDay = '2026-11-09'
+    engine.onMarketTick(marketAt(hhmm(9, 10), 100_000, 0, undefined, nextDay))
+    engine.resumeOrder(id, 'tester')
+    engine.onMarketTick(marketAt(hhmm(9, 11), 100_000, 0, undefined, nextDay))
+    expect(engine.getChildren(id).at(-1)).toMatchObject({ order_type: 'ATO', price: null })
+
+    engine.onMarketTick(marketAt(hhmm(9, 12), 100_000, 0, undefined, nextDay))
+    engine.onMarketTick(marketAt(OPEN_AUCTION, 100_400, 0, undefined, nextDay))
+    expect(engine.getChildren(id).at(-1)?.status).toBe('FILLED')
+    expect(engine.getExecutions(id).at(-1)?.price).toBe(100_400)
+  })
+
+  it('ATC: khớp trước, phần còn lại của lệnh DAY mới hết hạn', () => {
+    const engine = newEngine()
+    const id = place(engine, 'ICEBERG', [intParam('slice_qty', 300)], { limit_price: 100_500 })
+    engine.onMarketTick(marketAt(hhmm(14, 35)))
+    engine.onMarketTick(marketAt(hhmm(14, 36)))
+    engine.onMarketTick(marketAt(CLOSE_AUCTION, 100_100))
+
+    expect(engine.getOrder(id)).toMatchObject({ executed_qty: 300, status: 'EXPIRED' })
+    expect(engine.getExecutions(id)).toHaveLength(1)
+    expect(engine.getExecutions(id)[0]).toMatchObject({ price: 100_100, qty: 300 })
+  })
+
+  it('lệnh tạm dừng và Child UNKNOWN không tham gia khớp định kỳ', () => {
+    const engine = startInAto()
+    const paused = place(engine, 'ICEBERG', [intParam('slice_qty', 300)], { limit_price: 100_500 })
+    const unknown = place(engine, 'ICEBERG', [intParam('slice_qty', 300)], { limit_price: 100_500 })
+    run(engine, 2, 100_000, hhmm(9, 10))
+    engine.pauseOrder(paused, 'tester')
+    engine.markChildUnknown(engine.getChildren(unknown)[0].child_order_id)
+
+    engine.onMarketTick(marketAt(OPEN_AUCTION, 100_000))
+    expect(engine.getExecutions(paused)).toHaveLength(0)
+    expect(engine.getExecutions(unknown)).toHaveLength(0)
+    expect(engine.getChildren(unknown)[0].status).toBe('UNKNOWN')
+  })
+
+  it('khớp định kỳ không vượt total và không trùng mã khớp', () => {
+    const engine = startInAto()
+    const id = place(engine, 'ICEBERG', [intParam('slice_qty', 1_000)], { limit_price: 100_500 })
+    const other = place(engine, 'ICEBERG', [intParam('slice_qty', 1_000)], { limit_price: 100_500 })
+    run(engine, 2, 100_000, hhmm(9, 10))
+    engine.onMarketTick(marketAt(OPEN_AUCTION, 100_000))
+
+    expect(engine.getOrder(id)).toMatchObject({ executed_qty: 1_000, status: 'COMPLETED' })
+    const ids = [...engine.getExecutions(id), ...engine.getExecutions(other)].map((item) => item.exchange_match_id)
+    expect(new Set(ids).size).toBe(2)
+  })
+
+  it('nạp lại trạng thái giữa ATO vẫn khớp định kỳ đúng lúc', () => {
+    const engine = startInAto()
+    const id = place(engine, 'ICEBERG', [intParam('slice_qty', 300)], { limit_price: 100_500 })
+    run(engine, 2, 100_000, hhmm(9, 10))
+
+    const restored = createOrderEngine({ random: seededRandom(2) })
+    restored.importState(JSON.parse(JSON.stringify(engine.exportState())))
+    restored.onMarketTick(marketAt(OPEN_AUCTION, 100_000))
+    expect(restored.getExecutions(id)).toHaveLength(1)
+  })
+})
+
+describe('đầu ngày mới: giá giới hạn của lệnh mang sang', () => {
+  const NEXT_DAY = '2026-11-09'
+  const CLOSE = hhmm(14, 45)
+  const LONG_TERM = { persistence_mode: 'MULTI_SESSION', valid_to: '2026-12-31' } as const
+
+  /** Ngày mới có tham chiếu 80.000: trần 85.600, sàn 74.400. */
+  function newDayMarket(seconds = hhmm(9, 10)): MarketState {
+    return {
+      ...marketAt(seconds, 80_000, 0, undefined, NEXT_DAY),
+      quotes: [{ ...quoteAt(80_000), ref_price: 80_000, ceiling_price: 85_600, floor_price: 74_400 }],
+    }
+  }
+
+  function carried(extra: Partial<CreateOrderRequest> = {}) {
+    const engine = newEngine()
+    const id = place(engine, 'ICEBERG', [intParam('slice_qty', 300)], { limit_price: 94_000, ...LONG_TERM, ...extra })
+    run(engine, 2)
+    engine.onMarketTick(marketAt(CLOSE))
+    return { engine, id }
+  }
+
+  it('ngoài biên độ: PAUSED_SYSTEM, có OrderEvent và Notification lý do, không sinh lệnh con', () => {
+    const { engine, id } = carried()
+    const childrenBefore = engine.getChildren(id).length
+
+    engine.onMarketTick(newDayMarket())
+    engine.onMarketTick(newDayMarket(hhmm(9, 11)))
+    engine.onMarketTick(newDayMarket(hhmm(10, 0)))
+
+    expect(engine.getOrder(id).status).toBe('PAUSED_SYSTEM')
+    expect(engine.getChildren(id)).toHaveLength(childrenBefore)
+    expect(engine.getWorkingQty(id)).toBe(0)
+
+    const events = engine.getEvents(id)
+    expect(events.find((event) => event.action === 'PAUSE')).toMatchObject({
+      old_value: 'ACTIVE',
+      new_value: 'PAUSED_SYSTEM',
+      user_id: 'SYSTEM',
+    })
+    expect(events.find((event) => event.new_value?.startsWith('OUT_OF_BAND'))).toMatchObject({
+      action: 'DECISION',
+      old_value: 'LIMIT_PRICE:94000',
+      new_value: 'OUT_OF_BAND:floor=74400,ceiling=85600',
+    })
+
+    const notifications = engine.getNotifications(id)
+    expect(notifications).toHaveLength(1)
+    expect(notifications[0].notification_type).toBe('PARENT_PAUSED')
+    expect(notifications[0].message).toContain('94.000')
+    expect(notifications[0].message).toContain('sàn 74.400')
+    expect(notifications[0].message).toContain('trần 85.600')
+    expect(notifications[0].sent_at.startsWith(NEXT_DAY)).toBe(true)
+  })
+
+  it('giá thấp hơn sàn mới cũng bị tạm dừng, đúng bằng trần hoặc sàn thì vẫn chạy', () => {
+    const below = carried({ limit_price: 93_000 })
+    below.engine.onMarketTick({ ...newDayMarket(), quotes: [{ ...quoteAt(100_000), floor_price: 93_100 }] })
+    expect(below.engine.getOrder(below.id).status).toBe('PAUSED_SYSTEM')
+
+    const atFloor = carried({ limit_price: 93_100 })
+    atFloor.engine.onMarketTick({ ...newDayMarket(), quotes: [{ ...quoteAt(100_000), floor_price: 93_100 }] })
+    expect(atFloor.engine.getOrder(atFloor.id).status).toBe('ACTIVE')
+
+    const atCeiling = carried({ limit_price: 94_000 })
+    atCeiling.engine.onMarketTick({ ...newDayMarket(), quotes: [{ ...quoteAt(100_000), ceiling_price: 94_000 }] })
+    expect(atCeiling.engine.getOrder(atCeiling.id).status).toBe('ACTIVE')
+    expect(atCeiling.engine.getNotifications(atCeiling.id)).toHaveLength(0)
+  })
+
+  it('trong biên độ: chạy bình thường, không có thông báo', () => {
+    const { engine, id } = carried()
+    engine.onMarketTick(marketAt(hhmm(10, 0), 100_000, 0, undefined, NEXT_DAY))
+    expect(engine.getOrder(id).status).toBe('ACTIVE')
+    expect(engine.getNotifications(id)).toHaveLength(0)
+    expect(engine.getChildren(id).at(-1)?.status).toBe('CREATED')
+  })
+
+  it('lệnh không có giá giới hạn không bị ảnh hưởng', () => {
+    const engine = newEngine()
+    const id = place(engine, 'STOP', [intParam('trigger_price', 100_500)], { ...LONG_TERM })
+    engine.onMarketTick(marketAt(CLOSE))
+    engine.onMarketTick(newDayMarket())
+    expect(engine.getOrder(id).status).toBe('ACTIVE')
+  })
+
+  it('lệnh đang tạm dừng bởi người dùng cũng chuyển PAUSED_SYSTEM, không Tiếp tục được', () => {
+    const engine = newEngine()
+    const id = place(engine, 'ICEBERG', [intParam('slice_qty', 300)], { limit_price: 94_000, ...LONG_TERM })
+    engine.pauseOrder(id, 'tester')
+    engine.onMarketTick(marketAt(CLOSE))
+    engine.onMarketTick(newDayMarket())
+
+    expect(engine.getOrder(id).status).toBe('PAUSED_SYSTEM')
+    expect(() => engine.resumeOrder(id, 'tester')).toThrow('không cho phép')
+    expect(() => engine.cancelOrder(id, 'tester')).toThrow('ATO')
+    engine.onMarketTick(newDayMarket(hhmm(10, 0)))
+    expect(engine.cancelOrder(id, 'tester').status).toBe('CANCELLED')
+  })
+
+  it('lệnh đã PAUSED_SYSTEM từ trước không báo lặp lại', () => {
+    const { engine, id } = carried()
+    engine.onMarketTick(newDayMarket())
+    engine.onMarketTick(marketAt(CLOSE, 80_000, 0, undefined, NEXT_DAY))
+    engine.onMarketTick({ ...newDayMarket(), trading_date: '2026-11-10' })
+    expect(engine.getNotifications(id)).toHaveLength(1)
+  })
+
+  it('Bracket đã vào đủ không xét giá giới hạn nữa', () => {
+    const engine = newEngine()
+    const id = place(engine, 'BRACKET', [intParam('tp_price', 100_500), intParam('sl_price', 99_500)], {
+      limit_price: 100_000,
+      ...LONG_TERM,
+    })
+    run(engine, 40, 100_000)
+    expect(engine.getOrder(id).executed_qty).toBe(1_000)
+    engine.onMarketTick(marketAt(CLOSE))
+    engine.onMarketTick(newDayMarket())
+    expect(engine.getOrder(id).status).toBe('PARTIALLY_EXECUTED')
+  })
+
+  it('cùng một ngày thì không xét, sau khi nạp lại vẫn nhận ra ngày mới', () => {
+    const { engine, id } = carried()
+    const restored = createOrderEngine({ random: seededRandom(3) })
+    restored.importState(JSON.parse(JSON.stringify(engine.exportState())))
+    restored.onMarketTick({ ...newDayMarket(), trading_date: TODAY })
+    expect(restored.getOrder(id).status).toBe('ACTIVE')
+    restored.onMarketTick(newDayMarket())
+    expect(restored.getOrder(id).status).toBe('PAUSED_SYSTEM')
+    expect(restored.exportState().notifications).toHaveLength(1)
+  })
 })
 
 describe('hết hạn theo persistence_mode', () => {
@@ -537,12 +852,12 @@ describe('hết hạn theo persistence_mode', () => {
 
   /** Iceberg đã khớp 200/1.000, còn một lệnh con đang chờ. */
   function partlyFilled(engine: OrderEngine, extra: Partial<CreateOrderRequest>) {
-    const id = place(engine, 'ICEBERG', [intParam('slice_qty', 500)], { limit_price: 90_000, ...extra })
+    const id = place(engine, 'ICEBERG', [intParam('slice_qty', 500)], { limit_price: 94_000, ...extra })
     run(engine, 2)
     engine.applyExecution({
       child_order_id: engine.getChildren(id)[0].child_order_id,
       exchange_match_id: `M-${id}`,
-      price: 90_000,
+      price: 94_000,
       qty: 200,
     })
     return id
@@ -597,7 +912,7 @@ describe('hết hạn theo persistence_mode', () => {
     })
 
     tickOn(engine, NEXT_DAY)
-    expect(liveChildren(engine, id)[0]).toMatchObject({ quantity: 500, price: 90_000 })
+    expect(liveChildren(engine, id)[0]).toMatchObject({ quantity: 500, price: 94_000 })
 
     closeOn(engine, NEXT_DAY)
     expect(engine.getOrder(id).status).toBe('PARTIALLY_EXECUTED')
@@ -640,12 +955,12 @@ describe('hết hạn theo persistence_mode', () => {
       engine,
       'TWAP',
       [timeParam('start_time', '10:30'), timeParam('end_time', '11:00'), intParam('interval_min', 15)],
-      { limit_price: 90_000, total_qty: 2_000, persistence_mode: 'MULTI_SESSION', valid_to: '2026-12-31' },
+      { limit_price: 94_000, total_qty: 2_000, persistence_mode: 'MULTI_SESSION', valid_to: '2026-12-31' },
     )
     engine.onMarketTick(marketAt(hhmm(10, 30)))
     const firstChild = engine.getChildren(id)[0]
     expect(firstChild.quantity).toBe(1_000)
-    engine.applyExecution({ child_order_id: firstChild.child_order_id, exchange_match_id: 'M-T1', price: 90_000, qty: 400 })
+    engine.applyExecution({ child_order_id: firstChild.child_order_id, exchange_match_id: 'M-T1', price: 94_000, qty: 400 })
 
     engine.onMarketTick(marketAt(hhmm(11, 0)))
     expect(engine.getOrder(id).status).toBe('PARTIALLY_EXECUTED')
@@ -672,7 +987,7 @@ describe('hết hạn theo persistence_mode', () => {
   it('POV nhiều phiên: KL thị trường đếm lại từ 0 vào ngày mới không làm hỏng phép tính', () => {
     const engine = newEngine()
     const id = place(engine, 'POV', [intParam('participation_pct', 10), intParam('max_pct', 20)], {
-      limit_price: 90_000,
+      limit_price: 94_000,
       total_qty: 5_000,
       persistence_mode: 'MULTI_SESSION',
       valid_to: '2026-12-31',

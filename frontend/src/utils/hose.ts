@@ -8,7 +8,7 @@ import {
   TRADING_SESSIONS,
 } from '@/config/hose'
 import { formatNumber } from '@/lib/format'
-import type { SessionCode } from '@/types'
+import type { SessionCode, SymbolQuote } from '@/types'
 
 export function getTickSize(price: number): number {
   const rule = TICK_SIZE_RULES.find((item) => price < item.below)
@@ -40,6 +40,16 @@ export function getSessionAt(secondsOfDay: number): SessionCode {
     (item) => secondsOfDay >= item.start && secondsOfDay < item.end,
   )
   return session ? session.code : 'CLOSED'
+}
+
+/** Phiên khớp lệnh định kỳ: chỉ có giá dự kiến, khớp một lần lúc hết phiên. */
+export function isAuctionSession(session: SessionCode): boolean {
+  return session === 'ATO' || session === 'ATC'
+}
+
+/** Giá hiển thị trên bảng giá: giá dự kiến nếu đang có, không thì giá khớp. */
+export function getDisplayPrice(quote: SymbolQuote): number {
+  return quote.indicative_price ?? quote.last_price
 }
 
 /** Lệnh MTL chỉ hợp lệ trong phiên khớp lệnh liên tục. */

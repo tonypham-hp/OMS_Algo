@@ -15,6 +15,7 @@ const QUOTE: SymbolQuote = {
   ceiling_price: 107_000,
   floor_price: 93_000,
   last_price: 100_000,
+  indicative_price: null,
   last_qty: 0,
   total_volume: 0,
   bid_price: 99_900,

@@ -24,7 +24,7 @@ import { useAuthStore } from '@/store/auth.store'
 import { useMarketStore } from '@/store/market.store'
 import { useUiStore } from '@/store/ui.store'
 import type { PersistenceMode, Side, StrategyType } from '@/types'
-import { getTickSize, isMtlAllowed } from '@/utils/hose'
+import { getDisplayPrice, getTickSize, isAuctionSession, isMtlAllowed } from '@/utils/hose'
 import { ConfirmDialog } from './ConfirmDialog'
 import { createOrderSchema, toCreateOrderRequest, type OrderFormValues } from './orderSchema'
 import { StrategyFields } from './StrategyFields'
@@ -189,7 +189,11 @@ export function OrderTicket() {
                 ['Trần', quote.ceiling_price, PRICE_COLOR.ceiling],
                 ['TC', quote.ref_price, PRICE_COLOR.ref],
                 ['Sàn', quote.floor_price, PRICE_COLOR.floor],
-                ['Khớp', quote.last_price, getPriceColor(quote.last_price, quote)],
+                [
+                  isAuctionSession(session) ? 'Dự kiến' : 'Khớp',
+                  getDisplayPrice(quote),
+                  getPriceColor(getDisplayPrice(quote), quote),
+                ],
                 ['Bước', getTickSize(quote.last_price), ''],
               ].map(([label, price, color]) => (
                 <div key={label}>
@@ -302,7 +306,7 @@ export function OrderTicket() {
           {strategy.usesMtl && !isMtlAllowed(session) && (
             <p role="status" className="rounded-md bg-amber-500/15 p-2 text-xs text-amber-300">
               Hiện tại: {SESSION_LABELS[session]}. Lệnh {strategy.label} có thể sinh lệnh con MTL, mà MTL
-              chỉ hợp lệ trong phiên liên tục, nên lệnh con đó chỉ được gửi khi vào phiên liên tục.
+              chỉ hợp lệ trong phiên liên tục. Trong ATO, ATC lệnh con đó được gửi dưới dạng lệnh ATO, ATC.
             </p>
           )}
 

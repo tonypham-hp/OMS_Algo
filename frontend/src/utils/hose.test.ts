@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { formatNumber } from '@/lib/format'
+import type { SymbolQuote } from '@/types'
 import {
   getCeilingPrice,
+  getDisplayPrice,
   getFloorPrice,
   getSessionAt,
   getTickSize,
+  isAuctionSession,
   isModifyCancelAllowed,
   isMtlAllowed,
   isValidTick,
@@ -89,6 +92,20 @@ describe('phiên giao dịch', () => {
     [at(14, 45), 'CLOSED'],
   ])('giây %i thuộc phiên %s', (seconds, session) => {
     expect(getSessionAt(seconds)).toBe(session)
+  })
+
+  it('chỉ ATO và ATC là phiên khớp định kỳ', () => {
+    expect(isAuctionSession('ATO')).toBe(true)
+    expect(isAuctionSession('ATC')).toBe(true)
+    for (const session of ['PRE_OPEN', 'CONTINUOUS', 'LUNCH', 'CLOSED'] as const) {
+      expect(isAuctionSession(session)).toBe(false)
+    }
+  })
+
+  it('giá hiển thị ưu tiên giá dự kiến', () => {
+    const quote = { last_price: 100_000, indicative_price: null } as SymbolQuote
+    expect(getDisplayPrice(quote)).toBe(100_000)
+    expect(getDisplayPrice({ ...quote, indicative_price: 100_500 })).toBe(100_500)
   })
 
   it('MTL chỉ được dùng trong phiên liên tục', () => {

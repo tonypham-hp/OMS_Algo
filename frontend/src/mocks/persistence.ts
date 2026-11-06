@@ -3,7 +3,7 @@ import type { SimulatorState } from './simulator'
 
 // Đổi số phiên bản khi cấu trúc dữ liệu đổi, để dữ liệu cũ bị bỏ qua thay vì làm hỏng app.
 export const SIM_STATE_KEY = 'oms-sim-state-v1'
-const SIM_STATE_VERSION = 1
+const SIM_STATE_VERSION = 2
 
 export interface SavedSimState {
   version: number
@@ -29,6 +29,7 @@ function isSavedSimState(value: unknown): value is SavedSimState {
     Array.isArray(saved.engine.conditions) &&
     Array.isArray(saved.engine.executions) &&
     Array.isArray(saved.engine.events) &&
+    Array.isArray(saved.engine.notifications) &&
     Array.isArray(saved.engine.parameters) &&
     Array.isArray(saved.engine.snapshots) &&
     Array.isArray(saved.engine.runtimes) &&

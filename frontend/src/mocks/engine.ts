@@ -10,6 +10,7 @@ import type {
   Execution,
   MarketSnapshot,
   MarketState,
+  Notification,
   OrderCondition,
   OrderEvent,
   OrderEventAction,
@@ -17,10 +18,12 @@ import type {
   ParentOrderStatus,
   Side,
   StrategyParameter,
+  SessionCode,
   SymbolQuote,
   UpdateOrderRequest,
 } from '@/types'
-import { parseTimeToSeconds } from '@/utils/hose'
+import { formatDate, formatNumber } from '@/lib/format'
+import { isAuctionSession, parseTimeToSeconds } from '@/utils/hose'
 import { getAllowedActions, isTerminalStatus, type OrderAction } from '@/utils/orderActions'
 
 const LOT = QTY_LOT_SIZE
@@ -92,11 +95,14 @@ export interface EngineState {
   conditions: OrderCondition[]
   executions: Execution[]
   events: OrderEvent[]
+  notifications: Notification[]
   parameters: Array<[string, StrategyParameter[]]>
   snapshots: Array<[string, MarketSnapshot]>
   runtimes: Array<[string, ParentRuntime]>
   seenMatchIds: string[]
   closedDate: string | null
+  currentDate: string | null
+  previousSession: SessionCode | null
   orderSequence: number
   eventSequence: number
   matchSequence: number
@@ -151,6 +157,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
   let conditions: OrderCondition[] = []
   let executions: Execution[] = []
   let events: OrderEvent[] = []
+  let notifications: Notification[] = []
   const parameters = new Map<string, StrategyParameter[]>()
   const snapshots = new Map<string, MarketSnapshot>()
   const runtimes = new Map<string, ParentRuntime>()
@@ -158,6 +165,9 @@ export function createOrderEngine(options: EngineOptions = {}) {
   let market: MarketState | null = null
   /** Ngày đã xử lý đóng cửa, để lệnh nhiều phiên chỉ được mang sang một lần mỗi ngày. */
   let closedDate: string | null = null
+  /** Ngày và phiên của nhịp trước, để nhận ra lúc sang ngày mới và lúc hết phiên khớp định kỳ. */
+  let currentDate: string | null = null
+  let previousSession: SessionCode | null = null
   let orderSequence = 0
   let eventSequence = 0
   let matchSequence = 0
@@ -275,6 +285,9 @@ export function createOrderEngine(options: EngineOptions = {}) {
 
   function createChild(parent: ParentOrder, side: Side, orderType: ChildOrderType, price: number | null, quantity: number) {
     if (quantity <= 0) return
+    // MTL không hợp lệ trong ATO, ATC: lệnh không có giá ở hai phiên này là lệnh ATO, ATC.
+    const session = market?.session
+    const finalType = orderType === 'MTL' && session && isAuctionSession(session) ? (session as ChildOrderType) : orderType
     const runtime = runtimeOf(parent)
     runtime.cycleNo += 1
     const childId = `${parent.parent_order_id}-CH${String(runtime.cycleNo).padStart(3, '0')}`
@@ -283,7 +296,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
       parent_order_id: parent.parent_order_id,
       cycle_no: runtime.cycleNo,
       side,
-      order_type: orderType,
+      order_type: finalType,
       price,
       quantity,
       filled_qty: 0,
@@ -403,22 +416,79 @@ export function createOrderEngine(options: EngineOptions = {}) {
     }
   }
 
+  /** Lệnh không giá (MTL, ATO, ATC) luôn khớp được. LO khớp khi giá không tệ hơn giá đặt. */
+  function isMarketable(child: ChildOrder, price: number) {
+    if (child.price === null) return true
+    return child.side === 'BUY' ? price <= child.price : price >= child.price
+  }
+
+  function fillChild(child: ChildOrder, price: number, qty: number) {
+    matchSequence += 1
+    applyExecution({
+      child_order_id: child.child_order_id,
+      exchange_match_id: `M-${String(matchSequence).padStart(7, '0')}`,
+      price,
+      qty,
+    })
+  }
+
+  function getOpenChildren(parent: ParentOrder) {
+    return childrenOf(parent).filter((child) => child.status === 'ACKNOWLEDGED' || child.status === 'PARTIAL_FILLED')
+  }
+
+  /** Phiên liên tục: khớp dần từng phần. */
   function fillChildren(parent: ParentOrder, quote: SymbolQuote) {
-    const last = quote.last_price
-    for (const child of childrenOf(parent)) {
-      if (child.status !== 'ACKNOWLEDGED' && child.status !== 'PARTIAL_FILLED') continue
-      const marketable =
-        child.order_type === 'MTL' ||
-        (child.price !== null && (child.side === 'BUY' ? last <= child.price : last >= child.price))
-      if (!marketable) continue
-      matchSequence += 1
-      applyExecution({
-        child_order_id: child.child_order_id,
-        exchange_match_id: `M-${String(matchSequence).padStart(7, '0')}`,
-        price: last,
-        qty: (1 + Math.floor(random() * MAX_FILL_LOTS_PER_TICK)) * LOT,
-      })
+    for (const child of getOpenChildren(parent)) {
+      if (!isMarketable(child, quote.last_price)) continue
+      fillChild(child, quote.last_price, (1 + Math.floor(random() * MAX_FILL_LOTS_PER_TICK)) * LOT)
     }
+  }
+
+  /** Hết phiên ATO, ATC: khớp một lần duy nhất tại giá khớp định kỳ, lệnh đủ điều kiện khớp hết. */
+  function matchAuctionChildren(parent: ParentOrder, quote: SymbolQuote) {
+    for (const child of getOpenChildren(parent)) {
+      if (isMarketable(child, quote.last_price)) {
+        fillChild(child, quote.last_price, child.quantity - child.filled_qty)
+      }
+    }
+  }
+
+  /** Vào ATC: MTL còn sót không còn hợp lệ, hủy để nhịp sau sinh lại thành lệnh ATC. */
+  function cancelOpenMtlChildren(parent: ParentOrder) {
+    for (const child of getOpenChildren(parent)) {
+      if (child.order_type === 'MTL') setChildStatus(child, 'CANCELLED', 'CANCEL')
+    }
+  }
+
+  /**
+   * Đầu ngày mới: giá giới hạn của lệnh mang sang có thể nằm ngoài trần, sàn mới.
+   * Lệnh đó không được sinh lệnh con nữa, chuyển PAUSED_SYSTEM và báo lý do.
+   */
+  function checkCarriedLimitPrice(parent: ParentOrder) {
+    const limit = parent.limit_price
+    const quote = getQuote(parent.symbol)
+    if (limit === null || !quote) return
+    if (parent.status === 'PAUSED_SYSTEM' || parent.status === 'CANCEL_PENDING') return
+    // Đã vào đủ KL thì giá giới hạn không còn được dùng, ví dụ Bracket đang chờ thoát.
+    if (parent.executed_qty >= parent.total_qty) return
+    if (limit >= quote.floor_price && limit <= quote.ceiling_price) return
+
+    const floor = formatNumber(quote.floor_price)
+    const ceiling = formatNumber(quote.ceiling_price)
+    setParentStatus(parent, 'PAUSED_SYSTEM', 'PAUSE')
+    logEvent(
+      parent.parent_order_id,
+      null,
+      'DECISION',
+      `LIMIT_PRICE:${limit}`,
+      `OUT_OF_BAND:floor=${quote.floor_price},ceiling=${quote.ceiling_price}`,
+    )
+    notifications.push({
+      notification_type: 'PARENT_PAUSED',
+      parent_order_id: parent.parent_order_id,
+      message: `Lệnh ${parent.parent_order_id} tạm dừng: giá giới hạn ${formatNumber(limit)} nằm ngoài biên độ ngày ${formatDate(getToday())} (sàn ${floor}, trần ${ceiling}).`,
+      sent_at: nowIso(),
+    })
   }
 
   function triggerCondition(parent: ParentOrder, condition: OrderCondition) {
@@ -432,6 +502,8 @@ export function createOrderEngine(options: EngineOptions = {}) {
 
   function checkConditions(parent: ParentOrder, side: Side, last: number) {
     if (runtimeOf(parent).triggeredConditionId !== null) return
+    // Trong ATO, ATC chưa có giao dịch mới nên giá khớp chỉ là giá cũ, không được dùng để kích hoạt.
+    if (market?.session !== 'CONTINUOUS') return
     for (const condition of conditions) {
       if (condition.parent_order_id !== parent.parent_order_id || condition.status !== 'ACTIVE') continue
       if (condition.trigger_price === null) continue
@@ -622,13 +694,35 @@ export function createOrderEngine(options: EngineOptions = {}) {
 
   /** Một nhịp của thị trường: gửi lệnh con, khớp, kiểm tra điều kiện, sinh lệnh con mới, chốt trạng thái. */
   function onMarketTick(state: MarketState) {
+    // Đổi tốc độ cũng phát lại trạng thái, nhưng đồng hồ chưa nhích thì chưa phải một nhịp mới.
+    const isSameMoment = market?.sim_seconds === state.sim_seconds && market?.trading_date === state.trading_date
     market = state
+    if (isSameMoment) return
+
+    const previous = previousSession
+    const isNewDay = currentDate !== null && currentDate !== state.trading_date
+    previousSession = state.session
+    currentDate = state.trading_date
     const liveParents = parents.filter((parent) => !isTerminalStatus(parent.status))
+
+    if (isNewDay) for (const parent of liveParents) checkCarriedLimitPrice(parent)
 
     for (const parent of liveParents) {
       sendCreatedChildren(parent)
       if (parent.status === 'CANCEL_PENDING') reconcilePendingCancel(parent)
       settleParent(parent)
+    }
+
+    // Vừa hết phiên ATO, ATC: bộ giả lập đã chốt giá khớp định kỳ ở nhịp này.
+    if (previous !== null && isAuctionSession(previous) && state.session !== previous) {
+      for (const parent of liveParents) {
+        const quote = getQuote(parent.symbol)
+        if (quote && isRunning(parent)) matchAuctionChildren(parent, quote)
+      }
+    }
+
+    if (state.session === 'ATC' && previous !== 'ATC') {
+      for (const parent of liveParents) if (isRunning(parent)) cancelOpenMtlChildren(parent)
     }
 
     if (state.session === 'CLOSED') {
@@ -641,12 +735,13 @@ export function createOrderEngine(options: EngineOptions = {}) {
 
     for (const parent of liveParents) if (isRunning(parent)) checkOwnDeadline(parent)
 
-    if (state.session !== 'CONTINUOUS') return
+    // Nghỉ trưa và trước giờ mở cửa không gửi lệnh mới. ATO, ATC gửi lệnh được nhưng chỉ khớp lúc hết phiên.
+    if (state.session !== 'CONTINUOUS' && !isAuctionSession(state.session)) return
 
     for (const parent of liveParents) {
       const quote = getQuote(parent.symbol)
       if (!quote) continue
-      if (isRunning(parent)) fillChildren(parent, quote)
+      if (state.session === 'CONTINUOUS' && isRunning(parent)) fillChildren(parent, quote)
       if (isRunning(parent)) stepParent(parent, quote)
       settleParent(parent)
     }
@@ -860,7 +955,10 @@ export function createOrderEngine(options: EngineOptions = {}) {
     runtimes.clear()
     seenMatchIds.clear()
     executions.forEach((execution) => seenMatchIds.add(execution.exchange_match_id))
+    notifications = []
     closedDate = null
+    currentDate = null
+    previousSession = null
     orderSequence = seed.orders.length
     eventSequence = seed.events.length
   }
@@ -872,11 +970,14 @@ export function createOrderEngine(options: EngineOptions = {}) {
       conditions,
       executions,
       events,
+      notifications,
       parameters: [...parameters],
       snapshots: [...snapshots],
       runtimes: [...runtimes],
       seenMatchIds: [...seenMatchIds],
       closedDate,
+      currentDate,
+      previousSession,
       orderSequence,
       eventSequence,
       matchSequence,
@@ -890,6 +991,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
     conditions = state.conditions
     executions = state.executions
     events = state.events
+    notifications = state.notifications
     parameters.clear()
     state.parameters.forEach(([key, value]) => parameters.set(key, value))
     snapshots.clear()
@@ -899,6 +1001,8 @@ export function createOrderEngine(options: EngineOptions = {}) {
     seenMatchIds.clear()
     state.seenMatchIds.forEach((id) => seenMatchIds.add(id))
     closedDate = state.closedDate
+    currentDate = state.currentDate
+    previousSession = state.previousSession
     orderSequence = state.orderSequence
     eventSequence = state.eventSequence
     matchSequence = state.matchSequence
@@ -924,6 +1028,8 @@ export function createOrderEngine(options: EngineOptions = {}) {
     getConditions: (parentOrderId: string) => conditions.filter((item) => item.parent_order_id === parentOrderId),
     getExecutions: (parentOrderId: string) => executions.filter((item) => item.parent_order_id === parentOrderId),
     getEvents: (parentOrderId: string) => events.filter((event) => event.parent_order_id === parentOrderId),
+    getNotifications: (parentOrderId: string) =>
+      notifications.filter((item) => item.parent_order_id === parentOrderId),
     getSnapshot: (parentOrderId: string) => snapshots.get(parentOrderId),
     getWorkingQty: (parentOrderId: string) => workingOf(requireParent(parentOrderId)),
     getAllowedQty: (parentOrderId: string) => allowedOf(requireParent(parentOrderId)),
