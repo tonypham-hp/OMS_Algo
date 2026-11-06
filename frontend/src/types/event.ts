@@ -32,6 +32,8 @@ export interface OrderEvent {
   event_time: string
   /** Ngoài ERD: chỉ có ở event FILL. old_value, new_value vẫn là trạng thái lệnh con trước và sau khi khớp. */
   fill_detail?: FillDetail
+  /** Ngoài ERD: lý do vận hành nhập khi mở lại lệnh PAUSED_SYSTEM. */
+  reason?: string
 }
 
 export type NotificationType =
@@ -42,6 +44,11 @@ export type NotificationType =
   | 'PARENT_COMPLETED'
   | 'PARENT_CANCELLED'
   | 'PARENT_EXPIRED'
+  // Ngoài ERD: cần cho các kịch bản lỗi ở Màn 4.
+  | 'PARENT_RESUMED'
+  | 'CHILD_UNKNOWN'
+  | 'CHILD_RECOVERED'
+  | 'DUPLICATE_FILL_IGNORED'
 
 export interface Notification {
   notification_type: NotificationType

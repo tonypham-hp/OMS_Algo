@@ -24,6 +24,11 @@ const EDITABLE_STATUSES: ReadonlySet<ParentOrderStatus> = new Set([
 
 const PAUSABLE_STATUSES: ReadonlySet<ParentOrderStatus> = new Set(['ACTIVE', 'PARTIALLY_EXECUTED'])
 
+/** Lệnh đang chạy: engine còn sinh và khớp lệnh con. */
+export function isRunningStatus(status: ParentOrderStatus): boolean {
+  return PAUSABLE_STATUSES.has(status)
+}
+
 export function isTerminalStatus(status: ParentOrderStatus): boolean {
   return TERMINAL_STATUSES.has(status)
 }
@@ -31,6 +36,21 @@ export function isTerminalStatus(status: ParentOrderStatus): boolean {
 /** Lệnh hệ thống tạm dừng vì giá ngoài biên độ: chỉ được sửa giá, sửa hợp lệ thì tự chạy lại. */
 export function isRepriceRequired(status: ParentOrderStatus, reasonCode: OrderReasonCode | null): boolean {
   return status === 'PAUSED_SYSTEM' && reasonCode === 'PRICE_OUT_OF_BAND'
+}
+
+/**
+ * Lý do vận hành chưa được mở lại lệnh PAUSED_SYSTEM. null là được phép. UI và API giả lập dùng chung hàm này.
+ * Giá ngoài biên độ phải sửa giá, vì mở lại nguyên giá cũ thì lệnh con sẽ sai biên độ.
+ */
+export function getReopenBlock(
+  reasonCode: OrderReasonCode | null,
+  isKillSwitched: boolean,
+  isFeedStale: boolean,
+): string | null {
+  if (isKillSwitched) return 'Kill switch còn bật, chưa mở lại được'
+  if (reasonCode === 'PRICE_OUT_OF_BAND') return 'Giá ngoài biên độ: phải sửa giá, không mở lại trực tiếp'
+  if (isFeedStale) return 'Dữ liệu giá còn trễ, chưa mở lại được'
+  return null
 }
 
 export interface OrderActionItem {

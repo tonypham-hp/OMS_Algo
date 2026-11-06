@@ -1,12 +1,16 @@
+import type { JsonBodyType } from 'msw'
 import { http, HttpResponse } from 'msw/http'
 import { fromCreateOrderRequest, validateOrderValues } from '@/pages/PlaceOrder/orderSchema'
 import type {
   CreateOrderRequest,
   DemoUser,
+  FaultTargetRequest,
+  KillSwitchRequest,
   Notification,
   OrderDetailData,
   OrderPriceField,
   ParentOrder,
+  ReopenOrderRequest,
   RepriceOrderRequest,
   UpdateOrderRequest,
 } from '@/types'
@@ -48,7 +52,74 @@ function handleOrderAction(
   }
 }
 
+/** Khung chung của API vận hành: chỉ role OPS được gọi. */
+function handleOps(request: Request, action: (username: string) => unknown) {
+  const user = getUser(request)
+  if (!user) return errorResponse('Chưa đăng nhập', 401)
+  if (user.role !== 'OPS') return errorResponse('Không có quyền vận hành', 403)
+  try {
+    return HttpResponse.json(action(user.username) as JsonBodyType)
+  } catch (error) {
+    if (error instanceof EngineError) return errorResponse(error.message, error.status)
+    throw error
+  }
+}
+
 export const handlers = [
+  http.get('*/api/ops/overview', ({ request }) =>
+    handleOps(request, () => ({
+      ...orderEngine.getOpsOverview(),
+      feed_fault_active: marketSimulator.isFeedStale(),
+    })),
+  ),
+
+  http.post('*/api/ops/faults/reject', async ({ request }) => {
+    const { parent_order_id } = (await request.json()) as FaultTargetRequest
+    return handleOps(request, () => orderEngine.injectRejectNext(parent_order_id))
+  }),
+
+  http.post('*/api/ops/faults/timeout-before-core', async ({ request }) => {
+    const { parent_order_id } = (await request.json()) as FaultTargetRequest
+    return handleOps(request, () => orderEngine.injectTimeout(parent_order_id, 'TIMEOUT_BEFORE_CORE'))
+  }),
+
+  http.post('*/api/ops/faults/timeout-after-core', async ({ request }) => {
+    const { parent_order_id } = (await request.json()) as FaultTargetRequest
+    return handleOps(request, () => orderEngine.injectTimeout(parent_order_id, 'TIMEOUT_AFTER_CORE'))
+  }),
+
+  http.post('*/api/ops/orders/:id/reopen', async ({ request, params }) => {
+    const { reason } = (await request.json()) as ReopenOrderRequest
+    return handleOps(request, (username) => orderEngine.reopenOrder(String(params.id), reason, username))
+  }),
+
+  http.post('*/api/ops/children/:id/reconcile', ({ request, params }) =>
+    handleOps(request, (username) => orderEngine.reconcileChildNow(String(params.id), username)),
+  ),
+
+  http.post('*/api/ops/faults/duplicate-fill', async ({ request }) => {
+    const { parent_order_id } = (await request.json()) as FaultTargetRequest
+    return handleOps(request, () => orderEngine.injectDuplicateFill(parent_order_id))
+  }),
+
+  http.post('*/api/ops/faults/market-data', async ({ request }) => {
+    const { stale } = (await request.json()) as { stale: boolean }
+    return handleOps(request, () => {
+      marketSimulator.setFeedStale(stale)
+      return { stale }
+    })
+  }),
+
+  http.post('*/api/ops/kill-switch', async ({ request }) => {
+    const body = (await request.json()) as KillSwitchRequest
+    return handleOps(request, (username) => orderEngine.activateKillSwitch(body, username))
+  }),
+
+  http.post('*/api/ops/kill-switch/release', async ({ request }) => {
+    const body = (await request.json()) as KillSwitchRequest
+    return handleOps(request, () => orderEngine.releaseKillSwitch(body))
+  }),
+
   http.get('*/api/auth/demo-users', () => HttpResponse.json(DEMO_USERS)),
 
   http.post('*/api/auth/login', async ({ request }) => {
@@ -82,7 +153,12 @@ export const handlers = [
     if (errors.length > 0) {
       return HttpResponse.json({ message: errors[0].message, errors }, { status: 422 })
     }
-    return HttpResponse.json({ parent_order: orderEngine.createOrder(body, user.username) }, { status: 201 })
+    try {
+      return HttpResponse.json({ parent_order: orderEngine.createOrder(body, user.username) }, { status: 201 })
+    } catch (error) {
+      if (error instanceof EngineError) return errorResponse(error.message, error.status)
+      throw error
+    }
   }),
 
   http.patch('*/api/orders/:id', async ({ request, params }) => {

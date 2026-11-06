@@ -1,4 +1,5 @@
 import { QTY_LOT_SIZE } from '@/config/hose'
+import { PARENT_STATUS_STYLES } from '@/config/orderStatus'
 import { STRATEGIES } from '@/config/strategies'
 import { formatClock, toDateString } from '@/lib/format'
 import { fromCreateOrderRequest, validateOrderValues } from '@/pages/PlaceOrder/orderSchema'
@@ -10,14 +11,21 @@ import type {
   Execution,
   FillDetail,
   MarketSnapshot,
+  KillSwitchRequest,
+  KillSwitchState,
   MarketState,
   Notification,
+  NotificationType,
+  OpsAlert,
+  OpsOverview,
   OrderCondition,
   OrderEvent,
   OrderEventAction,
   OrderPriceField,
+  OrderReasonCode,
   ParentOrder,
   ParentOrderStatus,
+  PendingFault,
   PriceFieldName,
   RepriceOrderRequest,
   Side,
@@ -28,13 +36,25 @@ import type {
 } from '@/types'
 import { formatDate, formatNumber } from '@/lib/format'
 import { isAuctionSession, parseTimeToSeconds, validatePrice } from '@/utils/hose'
-import { getAllowedActions, isRepriceRequired, isTerminalStatus, type OrderAction } from '@/utils/orderActions'
+import {
+  getAllowedActions,
+  getReopenBlock,
+  isRepriceRequired,
+  isTerminalStatus,
+  type OrderAction,
+} from '@/utils/orderActions'
 import { getTwapTarget, getVwapTarget } from '@/utils/schedule'
 
 const LOT = QTY_LOT_SIZE
 const SECONDS_PER_DAY = 86_400
 /** Mỗi nhịp, một lệnh con khớp tối đa từng này lô, để thấy khớp dần. */
 const MAX_FILL_LOTS_PER_TICK = 5
+/** Core từ chối liên tiếp từng này lệnh con của một lệnh cha thì tạm dừng lệnh cha. */
+const MAX_CONSECUTIVE_REJECTS = 2
+/** Child UNKNOWN do mất ACK được đối soát sau từng này nhịp, tức khoảng 5 giây thật ở mọi tốc độ. */
+const RECOVERY_TICKS = 5
+/** Không có giá mới quá từng này giây thật thì coi là dữ liệu giá trễ, ở mọi tốc độ tua. */
+export const MAX_DATA_DELAY = 5
 
 const TERMINAL_CHILD_STATUSES: ReadonlySet<ChildOrderStatus> = new Set([
   'FILLED',
@@ -91,6 +111,15 @@ interface ParentRuntime {
   lastVolume: number | null
   /** POV: phần được phép tham gia đang cộng dồn, tính bằng (cổ phiếu x %) để giữ số nguyên. */
   povAccumulated: number
+  /** Số lệnh con liên tiếp bị Core từ chối. */
+  rejectStreak: number
+}
+
+/** Child UNKNOWN đang chờ đối soát tự động. */
+interface PendingRecovery {
+  child_order_id: string
+  ticksLeft: number
+  core_received: boolean
 }
 
 /** Toàn bộ trạng thái của engine ở dạng JSON được, để lưu lại khi tải lại trang. */
@@ -105,6 +134,9 @@ export interface EngineState {
   snapshots: Array<[string, MarketSnapshot]>
   runtimes: Array<[string, ParentRuntime]>
   seenMatchIds: string[]
+  pendingFaults: PendingFault[]
+  pendingRecoveries: PendingRecovery[]
+  killSwitch: KillSwitchState
   closedDate: string | null
   currentDate: string | null
   previousSession: SessionCode | null
@@ -138,6 +170,9 @@ export function createOrderEngine(options: EngineOptions = {}) {
   const snapshots = new Map<string, MarketSnapshot>()
   const runtimes = new Map<string, ParentRuntime>()
   const seenMatchIds = new Set<string>()
+  let pendingFaults: PendingFault[] = []
+  let pendingRecoveries: PendingRecovery[] = []
+  let killSwitch: KillSwitchState = { global: false, accounts: [] }
   let market: MarketState | null = null
   /** Ngày đã xử lý đóng cửa, để lệnh nhiều phiên chỉ được mang sang một lần mỗi ngày. */
   let closedDate: string | null = null
@@ -197,6 +232,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
         trailingExtreme: null,
         lastVolume: null,
         povAccumulated: 0,
+        rejectStreak: 0,
       }
       runtimes.set(parent.parent_order_id, runtime)
     }
@@ -231,7 +267,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
     oldValue: string | null,
     newValue: string | null,
     userId = 'SYSTEM',
-    fillDetail?: FillDetail,
+    extra?: Pick<OrderEvent, 'fill_detail' | 'reason'>,
   ) {
     eventSequence += 1
     events.push({
@@ -244,15 +280,21 @@ export function createOrderEngine(options: EngineOptions = {}) {
       old_value: oldValue,
       new_value: newValue,
       event_time: nowIso(),
-      ...(fillDetail && { fill_detail: fillDetail }),
+      ...extra,
     })
   }
 
-  function setParentStatus(parent: ParentOrder, next: ParentOrderStatus, action: OrderEventAction, userId?: string) {
+  function setParentStatus(
+    parent: ParentOrder,
+    next: ParentOrderStatus,
+    action: OrderEventAction,
+    userId?: string,
+    reason?: string,
+  ) {
     const previous = parent.status
     parent.status = next
     parent.updated_at = nowIso()
-    logEvent(parent.parent_order_id, null, action, previous, next, userId)
+    logEvent(parent.parent_order_id, null, action, previous, next, userId, reason ? { reason } : undefined)
   }
 
   function setChildStatus(
@@ -264,7 +306,23 @@ export function createOrderEngine(options: EngineOptions = {}) {
   ) {
     const previous = child.status
     child.status = next
-    logEvent(child.parent_order_id, child.child_order_id, action, previous, next, userId, fillDetail)
+    logEvent(child.parent_order_id, child.child_order_id, action, previous, next, userId, fillDetail && { fill_detail: fillDetail })
+  }
+
+  function notify(parentOrderId: string, type: NotificationType, message: string) {
+    notifications.push({ notification_type: type, parent_order_id: parentOrderId, message, sent_at: nowIso() })
+  }
+
+  /** Hệ thống tạm dừng lệnh: hủy lệnh con đang chờ (Child UNKNOWN giữ nguyên), ghi event và báo lý do. */
+  function pauseBySystem(parent: ParentOrder, reason: OrderReasonCode, message: string, userId?: string) {
+    cancelOpenChildren(parent, userId)
+    parent.reason_code = reason
+    // Chỉ lệnh dừng vì giá trễ mới tự chạy lại. Lệnh khác không còn gửi lệnh con, lỗi đang chờ sẽ treo mãi.
+    if (reason !== 'MARKET_DATA_STALE') {
+      pendingFaults = pendingFaults.filter((fault) => fault.parent_order_id !== parent.parent_order_id)
+    }
+    setParentStatus(parent, 'PAUSED_SYSTEM', 'PAUSE', userId)
+    notify(parent.parent_order_id, 'PARENT_PAUSED', `Lệnh ${parent.parent_order_id} tạm dừng: ${message}`)
   }
 
   function createChild(parent: ParentOrder, side: Side, orderType: ChildOrderType, price: number | null, quantity: number) {
@@ -355,10 +413,18 @@ export function createOrderEngine(options: EngineOptions = {}) {
    * Trả về true nếu báo khớp được ghi nhận.
    */
   function applyExecution(report: ExecutionReport): boolean {
-    if (seenMatchIds.has(report.exchange_match_id)) return false
     const child = children.find((item) => item.child_order_id === report.child_order_id)
     if (!child) return false
     const parent = requireParent(child.parent_order_id)
+    if (seenMatchIds.has(report.exchange_match_id)) {
+      logEvent(parent.parent_order_id, child.child_order_id, 'DECISION', `DUPLICATE_FILL:${report.exchange_match_id}`, 'IGNORED')
+      notify(
+        parent.parent_order_id,
+        'DUPLICATE_FILL_IGNORED',
+        `Bỏ qua báo khớp trùng ${report.exchange_match_id} của lệnh ${parent.parent_order_id}, khối lượng không đổi.`,
+      )
+      return false
+    }
     seenMatchIds.add(report.exchange_match_id)
 
     if (!isChildLive(child.status)) return false
@@ -397,10 +463,100 @@ export function createOrderEngine(options: EngineOptions = {}) {
   function sendCreatedChildren(parent: ParentOrder) {
     for (const child of childrenOf(parent)) {
       if (child.status !== 'CREATED') continue
-      coreSequence += 1
-      child.core_order_id = `CORE-${String(coreSequence).padStart(6, '0')}`
       child.sent_at = nowIso()
-      setChildStatus(child, 'ACKNOWLEDGED', 'CHILD_SEND')
+      const fault = takePendingFault(parent)
+      if (fault?.type === 'REJECT') rejectChild(parent, child)
+      else if (fault) timeOutChild(parent, child, fault)
+      else acknowledgeChild(parent, child, 'CHILD_SEND')
+    }
+  }
+
+  function acknowledgeChild(parent: ParentOrder, child: ChildOrder, action: OrderEventAction, userId?: string) {
+    coreSequence += 1
+    child.core_order_id = `CORE-${String(coreSequence).padStart(6, '0')}`
+    runtimeOf(parent).rejectStreak = 0
+    setChildStatus(child, 'ACKNOWLEDGED', action, userId)
+  }
+
+  function takePendingFault(parent: ParentOrder) {
+    const index = pendingFaults.findIndex((fault) => fault.parent_order_id === parent.parent_order_id)
+    return index === -1 ? undefined : pendingFaults.splice(index, 1)[0]
+  }
+
+  /** Core từ chối: lệnh con kết thúc nên lệnh cha sinh lại ở nhịp sau, nhưng lặp lại thì phải dừng. */
+  function rejectChild(parent: ParentOrder, child: ChildOrder) {
+    setChildStatus(child, 'REJECTED', 'REJECT')
+    notify(
+      parent.parent_order_id,
+      'CHILD_REJECTED',
+      `Core từ chối lệnh con chu kỳ ${child.cycle_no} của lệnh ${parent.parent_order_id}.`,
+    )
+    const runtime = runtimeOf(parent)
+    runtime.rejectStreak += 1
+    if (runtime.rejectStreak >= MAX_CONSECUTIVE_REJECTS) {
+      pauseBySystem(parent, 'CHILD_REJECTED_REPEAT', `Core từ chối ${runtime.rejectStreak} lệnh con liên tiếp.`)
+    }
+  }
+
+  /** Timeout: chưa biết Core đã tạo lệnh hay chưa, nên vẫn tính là working để không gửi trùng. */
+  function timeOutChild(parent: ParentOrder, child: ChildOrder, fault: PendingFault) {
+    setChildStatus(child, 'UNKNOWN', 'CHILD_UNKNOWN')
+    pendingRecoveries.push({
+      child_order_id: child.child_order_id,
+      ticksLeft: RECOVERY_TICKS,
+      core_received: fault.type === 'TIMEOUT_AFTER_CORE',
+    })
+    notify(
+      parent.parent_order_id,
+      'CHILD_UNKNOWN',
+      `Mất phản hồi từ Core với lệnh con chu kỳ ${child.cycle_no} của lệnh ${parent.parent_order_id}, đang chờ đối soát.`,
+    )
+  }
+
+  function processRecoveries() {
+    pendingRecoveries = pendingRecoveries.filter((item) => {
+      item.ticksLeft -= 1
+      if (item.ticksLeft > 0) return true
+      recoverChild(item)
+      return false
+    })
+  }
+
+  /**
+   * Đối soát ra trạng thái thật. Core đã nhận thì vẫn là lệnh con đó, không gửi lại.
+   * Core chưa nhận, hoặc lệnh cha đã ngừng chạy, thì hủy để giải phóng phần KL.
+   */
+  function recoverChild(item: Pick<PendingRecovery, 'child_order_id' | 'core_received'>, userId?: string) {
+    const child = children.find((entry) => entry.child_order_id === item.child_order_id)
+    if (child?.status !== 'UNKNOWN') return
+    const parent = requireParent(child.parent_order_id)
+    const isKept = item.core_received && isRunning(parent)
+    if (isKept) acknowledgeChild(parent, child, 'RECOVERY', userId)
+    else reconcileUnknownChild(child.child_order_id, userId)
+    notify(
+      parent.parent_order_id,
+      'CHILD_RECOVERED',
+      `Đối soát xong lệnh con chu kỳ ${child.cycle_no} của lệnh ${parent.parent_order_id}: ${
+        isKept ? 'Core đã nhận lệnh, không gửi lại.' : 'lệnh không còn hiệu lực trên Core, đã hủy.'
+      }`,
+    )
+  }
+
+  /** Giá trễ thì lệnh đang chạy phải dừng, vì quyết định theo giá cũ. Có giá mới thì chỉ chạy lại lệnh dừng vì lý do này. */
+  function checkMarketData(state: MarketState) {
+    const isStale = state.quote_age_seconds >= MAX_DATA_DELAY
+    for (const parent of parents) {
+      if (isStale && isRunning(parent)) {
+        pauseBySystem(parent, 'MARKET_DATA_STALE', 'dữ liệu giá thị trường bị trễ.')
+      } else if (!isStale && parent.status === 'PAUSED_SYSTEM' && parent.reason_code === 'MARKET_DATA_STALE') {
+        const runtime = runtimeOf(parent)
+        runtime.lastVolume = null // Không tính bù KL của POV trong lúc tạm dừng.
+        runtime.povAccumulated = 0
+        parent.reason_code = null
+        setParentStatus(parent, parent.executed_qty > 0 ? 'PARTIALLY_EXECUTED' : 'ACTIVE', 'RESUME')
+        notify(parent.parent_order_id, 'PARENT_RESUMED', `Lệnh ${parent.parent_order_id} chạy lại: đã có giá mới.`)
+        settleParent(parent)
+      }
     }
   }
 
@@ -714,6 +870,9 @@ export function createOrderEngine(options: EngineOptions = {}) {
     // Đổi tốc độ cũng phát lại trạng thái, nhưng đồng hồ chưa nhích thì chưa phải một nhịp mới.
     const isSameMoment = market?.sim_seconds === state.sim_seconds && market?.trading_date === state.trading_date
     market = state
+    // Hai việc này phải chạy cả khi đồng hồ đứng yên (đã tới 15:00), nếu không lệnh sẽ kẹt mãi.
+    processRecoveries()
+    checkMarketData(state)
     if (isSameMoment) return
 
     const previous = previousSession
@@ -812,6 +971,9 @@ export function createOrderEngine(options: EngineOptions = {}) {
   }
 
   function createOrder(request: CreateOrderRequest, userId: string): ParentOrder {
+    if (isKillSwitched(request.account_no)) {
+      throw new EngineError('Tài khoản đang bị dừng bởi kill switch, chưa đặt được lệnh mới')
+    }
     const today = getToday()
     const now = nowIso()
     orderSequence += 1
@@ -1029,14 +1191,179 @@ export function createOrderEngine(options: EngineOptions = {}) {
     setChildStatus(child, 'UNKNOWN', 'CHILD_UNKNOWN')
   }
   /** Đối soát xong: phần chưa khớp của Child UNKNOWN được giải phóng để sinh lại. */
-  function reconcileUnknownChild(childOrderId: string) {
+  function reconcileUnknownChild(childOrderId: string, userId?: string) {
     const child = children.find((item) => item.child_order_id === childOrderId)
     if (!child || child.status !== 'UNKNOWN') throw new EngineError('Không tìm thấy lệnh con UNKNOWN', 404)
-    setChildStatus(child, 'CANCELLED', 'RECOVERY')
+    setChildStatus(child, 'CANCELLED', 'RECOVERY', userId)
     settleParent(requireParent(child.parent_order_id))
   }
 
-  // ===== Dữ liệu ===== 
+  /**
+   * Vận hành đối soát ngay, không chờ hết thời gian. Child đang chờ đối soát tự động thì theo kết cục đã định;
+   * Child khác (lệnh mẫu) coi là Core đã nhận khi có core_order_id.
+   */
+  function reconcileChildNow(childOrderId: string, userId: string) {
+    const child = children.find((item) => item.child_order_id === childOrderId)
+    if (child?.status !== 'UNKNOWN') throw new EngineError('Lệnh con này không còn ở trạng thái UNKNOWN', 404)
+    const pending = pendingRecoveries.find((item) => item.child_order_id === childOrderId)
+    pendingRecoveries = pendingRecoveries.filter((item) => item !== pending)
+    recoverChild({ child_order_id: childOrderId, core_received: pending?.core_received ?? child.core_order_id !== null }, userId)
+    return child
+  }
+
+  /** Vận hành mở lại lệnh PAUSED_SYSTEM: bắt buộc có lý do, ghi RESUME kèm người thao tác và lý do. */
+  function reopenOrder(parentOrderId: string, reason: string, userId: string) {
+    const parent = requireParent(parentOrderId)
+    if (parent.status !== 'PAUSED_SYSTEM') throw new EngineError('Chỉ mở lại được lệnh đang bị hệ thống tạm dừng')
+    const trimmed = reason.trim()
+    if (trimmed === '') throw new EngineError('Phải nhập lý do mở lại', 422)
+    const isStale = (market?.quote_age_seconds ?? 0) >= MAX_DATA_DELAY
+    const block = getReopenBlock(parent.reason_code, isKillSwitched(parent.account_no), isStale)
+    if (block) throw new EngineError(block)
+
+    const runtime = runtimeOf(parent)
+    runtime.lastVolume = null // Không tính bù KL của POV trong lúc tạm dừng.
+    runtime.povAccumulated = 0
+    runtime.rejectStreak = 0
+    parent.reason_code = null
+    setParentStatus(parent, parent.executed_qty > 0 ? 'PARTIALLY_EXECUTED' : 'ACTIVE', 'RESUME', userId, trimmed)
+    notify(parentOrderId, 'PARENT_RESUMED', `Lệnh ${parentOrderId} được ${userId} mở lại. Lý do: ${trimmed}`)
+    settleParent(parent)
+    return parent
+  }
+
+  function requireRunning(parentOrderId: string) {
+    const parent = requireParent(parentOrderId)
+    if (!isRunning(parent)) throw new EngineError('Chỉ bơm được lỗi này vào lệnh đang chạy', 422)
+    return parent
+  }
+
+  function injectRejectNext(parentOrderId: string) {
+    const parent = requireRunning(parentOrderId)
+    pendingFaults.push({ parent_order_id: parentOrderId, type: 'REJECT' })
+    return parent
+  }
+
+  /** TC-E2E-140: timeout trước khi Core tạo lệnh. TC-E2E-141: timeout nhưng Core đã tạo lệnh. */
+  function injectTimeout(parentOrderId: string, type: 'TIMEOUT_BEFORE_CORE' | 'TIMEOUT_AFTER_CORE') {
+    const parent = requireRunning(parentOrderId)
+    pendingFaults.push({ parent_order_id: parentOrderId, type })
+    return parent
+  }
+
+  /** Phát lại đúng báo khớp cuối cùng của lệnh. */
+  function injectDuplicateFill(parentOrderId: string) {
+    const parent = requireParent(parentOrderId)
+    const last = executions.filter((item) => item.parent_order_id === parentOrderId).at(-1)
+    if (!last) throw new EngineError('Lệnh này chưa có lần khớp nào để báo trùng', 422)
+    applyExecution({
+      child_order_id: last.child_order_id,
+      exchange_match_id: last.exchange_match_id,
+      price: last.price,
+      qty: last.qty,
+    })
+    return parent
+  }
+
+  // ===== Kill switch =====
+
+  function isKillSwitched(accountNo: string) {
+    return killSwitch.global || killSwitch.accounts.includes(accountNo)
+  }
+
+  /**
+   * Dừng khẩn cấp: mọi lệnh chưa kết thúc trong phạm vi chuyển PAUSED_SYSTEM và hủy lệnh con chưa khớp.
+   * Cố ý không kiểm tra phiên: đây là thao tác khẩn cấp nên được hủy cả trong ATO, ATC.
+   */
+  function activateKillSwitch(request: KillSwitchRequest, userId: string) {
+    const label = request.scope === 'ALL' ? 'ALL' : `ACCOUNT:${request.account_no}`
+    if (request.scope === 'ALL') killSwitch.global = true
+    else if (!killSwitch.accounts.includes(request.account_no)) killSwitch.accounts.push(request.account_no)
+
+    for (const parent of parents) {
+      if (isTerminalStatus(parent.status) || parent.status === 'CANCEL_PENDING') continue
+      if (parent.reason_code === 'KILL_SWITCH' || !isKillSwitched(parent.account_no)) continue
+      logEvent(parent.parent_order_id, null, 'DECISION', null, `KILL_SWITCH:${label}`, userId)
+      pauseBySystem(parent, 'KILL_SWITCH', 'vận hành đã kích hoạt kill switch.', userId)
+    }
+    return killSwitch
+  }
+
+  /** Chỉ cho đặt lệnh mới trở lại. Lệnh đã dừng giữ nguyên, để không có lệnh nào tự gửi lại ra sàn. */
+  function releaseKillSwitch(request: KillSwitchRequest) {
+    if (request.scope === 'ALL') killSwitch.global = false
+    else killSwitch.accounts = killSwitch.accounts.filter((account) => account !== request.account_no)
+    return killSwitch
+  }
+
+  // ===== Màn vận hành =====
+
+  function getOpsAlerts(isStale: boolean): OpsAlert[] {
+    const alerts: OpsAlert[] = []
+    if (isStale) {
+      alerts.push({
+        alert_id: 'MARKET_DATA_STALE',
+        type: 'MARKET_DATA_STALE',
+        parent_order_id: null,
+        child_order_id: null,
+        message: `Dữ liệu giá trễ ${formatNumber(market?.quote_age_seconds ?? 0)} giây.`,
+        time: nowIso(),
+      })
+    }
+    for (const parent of parents) {
+      if (parent.status === 'PAUSED_SYSTEM') {
+        const reason = notifications
+          .filter((item) => item.parent_order_id === parent.parent_order_id && item.notification_type === 'PARENT_PAUSED')
+          .at(-1)?.message
+        alerts.push({
+          alert_id: `PAUSED-${parent.parent_order_id}`,
+          type: 'PARENT_PAUSED_SYSTEM',
+          parent_order_id: parent.parent_order_id,
+          child_order_id: null,
+          message: reason ?? `Lệnh ${parent.parent_order_id} đang bị hệ thống tạm dừng.`,
+          time: parent.updated_at,
+        })
+      }
+      if (isTerminalStatus(parent.status)) continue
+      for (const child of childrenOf(parent)) {
+        if (child.status !== 'UNKNOWN' && child.status !== 'REJECTED') continue
+        const isUnknown = child.status === 'UNKNOWN'
+        alerts.push({
+          alert_id: child.child_order_id,
+          type: isUnknown ? 'CHILD_UNKNOWN' : 'CHILD_REJECTED',
+          parent_order_id: parent.parent_order_id,
+          child_order_id: child.child_order_id,
+          message: `${parent.symbol}: lệnh con chu kỳ ${child.cycle_no} ${isUnknown ? 'mất phản hồi từ Core' : 'bị Core từ chối'}.`,
+          time: child.sent_at ?? child.created_at,
+        })
+      }
+    }
+    return alerts.sort((a, b) => b.time.localeCompare(a.time))
+  }
+
+  function getOpsOverview(): Omit<OpsOverview, 'feed_fault_active'> {
+    const status_counts = Object.fromEntries(
+      (Object.keys(PARENT_STATUS_STYLES) as ParentOrderStatus[]).map((status) => [
+        status,
+        parents.filter((parent) => parent.status === status).length,
+      ]),
+    ) as Record<ParentOrderStatus, number>
+    const quoteAge = market?.quote_age_seconds ?? 0
+    const isStale = quoteAge >= MAX_DATA_DELAY
+    return {
+      status_counts,
+      child_unknown: children.filter((child) => child.status === 'UNKNOWN').length,
+      child_rejected: children.filter((child) => child.status === 'REJECTED').length,
+      quote_age_seconds: quoteAge,
+      is_feed_stale: isStale,
+      alerts: getOpsAlerts(isStale),
+      pending_faults: pendingFaults.filter((fault) => !isTerminalStatus(requireParent(fault.parent_order_id).status)),
+      kill_switch: killSwitch,
+      accounts: [...new Set(parents.map((parent) => parent.account_no))].sort(),
+    }
+  }
+
+  // ===== Dữ liệu =====
 
   function load(seed: SeedData) {
     parents = seed.orders.map((order) => ({ ...order }))
@@ -1052,6 +1379,9 @@ export function createOrderEngine(options: EngineOptions = {}) {
     seenMatchIds.clear()
     executions.forEach((execution) => seenMatchIds.add(execution.exchange_match_id))
     notifications = seed.notifications.map((notification) => ({ ...notification }))
+    pendingFaults = []
+    pendingRecoveries = []
+    killSwitch = { global: false, accounts: [] }
     closedDate = null
     currentDate = null
     previousSession = null
@@ -1071,6 +1401,9 @@ export function createOrderEngine(options: EngineOptions = {}) {
       snapshots: [...snapshots],
       runtimes: [...runtimes],
       seenMatchIds: [...seenMatchIds],
+      pendingFaults,
+      pendingRecoveries,
+      killSwitch,
       closedDate,
       currentDate,
       previousSession,
@@ -1096,6 +1429,9 @@ export function createOrderEngine(options: EngineOptions = {}) {
     state.runtimes.forEach(([key, value]) => runtimes.set(key, value))
     seenMatchIds.clear()
     state.seenMatchIds.forEach((id) => seenMatchIds.add(id))
+    pendingFaults = state.pendingFaults
+    pendingRecoveries = state.pendingRecoveries
+    killSwitch = state.killSwitch
     closedDate = state.closedDate
     currentDate = state.currentDate
     previousSession = state.previousSession
@@ -1117,6 +1453,14 @@ export function createOrderEngine(options: EngineOptions = {}) {
     getRepriceFields,
     markChildUnknown,
     reconcileUnknownChild,
+    reconcileChildNow,
+    reopenOrder,
+    injectRejectNext,
+    injectTimeout,
+    injectDuplicateFill,
+    activateKillSwitch,
+    releaseKillSwitch,
+    getOpsOverview,
     load,
     exportState,
     importState,

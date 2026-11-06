@@ -60,6 +60,7 @@ function marketAt(
   return {
     trading_date: tradingDate,
     sim_seconds: seconds,
+    quote_age_seconds: 0,
     session: session ?? getSessionAt(seconds),
     speed: 1,
     quotes: [quoteAt(last, totalVolume)],
@@ -1689,6 +1690,7 @@ describe('lệnh mẫu', () => {
     engine.load(seed)
     engine.onMarketTick({
       sim_seconds: AT_1000,
+      quote_age_seconds: 0,
       trading_date: TODAY, session: 'CONTINUOUS',
       speed: 1,
       quotes: [{ ...quoteAt(27_500), symbol: 'HPG', ref_price: 27_500, ceiling_price: 29_400, floor_price: 25_600 }],
@@ -1704,7 +1706,7 @@ describe('lệnh mẫu', () => {
     const engine = createOrderEngine({ random: seededRandom(1) })
     engine.load(seed)
     const before = seed.orders[0].status
-    engine.onMarketTick({ sim_seconds: AT_1000, trading_date: TODAY, session: 'CONTINUOUS', speed: 1, quotes: [] })
+    engine.onMarketTick({ sim_seconds: AT_1000, quote_age_seconds: 0, trading_date: TODAY, session: 'CONTINUOUS', speed: 1, quotes: [] })
     engine.cancelOrder(seed.orders[0].parent_order_id, 'tester')
     engine.createOrder(request('ICEBERG', [intParam('slice_qty', 100)]), 'tester')
 

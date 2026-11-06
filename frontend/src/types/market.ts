@@ -25,6 +25,8 @@ export interface MarketState {
   trading_date: string
   /** Giờ giả lập, tính bằng số giây kể từ 00:00. */
   sim_seconds: number
+  /** Số giây thật kể từ lần cuối nhận được giá, không phụ thuộc tốc độ tua. Bình thường là 0. */
+  quote_age_seconds: number
   session: SessionCode
   speed: SimSpeed
   quotes: SymbolQuote[]

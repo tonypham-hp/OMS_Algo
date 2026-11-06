@@ -254,6 +254,7 @@ describe('dữ liệu biểu đồ', () => {
     const market = (seconds: number): MarketState => ({
       trading_date: TODAY,
       sim_seconds: seconds,
+      quote_age_seconds: 0,
       session: getSessionAt(seconds),
       speed: 1,
       quotes: [
@@ -345,6 +346,18 @@ describe('nhật ký', () => {
     expect(formatEventValue('TRIGGERED', parentEvent)).toBe('Đã kích hoạt')
     expect(formatEventValue('SESSION:2026-11-06', parentEvent)).toBe('Phiên 06/11/2026')
     expect(formatEventValue('CARRY_OVER:7000', parentEvent)).toBe('Mang sang phiên sau 7.000 CP')
+  })
+
+  it('đọc được giá trị của các kịch bản vận hành', () => {
+    expect(formatEventValue('DUPLICATE_FILL:M-1', childEvent)).toBe('Báo khớp trùng M-1')
+    expect(formatEventValue('IGNORED', childEvent)).toBe('Đã bỏ qua, KL không đổi')
+    expect(formatEventValue('KILL_SWITCH:ALL', parentEvent)).toBe('Kill switch toàn hệ thống')
+    expect(formatEventValue('KILL_SWITCH:ACCOUNT:058C123456', parentEvent)).toBe('Kill switch tài khoản 058C123456')
+  })
+
+  it('mở lại lệnh ghi kèm lý do vận hành nhập', () => {
+    const event = { child_order_id: null, old_value: 'PAUSED_SYSTEM', new_value: 'ACTIVE', reason: 'Đã kiểm tra với Core' }
+    expect(formatEventChange(event)).toBe('Hệ thống tạm dừng → Đang hoạt động · Lý do: Đã kiểm tra với Core')
   })
 
   it('lần khớp ghi KL, giá và mã khớp, định dạng kiểu Việt Nam', () => {
