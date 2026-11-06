@@ -12,7 +12,7 @@ import type {
 } from '@/types'
 import { getOrderActionItems } from '@/utils/orderActions'
 import { getSessionAt } from '@/utils/hose'
-import { formatEventActor, formatEventValue } from './eventFormat'
+import { formatEventActor, formatEventChange, formatEventValue } from './eventFormat'
 import { getEntryExecutions, getFillSummary, getStrategyParamRows } from './orderMetrics'
 import { buildOrderProgress, formatTimeTick, getTimeTicks } from './orderProgress'
 
@@ -345,6 +345,23 @@ describe('nhật ký', () => {
     expect(formatEventValue('TRIGGERED', parentEvent)).toBe('Đã kích hoạt')
     expect(formatEventValue('SESSION:2026-11-06', parentEvent)).toBe('Phiên 06/11/2026')
     expect(formatEventValue('CARRY_OVER:7000', parentEvent)).toBe('Mang sang phiên sau 7.000 CP')
+  })
+
+  it('lần khớp ghi KL, giá và mã khớp, định dạng kiểu Việt Nam', () => {
+    const event = {
+      child_order_id: 'C1',
+      old_value: 'ACKNOWLEDGED',
+      new_value: 'PARTIAL_FILLED',
+      fill_detail: { qty: 1_300, price: 61_000, exchange_match_id: 'M-0000047' },
+    }
+    expect(formatEventChange(event)).toBe('Khớp 1.300 CP @ 61.000 · M-0000047')
+  })
+
+  it('event khác, và FILL cũ đã lưu chưa có chi tiết, vẫn ghi giá trị cũ → mới', () => {
+    const pause = { child_order_id: null, old_value: 'ACTIVE', new_value: 'PAUSED_USER' }
+    expect(formatEventChange(pause)).toBe('Đang hoạt động → Tạm dừng')
+    const oldFill = { child_order_id: 'C1', old_value: 'ACKNOWLEDGED', new_value: 'FILLED' }
+    expect(formatEventChange(oldFill)).toBe('Đã xác nhận → Đã khớp')
   })
 
   it('tên người thực hiện', () => {

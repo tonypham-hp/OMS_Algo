@@ -2,7 +2,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { formatDateTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { ChildOrder, OrderEvent, OrderEventAction } from '@/types'
-import { EVENT_ACTION_LABELS, formatEventActor, formatEventValue } from './eventFormat'
+import { EVENT_ACTION_LABELS, formatEventActor, formatEventChange } from './eventFormat'
 import { SCROLL_TABLE, STICKY_HEADER } from './tableStyles'
 
 const ALERT_ACTIONS: ReadonlySet<OrderEventAction> = new Set(['CHILD_UNKNOWN', 'REJECT'])
@@ -38,9 +38,7 @@ export function OrderEventLog({ events, childOrders }: OrderEventLogProps) {
                   {EVENT_ACTION_LABELS[event.action]}
                   {cycle !== undefined && <span className="text-muted-foreground"> · chu kỳ {cycle}</span>}
                 </TableCell>
-                <TableCell className="whitespace-normal">
-                  {formatEventValue(event.old_value, event)} → {formatEventValue(event.new_value, event)}
-                </TableCell>
+                <TableCell className="whitespace-normal">{formatEventChange(event)}</TableCell>
               </TableRow>
             )
           })}

@@ -292,7 +292,7 @@ export function createSeedData(now: Date): SeedData {
           qty: child.filled,
           match_time: createdAt,
         })
-        addEvent({ parent_order_id: id, child_order_id: childId, action: 'FILL', old_value: null, new_value: child.status, event_time: createdAt })
+        addEvent({ parent_order_id: id, child_order_id: childId, action: 'FILL', old_value: null, new_value: child.status, event_time: createdAt, fill_detail: { qty: child.filled, price: child.price, exchange_match_id: matchId } })
       }
     })
 

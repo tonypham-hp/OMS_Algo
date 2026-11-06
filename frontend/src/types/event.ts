@@ -13,6 +13,13 @@ export type OrderEventAction =
   | 'DECISION'
   | 'CHILD_UNKNOWN'
 
+/** Chi tiết của một lần khớp. `qty` là KL thực ghi nhận, có thể nhỏ hơn KL trong báo khớp nếu bị cắt bớt. */
+export interface FillDetail {
+  qty: number
+  price: number
+  exchange_match_id: string
+}
+
 export interface OrderEvent {
   event_id: string
   parent_order_id: string
@@ -23,6 +30,8 @@ export interface OrderEvent {
   old_value: string | null
   new_value: string | null
   event_time: string
+  /** Ngoài ERD: chỉ có ở event FILL. old_value, new_value vẫn là trạng thái lệnh con trước và sau khi khớp. */
+  fill_detail?: FillDetail
 }
 
 export type NotificationType =

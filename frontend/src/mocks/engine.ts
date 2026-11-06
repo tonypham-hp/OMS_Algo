@@ -8,6 +8,7 @@ import type {
   ChildOrderType,
   CreateOrderRequest,
   Execution,
+  FillDetail,
   MarketSnapshot,
   MarketState,
   Notification,
@@ -230,6 +231,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
     oldValue: string | null,
     newValue: string | null,
     userId = 'SYSTEM',
+    fillDetail?: FillDetail,
   ) {
     eventSequence += 1
     events.push({
@@ -242,6 +244,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
       old_value: oldValue,
       new_value: newValue,
       event_time: nowIso(),
+      ...(fillDetail && { fill_detail: fillDetail }),
     })
   }
 
@@ -252,10 +255,16 @@ export function createOrderEngine(options: EngineOptions = {}) {
     logEvent(parent.parent_order_id, null, action, previous, next, userId)
   }
 
-  function setChildStatus(child: ChildOrder, next: ChildOrderStatus, action: OrderEventAction, userId?: string) {
+  function setChildStatus(
+    child: ChildOrder,
+    next: ChildOrderStatus,
+    action: OrderEventAction,
+    userId?: string,
+    fillDetail?: FillDetail,
+  ) {
     const previous = child.status
     child.status = next
-    logEvent(child.parent_order_id, child.child_order_id, action, previous, next, userId)
+    logEvent(child.parent_order_id, child.child_order_id, action, previous, next, userId, fillDetail)
   }
 
   function createChild(parent: ParentOrder, side: Side, orderType: ChildOrderType, price: number | null, quantity: number) {
@@ -370,7 +379,11 @@ export function createOrderEngine(options: EngineOptions = {}) {
       match_time: now,
     })
     child.filled_qty += qty
-    setChildStatus(child, child.filled_qty >= child.quantity ? 'FILLED' : 'PARTIAL_FILLED', 'FILL')
+    setChildStatus(child, child.filled_qty >= child.quantity ? 'FILLED' : 'PARTIAL_FILLED', 'FILL', undefined, {
+      qty,
+      price: report.price,
+      exchange_match_id: report.exchange_match_id,
+    })
 
     if (!exit) parent.executed_qty += qty
     parent.updated_at = now
