@@ -33,7 +33,10 @@ interface SimulatorOptions {
 }
 
 /** Phần trạng thái cần lưu lại để tải lại trang không mất. */
-export type SimulatorState = Pick<MarketState, 'trading_date' | 'sim_seconds' | 'speed' | 'quotes'>
+export type SimulatorState = Pick<MarketState, 'trading_date' | 'sim_seconds' | 'speed' | 'quotes'> & {
+  last_quote_seconds: number
+  feed_stale: boolean
+}
 
 /** Ngày làm việc kế tiếp, bỏ qua thứ Bảy và Chủ nhật. */
 function getNextTradingDate(date: string): string {
@@ -138,11 +141,16 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
   let speed: SimSpeed = 1
   let quotes = symbols.map((item) => createInitialQuote(item.symbol, item.ref_price))
   let timer: ReturnType<typeof setInterval> | null = null
+  /** Giờ giả lập của lần cuối nhận được giá. */
+  let lastQuoteSeconds = simSeconds
+  /** Đang bơm lỗi giá trễ: đồng hồ vẫn chạy nhưng không có giá mới. */
+  let feedStale = false
 
   function getState(): MarketState {
     return {
       trading_date: tradingDate,
       sim_seconds: simSeconds,
+      quote_age_seconds: simSeconds - lastQuoteSeconds,
       session: getSessionAt(simSeconds),
       speed,
       quotes,
@@ -165,6 +173,13 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
     }
     simSeconds = next
 
+    if (feedStale) {
+      quotes = quotes.map((quote) => ({ ...quote, tick_direction: 0 }))
+      notify()
+      return
+    }
+
+    lastQuoteSeconds = simSeconds
     const session = getSessionAt(simSeconds)
     quotes = quotes.map((quote) => {
       if (isAuctionSession(previous) && session !== previous) return matchAuction(quote, random)
@@ -197,10 +212,17 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
       speed = next
       notify()
     },
+    /** Bật, tắt lỗi giá trễ. Tắt rồi thì nhịp kế tiếp mới có giá mới. */
+    setFeedStale(stale: boolean) {
+      feedStale = stale
+    },
+    isFeedStale: () => feedStale,
     /** Về đầu ngày: ngày về hiện tại, đồng hồ về 09:10, giá về tham chiếu, giữ nguyên tốc độ. */
     reset() {
       tradingDate = getStartDate()
       simSeconds = START_SECONDS
+      lastQuoteSeconds = simSeconds
+      feedStale = false
       quotes = symbols.map((item) => createInitialQuote(item.symbol, item.ref_price))
       notify()
     },
@@ -208,15 +230,25 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
     nextDay() {
       tradingDate = getNextTradingDate(tradingDate)
       simSeconds = START_SECONDS
+      lastQuoteSeconds = simSeconds
       quotes = quotes.map((quote) => createInitialQuote(quote.symbol, quote.last_price))
       notify()
     },
     exportState(): SimulatorState {
-      return { trading_date: tradingDate, sim_seconds: simSeconds, speed, quotes }
+      return {
+        trading_date: tradingDate,
+        sim_seconds: simSeconds,
+        speed,
+        quotes,
+        last_quote_seconds: lastQuoteSeconds,
+        feed_stale: feedStale,
+      }
     },
     importState(state: SimulatorState) {
       tradingDate = state.trading_date
       simSeconds = state.sim_seconds
+      lastQuoteSeconds = state.last_quote_seconds
+      feedStale = state.feed_stale
       speed = state.speed
       quotes = state.quotes
     },

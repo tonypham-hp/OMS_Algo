@@ -24,6 +24,11 @@ const EDITABLE_STATUSES: ReadonlySet<ParentOrderStatus> = new Set([
 
 const PAUSABLE_STATUSES: ReadonlySet<ParentOrderStatus> = new Set(['ACTIVE', 'PARTIALLY_EXECUTED'])
 
+/** Lệnh đang chạy: engine còn sinh và khớp lệnh con. */
+export function isRunningStatus(status: ParentOrderStatus): boolean {
+  return PAUSABLE_STATUSES.has(status)
+}
+
 export function isTerminalStatus(status: ParentOrderStatus): boolean {
   return TERMINAL_STATUSES.has(status)
 }

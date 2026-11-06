@@ -71,6 +71,10 @@ export function formatEventValue(value: string | null, event: Pick<OrderEvent, '
     const [type, status] = detail.split(':')
     return `Điều kiện ${CONDITION_LABELS[type] ?? type}: ${CONDITION_STATUS_LABELS[status] ?? status}`
   }
+  if (prefix === 'DUPLICATE_FILL') return `Báo khớp trùng ${detail}`
+  if (prefix === 'KILL_SWITCH') {
+    return detail === 'ALL' ? 'Kill switch toàn hệ thống' : `Kill switch tài khoản ${detail.replace('ACCOUNT:', '')}`
+  }
   if (prefix === 'SESSION') return `Phiên ${formatDate(detail)}`
   if (prefix === 'CARRY_OVER') return `Mang sang phiên sau ${formatNumber(Number(detail))} CP`
   if (prefix === 'PRICE_OUT_OF_BAND') {
@@ -82,6 +86,7 @@ export function formatEventValue(value: string | null, event: Pick<OrderEvent, '
   if (value.includes('=')) return formatFields(value.split(',').map((part) => part.split('=') as [string, string]))
 
   if (value === 'TRIGGERED') return CONDITION_STATUS_LABELS.TRIGGERED
+  if (value === 'IGNORED') return 'Đã bỏ qua, KL không đổi'
   const label = event.child_order_id
     ? CHILD_STATUS_STYLES[value as ChildOrderStatus]?.label
     : PARENT_STATUS_STYLES[value as ParentOrderStatus]?.label

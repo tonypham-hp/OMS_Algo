@@ -31,7 +31,7 @@ export type ParentOrderStatus =
 export type PersistenceMode = 'DAY' | 'GTD' | 'MULTI_SESSION'
 
 /** Lý do hệ thống tạm dừng lệnh. */
-export type OrderReasonCode = 'PRICE_OUT_OF_BAND'
+export type OrderReasonCode = 'PRICE_OUT_OF_BAND' | 'CHILD_REJECTED_REPEAT' | 'MARKET_DATA_STALE' | 'KILL_SWITCH'
 
 /** Các loại giá của lệnh, phải nằm trong biên độ ngày hiện tại. */
 export type PriceFieldName = 'limit_price' | 'trigger_price' | 'tp_price' | 'sl_price' | 'hunt_price'

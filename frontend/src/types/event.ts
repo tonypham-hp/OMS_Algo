@@ -42,6 +42,11 @@ export type NotificationType =
   | 'PARENT_COMPLETED'
   | 'PARENT_CANCELLED'
   | 'PARENT_EXPIRED'
+  // Ngoài ERD: cần cho các kịch bản lỗi ở Màn 4.
+  | 'PARENT_RESUMED'
+  | 'CHILD_UNKNOWN'
+  | 'CHILD_RECOVERED'
+  | 'DUPLICATE_FILL_IGNORED'
 
 export interface Notification {
   notification_type: NotificationType
