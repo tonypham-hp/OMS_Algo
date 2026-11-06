@@ -18,13 +18,13 @@ import { SESSION_LABELS } from '@/config/hose'
 import { getPriceColor, PRICE_COLOR } from '@/config/priceColors'
 import { PERSISTENCE_LABELS, STRATEGIES, STRATEGY_TYPES } from '@/config/strategies'
 import { useCreateOrder } from '@/hooks/useOrders'
-import { formatNumber, toDateString } from '@/lib/format'
+import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth.store'
 import { useMarketStore } from '@/store/market.store'
 import { useUiStore } from '@/store/ui.store'
 import type { PersistenceMode, Side, StrategyType } from '@/types'
-import { getTickSize, isMtlAllowed } from '@/utils/hose'
+import { getDisplayPrice, getTickSize, isAuctionSession, isMtlAllowed } from '@/utils/hose'
 import { ConfirmDialog } from './ConfirmDialog'
 import { createOrderSchema, toCreateOrderRequest, type OrderFormValues } from './orderSchema'
 import { StrategyFields } from './StrategyFields'
@@ -32,7 +32,7 @@ import { StrategyFields } from './StrategyFields'
 // Luôn đọc giá mới nhất ở thời điểm kiểm tra, không giữ bản cũ.
 const orderSchema = createOrderSchema(() => ({
   getQuote: (symbol) => useMarketStore.getState().quotes.find((quote) => quote.symbol === symbol),
-  today: toDateString(new Date()),
+  today: useMarketStore.getState().trading_date,
 }))
 
 const PERSISTENCE_MODES = Object.keys(PERSISTENCE_LABELS) as PersistenceMode[]
@@ -189,7 +189,11 @@ export function OrderTicket() {
                 ['Trần', quote.ceiling_price, PRICE_COLOR.ceiling],
                 ['TC', quote.ref_price, PRICE_COLOR.ref],
                 ['Sàn', quote.floor_price, PRICE_COLOR.floor],
-                ['Khớp', quote.last_price, getPriceColor(quote.last_price, quote)],
+                [
+                  isAuctionSession(session) ? 'Dự kiến' : 'Khớp',
+                  getDisplayPrice(quote),
+                  getPriceColor(getDisplayPrice(quote), quote),
+                ],
                 ['Bước', getTickSize(quote.last_price), ''],
               ].map(([label, price, color]) => (
                 <div key={label}>
@@ -301,8 +305,8 @@ export function OrderTicket() {
 
           {strategy.usesMtl && !isMtlAllowed(session) && (
             <p role="status" className="rounded-md bg-amber-500/15 p-2 text-xs text-amber-300">
-              Hiện tại: {SESSION_LABELS[session]}. Lệnh {strategy.label} sinh lệnh con MTL, mà MTL chỉ
-              hợp lệ trong phiên liên tục, nên lệnh con chỉ được gửi khi vào phiên liên tục.
+              Hiện tại: {SESSION_LABELS[session]}. Lệnh {strategy.label} có thể sinh lệnh con MTL, mà MTL
+              chỉ hợp lệ trong phiên liên tục. Trong ATO, ATC lệnh con đó được gửi dưới dạng lệnh ATO, ATC.
             </p>
           )}
 

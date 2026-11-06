@@ -13,11 +13,13 @@ import { formatNumber, formatPercent, formatSigned } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useMarketStore } from '@/store/market.store'
 import { useUiStore } from '@/store/ui.store'
+import { getDisplayPrice, isAuctionSession } from '@/utils/hose'
 
 const NUMBER_CELL = 'text-right tabular-nums'
 
 export function PriceBoard() {
   const quotes = useMarketStore((state) => state.quotes)
+  const session = useMarketStore((state) => state.session)
   const selectedSymbol = useUiStore((state) => state.selectedSymbol)
   const setSelectedSymbol = useUiStore((state) => state.setSelectedSymbol)
 
@@ -34,7 +36,9 @@ export function PriceBoard() {
               <TableHead className="text-right">Trần</TableHead>
               <TableHead className="text-right">TC</TableHead>
               <TableHead className="text-right">Sàn</TableHead>
-              <TableHead className="text-right">Giá khớp</TableHead>
+              <TableHead className="text-right">
+                {isAuctionSession(session) ? 'Giá dự kiến' : 'Giá khớp'}
+              </TableHead>
               <TableHead className="text-right">+/-</TableHead>
               <TableHead className="text-right">%</TableHead>
               <TableHead className="text-right">Tổng KL</TableHead>
@@ -42,8 +46,9 @@ export function PriceBoard() {
           </TableHeader>
           <TableBody>
             {quotes.map((quote) => {
-              const change = quote.last_price - quote.ref_price
-              const color = getPriceColor(quote.last_price, quote)
+              const price = getDisplayPrice(quote)
+              const change = price - quote.ref_price
+              const color = getPriceColor(price, quote)
               const isSelected = quote.symbol === selectedSymbol
               return (
                 <TableRow

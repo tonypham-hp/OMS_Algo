@@ -1,3 +1,4 @@
+import { resetDemoDay } from '@/mocks/runtime'
 import { marketSimulator } from '@/mocks/simulator'
 import type { MarketState, SimSpeed } from '@/types'
 
@@ -13,5 +14,6 @@ export const marketService = {
     }
   },
   setSpeed: (speed: SimSpeed) => marketSimulator.setSpeed(speed),
-  resetDay: () => marketSimulator.reset(),
+  resetDay: () => resetDemoDay(),
+  nextDay: () => marketSimulator.nextDay(),
 }

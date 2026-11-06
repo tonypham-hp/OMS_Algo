@@ -46,7 +46,7 @@ export interface StrategyConfig {
   description: string
   fields: StrategyField[]
   /**
-   * Lệnh không có giá giới hạn nên khi kích hoạt sẽ sinh lệnh con MTL.
+   * Khi kích hoạt có thể sinh lệnh con MTL (Stop, Trailing Stop, và nhánh cắt lỗ của OCO, Bracket).
    * Đặt ngoài phiên liên tục chỉ cảnh báo, không chặn, vì lệnh cha mới ở trạng thái chờ.
    */
   usesMtl: boolean
@@ -82,13 +82,13 @@ export const STRATEGIES: Record<StrategyType, StrategyConfig> = {
     label: 'OCO',
     description: 'Một cặp chốt lời và cắt lỗ: một bên kích hoạt thì bên kia bị hủy.',
     fields: [TP_PRICE, SL_PRICE],
-    usesMtl: false,
+    usesMtl: true,
   },
   BRACKET: {
     label: 'Bracket',
     description: 'Lệnh vào kèm sẵn cặp chốt lời và cắt lỗ.',
     fields: [{ ...LIMIT_PRICE, label: 'Giá vào lệnh' }, TP_PRICE, SL_PRICE],
-    usesMtl: false,
+    usesMtl: true,
   },
   ICEBERG: {
     label: 'Iceberg',

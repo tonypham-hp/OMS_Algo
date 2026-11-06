@@ -1,6 +1,14 @@
-import { QTY_LOT_SIZE } from '@/config/hose'
+import { QTY_LOT_SIZE, TRADING_SESSIONS } from '@/config/hose'
+import { toDateString } from '@/lib/format'
 import type { MarketState, SimSpeed, SymbolQuote } from '@/types'
-import { getCeilingPrice, getFloorPrice, getSessionAt, getTickSize } from '@/utils/hose'
+import {
+  getCeilingPrice,
+  getDisplayPrice,
+  getFloorPrice,
+  getSessionAt,
+  getTickSize,
+  isAuctionSession,
+} from '@/utils/hose'
 import { DEMO_SYMBOLS } from './data'
 
 const hhmm = (hour: number, minute: number) => hour * 3600 + minute * 60
@@ -20,6 +28,19 @@ interface SimulatorOptions {
   /** Truyền hàm random cố định khi test để kết quả lặp lại được. */
   random?: RandomFn
   symbols?: ReadonlyArray<{ symbol: string; ref_price: number }>
+  /** Ngày giao dịch đầu tiên. Không truyền thì lấy ngày hiện tại. */
+  startDate?: Date
+}
+
+/** Phần trạng thái cần lưu lại để tải lại trang không mất. */
+export type SimulatorState = Pick<MarketState, 'trading_date' | 'sim_seconds' | 'speed' | 'quotes'>
+
+/** Ngày làm việc kế tiếp, bỏ qua thứ Bảy và Chủ nhật. */
+function getNextTradingDate(date: string): string {
+  const [year, month, day] = date.split('-').map(Number)
+  const next = new Date(year, month - 1, day + 1)
+  while (next.getDay() === 0 || next.getDay() === 6) next.setDate(next.getDate() + 1)
+  return toDateString(next)
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -52,6 +73,7 @@ function createInitialQuote(symbol: string, refPrice: number): SymbolQuote {
     ceiling_price: ceiling,
     floor_price: floor,
     last_price: refPrice,
+    indicative_price: null,
     last_qty: 0,
     total_volume: 0,
     bid_price: clamp(stepPrice(refPrice, -1), floor, ceiling),
@@ -60,28 +82,49 @@ function createInitialQuote(symbol: string, refPrice: number): SymbolQuote {
   }
 }
 
-function nextQuote(quote: SymbolQuote, random: RandomFn): SymbolQuote {
-  if (random() > TRADE_PROBABILITY) return { ...quote, tick_direction: 0 }
-
-  // Số bước trong khoảng -2..2, bỏ giá trị 0.
+/** Bước giá ngẫu nhiên từ -2 đến 2, bỏ giá trị 0, luôn nằm trong biên độ. */
+function randomWalk(price: number, quote: SymbolQuote, random: RandomFn): number {
   const magnitude = random() < 0.75 ? 1 : 2
   const steps = random() < 0.5 ? -magnitude : magnitude
-  const lastPrice = clamp(
-    stepPrice(quote.last_price, steps),
-    quote.floor_price,
-    quote.ceiling_price,
-  )
-  const lastQty = (1 + Math.floor(random() * 50)) * QTY_LOT_SIZE
+  return clamp(stepPrice(price, steps), quote.floor_price, quote.ceiling_price)
+}
 
+/** Ghi nhận một lần khớp: cập nhật giá khớp, KL, giá mua bán. */
+function withMatch(quote: SymbolQuote, price: number, qty: number): SymbolQuote {
   return {
     ...quote,
-    last_price: lastPrice,
-    last_qty: lastQty,
-    total_volume: quote.total_volume + lastQty,
-    bid_price: clamp(stepPrice(lastPrice, -1), quote.floor_price, quote.ceiling_price),
-    ask_price: clamp(stepPrice(lastPrice, 1), quote.floor_price, quote.ceiling_price),
-    tick_direction: Math.sign(lastPrice - quote.last_price) as SymbolQuote['tick_direction'],
+    last_price: price,
+    indicative_price: null,
+    last_qty: qty,
+    total_volume: quote.total_volume + qty,
+    bid_price: clamp(stepPrice(price, -1), quote.floor_price, quote.ceiling_price),
+    ask_price: clamp(stepPrice(price, 1), quote.floor_price, quote.ceiling_price),
+    tick_direction: Math.sign(price - quote.last_price) as SymbolQuote['tick_direction'],
   }
+}
+
+function nextQuote(quote: SymbolQuote, random: RandomFn): SymbolQuote {
+  if (random() > TRADE_PROBABILITY) return { ...quote, tick_direction: 0 }
+  const price = randomWalk(quote.last_price, quote, random)
+  return withMatch(quote, price, (1 + Math.floor(random() * 50)) * QTY_LOT_SIZE)
+}
+
+/** Trong ATO, ATC chỉ giá dự kiến thay đổi. Giá khớp và KL đứng yên cho tới lúc khớp định kỳ. */
+function nextIndicative(quote: SymbolQuote, random: RandomFn): SymbolQuote {
+  const current = getDisplayPrice(quote)
+  if (random() > TRADE_PROBABILITY) return { ...quote, indicative_price: current, tick_direction: 0 }
+  const price = randomWalk(current, quote, random)
+  return {
+    ...quote,
+    indicative_price: price,
+    tick_direction: Math.sign(price - current) as SymbolQuote['tick_direction'],
+  }
+}
+
+/** Hết phiên ATO, ATC: khớp một lần duy nhất theo giá dự kiến. KL định kỳ lớn hơn một nhịp thường. */
+function matchAuction(quote: SymbolQuote, random: RandomFn): SymbolQuote {
+  const qty = (50 + Math.floor(random() * 200)) * QTY_LOT_SIZE
+  return withMatch(quote, getDisplayPrice(quote), qty)
 }
 
 export function createMarketSimulator(options: SimulatorOptions = {}) {
@@ -89,13 +132,21 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
   const symbols = options.symbols ?? DEMO_SYMBOLS
   const listeners = new Set<Listener>()
 
+  const getStartDate = () => toDateString(options.startDate ?? new Date())
+  let tradingDate = getStartDate()
   let simSeconds = START_SECONDS
   let speed: SimSpeed = 1
   let quotes = symbols.map((item) => createInitialQuote(item.symbol, item.ref_price))
   let timer: ReturnType<typeof setInterval> | null = null
 
   function getState(): MarketState {
-    return { sim_seconds: simSeconds, session: getSessionAt(simSeconds), speed, quotes }
+    return {
+      trading_date: tradingDate,
+      sim_seconds: simSeconds,
+      session: getSessionAt(simSeconds),
+      speed,
+      quotes,
+    }
   }
 
   function notify() {
@@ -105,12 +156,22 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
 
   /** Một nhịp giả lập: tua đồng hồ theo tốc độ, rồi cho giá nhảy nếu thị trường đang mở. */
   function tick(elapsedMs = TICK_INTERVAL_MS) {
-    simSeconds = Math.min(simSeconds + (elapsedMs / 1000) * speed, END_SECONDS)
+    const previous = getSessionAt(simSeconds)
+    let next = Math.min(simSeconds + (elapsedMs / 1000) * speed, END_SECONDS)
+    if (isAuctionSession(previous)) {
+      // Không tua vượt giờ khớp định kỳ, để luôn khớp đúng 09:15:00 và 14:45:00 ở mọi tốc độ.
+      const auctionEnd = TRADING_SESSIONS.find((item) => item.code === previous)?.end
+      if (auctionEnd !== undefined) next = Math.min(next, auctionEnd)
+    }
+    simSeconds = next
+
     const session = getSessionAt(simSeconds)
-    const isMarketOpen = session === 'ATO' || session === 'CONTINUOUS' || session === 'ATC'
-    quotes = quotes.map((quote) =>
-      isMarketOpen ? nextQuote(quote, random) : { ...quote, tick_direction: 0 },
-    )
+    quotes = quotes.map((quote) => {
+      if (isAuctionSession(previous) && session !== previous) return matchAuction(quote, random)
+      if (isAuctionSession(session)) return nextIndicative(quote, random)
+      if (session === 'CONTINUOUS') return nextQuote(quote, random)
+      return { ...quote, tick_direction: 0 }
+    })
     notify()
   }
 
@@ -136,11 +197,28 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
       speed = next
       notify()
     },
-    /** Về đầu ngày: đồng hồ về 09:10, giá về tham chiếu, giữ nguyên tốc độ. */
+    /** Về đầu ngày: ngày về hiện tại, đồng hồ về 09:10, giá về tham chiếu, giữ nguyên tốc độ. */
     reset() {
+      tradingDate = getStartDate()
       simSeconds = START_SECONDS
       quotes = symbols.map((item) => createInitialQuote(item.symbol, item.ref_price))
       notify()
+    },
+    /** Sang ngày giao dịch mới: giá đóng cửa hôm trước thành giá tham chiếu hôm nay. */
+    nextDay() {
+      tradingDate = getNextTradingDate(tradingDate)
+      simSeconds = START_SECONDS
+      quotes = quotes.map((quote) => createInitialQuote(quote.symbol, quote.last_price))
+      notify()
+    },
+    exportState(): SimulatorState {
+      return { trading_date: tradingDate, sim_seconds: simSeconds, speed, quotes }
+    },
+    importState(state: SimulatorState) {
+      tradingDate = state.trading_date
+      simSeconds = state.sim_seconds
+      speed = state.speed
+      quotes = state.quotes
     },
   }
 }

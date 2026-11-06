@@ -28,11 +28,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const message = (body as { message?: string } | null)?.message
     throw new ApiError(message ?? `Lỗi máy chủ (${response.status})`, response.status)
   }
+  // API của app luôn trả JSON. Phản hồi khác (ví dụ trang HTML) là lỗi, không phải "không có dữ liệu".
+  if (body === null) throw new ApiError('Phản hồi từ máy chủ không hợp lệ', response.status)
   return body as T
 }
 
 export const http = {
   get: <T>(path: string) => request<T>(path),
-  post: <T>(path: string, data: unknown) =>
-    request<T>(path, { method: 'POST', body: JSON.stringify(data) }),
+  post: <T>(path: string, data?: unknown) =>
+    request<T>(path, { method: 'POST', body: data === undefined ? undefined : JSON.stringify(data) }),
+  patch: <T>(path: string, data: unknown) =>
+    request<T>(path, { method: 'PATCH', body: JSON.stringify(data) }),
 }

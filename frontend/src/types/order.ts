@@ -29,6 +29,12 @@ export type ParentOrderStatus =
 
 export type PersistenceMode = 'DAY' | 'GTD' | 'MULTI_SESSION'
 
+/** Lý do hệ thống tạm dừng lệnh. */
+export type OrderReasonCode = 'PRICE_OUT_OF_BAND'
+
+/** Các loại giá của lệnh, phải nằm trong biên độ ngày hiện tại. */
+export type PriceFieldName = 'limit_price' | 'trigger_price' | 'tp_price' | 'sl_price' | 'hunt_price'
+
 export interface ParentOrder {
   parent_order_id: string
   client_request_id: string
@@ -41,6 +47,8 @@ export interface ParentOrder {
   limit_price: number | null
   strategy_type: StrategyType
   status: ParentOrderStatus
+  /** Ngoài ERD: lý do của PAUSED_SYSTEM, quyết định lệnh có được sửa giá hay không. */
+  reason_code: OrderReasonCode | null
   valid_from: string
   valid_to: string
   persistence_mode: PersistenceMode
@@ -134,4 +142,23 @@ export interface CreateOrderRequest {
 
 export interface CreateOrderResponse {
   parent_order: ParentOrder
+}
+
+/** Dữ liệu gửi lên khi sửa lệnh. `version` để phát hiện lệnh đã bị đổi ở nơi khác. */
+export interface UpdateOrderRequest {
+  version: number
+  total_qty: number
+  limit_price: number | null
+}
+
+/** Một loại giá mà lệnh đang tạm dừng cần có giá hợp lệ. */
+export interface OrderPriceField {
+  name: PriceFieldName
+  value: number
+}
+
+/** Dữ liệu gửi lên khi sửa giá lệnh PAUSED_SYSTEM do giá ngoài biên độ. */
+export interface RepriceOrderRequest {
+  version: number
+  prices: Partial<Record<PriceFieldName, number>>
 }

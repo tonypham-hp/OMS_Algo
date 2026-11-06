@@ -85,6 +85,126 @@ describe('bộ giả lập giá', () => {
     }
   })
 
+  describe('khớp định kỳ ATO, ATC', () => {
+    const ONE_SYMBOL = [{ symbol: 'TEST', ref_price: 100_000 }]
+    const quoteOf = (simulator: ReturnType<typeof createMarketSimulator>) => simulator.getState().quotes[0]
+
+    function tickUntil(simulator: ReturnType<typeof createMarketSimulator>, session: string) {
+      while (simulator.getState().session !== session) simulator.tick(1000)
+    }
+
+    it('trong ATO chỉ giá dự kiến đổi, giá khớp và KL đứng yên', () => {
+      const simulator = createMarketSimulator({ random: seededRandom(10), symbols: ONE_SYMBOL })
+      const seen = new Set<number>()
+      for (let index = 0; index < 100; index += 1) {
+        simulator.tick(1000)
+        const quote = quoteOf(simulator)
+        expect(quote.last_price).toBe(100_000)
+        expect(quote.total_volume).toBe(0)
+        expect(quote.last_qty).toBe(0)
+        expect(quote.indicative_price).not.toBeNull()
+        expect(isValidTick(quote.indicative_price as number)).toBe(true)
+        expect(quote.indicative_price).toBeLessThanOrEqual(quote.ceiling_price)
+        expect(quote.indicative_price).toBeGreaterThanOrEqual(quote.floor_price)
+        seen.add(quote.indicative_price as number)
+      }
+      expect(seen.size).toBeGreaterThan(1)
+    })
+
+    it.each([1, 10, 60] as const)('x%i: khớp một lần đúng 09:15:00 theo giá dự kiến', (speed) => {
+      const simulator = createMarketSimulator({ random: seededRandom(11), symbols: ONE_SYMBOL })
+      simulator.setSpeed(speed)
+      simulator.tick(1000)
+      let indicative = quoteOf(simulator).indicative_price
+      while (simulator.getState().session === 'ATO') {
+        indicative = quoteOf(simulator).indicative_price
+        simulator.tick(1000)
+      }
+
+      const matched = quoteOf(simulator)
+      expect(simulator.getState().sim_seconds).toBe(9 * 3600 + 15 * 60)
+      expect(matched.last_price).toBe(indicative)
+      expect(matched.indicative_price).toBeNull()
+      expect(matched.total_volume).toBe(matched.last_qty)
+      expect(matched.total_volume).toBeGreaterThan(0)
+    })
+
+    it('trong ATC KL đứng yên, khớp một lần đúng 14:45:00, sau đó không đổi gì nữa', () => {
+      const simulator = createMarketSimulator({ random: seededRandom(12), symbols: ONE_SYMBOL })
+      simulator.setSpeed(60)
+      tickUntil(simulator, 'ATC')
+      const before = quoteOf(simulator)
+      expect(before.indicative_price).not.toBeNull()
+
+      let indicative = before.indicative_price
+      while (simulator.getState().session === 'ATC') {
+        indicative = quoteOf(simulator).indicative_price
+        expect(quoteOf(simulator).total_volume).toBe(before.total_volume)
+        expect(quoteOf(simulator).last_price).toBe(before.last_price)
+        simulator.tick(1000)
+      }
+
+      const matched = quoteOf(simulator)
+      expect(simulator.getState().session).toBe('CLOSED')
+      expect(simulator.getState().sim_seconds).toBe(14 * 3600 + 45 * 60)
+      expect(matched.last_price).toBe(indicative)
+      expect(matched.total_volume).toBe(before.total_volume + matched.last_qty)
+
+      simulator.tick(1000)
+      expect(quoteOf(simulator)).toEqual({ ...matched, tick_direction: 0 })
+    })
+
+    it('phiên liên tục và nghỉ trưa không có giá dự kiến', () => {
+      const simulator = createMarketSimulator({ random: seededRandom(13), symbols: ONE_SYMBOL })
+      simulator.setSpeed(60)
+      tickUntil(simulator, 'CONTINUOUS')
+      expect(quoteOf(simulator).indicative_price).toBeNull()
+      tickUntil(simulator, 'LUNCH')
+      expect(quoteOf(simulator).indicative_price).toBeNull()
+    })
+  })
+
+  it('sang ngày mới: bỏ qua cuối tuần, giá đóng cửa thành giá tham chiếu, trần sàn tính lại', () => {
+    const simulator = createMarketSimulator({
+      random: seededRandom(8),
+      startDate: new Date(2026, 10, 6), // Thứ Sáu.
+      symbols: [{ symbol: 'TEST', ref_price: 100_000 }],
+    })
+    for (let index = 0; index < 400; index += 1) {
+      simulator.setSpeed(60)
+      simulator.tick(1000)
+    }
+    const close = simulator.getState().quotes[0].last_price
+
+    simulator.nextDay()
+    const state = simulator.getState()
+    const quote = state.quotes[0]
+    expect(state.trading_date).toBe('2026-11-09')
+    expect(state.session).toBe('ATO')
+    expect(quote.ref_price).toBe(close)
+    expect(quote.last_price).toBe(close)
+    expect(quote.total_volume).toBe(0)
+    expect(isValidTick(quote.ceiling_price)).toBe(true)
+    expect(quote.ceiling_price).toBeGreaterThan(close)
+    expect(quote.floor_price).toBeLessThan(close)
+
+    simulator.reset()
+    expect(simulator.getState().trading_date).toBe('2026-11-06')
+    expect(simulator.getState().quotes[0].ref_price).toBe(100_000)
+  })
+
+  it('xuất rồi nạp lại giữ nguyên ngày, giờ, tốc độ và giá', () => {
+    const source = createMarketSimulator({ random: seededRandom(9), startDate: new Date(2026, 10, 6) })
+    source.setSpeed(10)
+    for (let index = 0; index < 50; index += 1) source.tick()
+    source.nextDay()
+    source.tick()
+
+    const target = createMarketSimulator({ random: seededRandom(9) })
+    target.importState(JSON.parse(JSON.stringify(source.exportState())))
+    expect(target.getState()).toEqual(source.getState())
+  })
+
   it('subscribe nhận ngay trạng thái hiện tại và ngừng nhận sau khi hủy', () => {
     const simulator = createMarketSimulator({ random: seededRandom(7) })
     let calls = 0

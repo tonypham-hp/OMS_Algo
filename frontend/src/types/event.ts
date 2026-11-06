@@ -36,5 +36,8 @@ export type NotificationType =
 
 export interface Notification {
   notification_type: NotificationType
+  /** Ngoài ERD: cho biết thông báo thuộc lệnh nào và lý do, để hiển thị được. */
+  parent_order_id: string
+  message: string
   sent_at: string
 }
