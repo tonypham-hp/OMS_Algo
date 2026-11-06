@@ -4,6 +4,11 @@ const percentFormatter = new Intl.NumberFormat('vi-VN', {
   maximumFractionDigits: 2,
 })
 
+const bpsFormatter = new Intl.NumberFormat('vi-VN', {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+})
+
 const pad = (value: number) => String(value).padStart(2, '0')
 
 /** 1000000 → "1.000.000" */
@@ -37,4 +42,17 @@ export function toDateString(date: Date): string {
 export function formatDate(dateString: string): string {
   const [year, month, day] = dateString.split('-')
   return `${day}/${month}/${year}`
+}
+
+/** "2026-11-06T09:15:30" → "06/11 09:15:30". Có ngày vì lệnh nhiều phiên kéo dài qua nhiều ngày. */
+export function formatDateTime(isoDateTime: string): string {
+  const [date, time] = isoDateTime.split('T')
+  return `${formatDate(date).slice(0, 5)} ${time}`
+}
+
+/** 12.34 → "+12,3 bps" */
+export function formatBps(value: number): string {
+  const rounded = Math.round(value * 10) / 10
+  const text = `${bpsFormatter.format(rounded)} bps`
+  return rounded > 0 ? `+${text}` : text
 }

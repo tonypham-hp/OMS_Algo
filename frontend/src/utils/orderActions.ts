@@ -33,6 +33,29 @@ export function isRepriceRequired(status: ParentOrderStatus, reasonCode: OrderRe
   return status === 'PAUSED_SYSTEM' && reasonCode === 'PRICE_OUT_OF_BAND'
 }
 
+export interface OrderActionItem {
+  action: OrderAction
+  label: string
+  availability: ActionAvailability
+}
+
+/** Danh sách nút hành động của một lệnh, dùng chung cho Sổ lệnh và Chi tiết lệnh. */
+export function getOrderActionItems(
+  status: ParentOrderStatus,
+  session: SessionCode,
+  reasonCode: OrderReasonCode | null = null,
+): OrderActionItem[] {
+  const actions = getAllowedActions(status, session, reasonCode)
+  const isPaused = status === 'PAUSED_USER' || status === 'PAUSED_SYSTEM'
+  return [
+    { action: 'edit', label: isRepriceRequired(status, reasonCode) ? 'Sửa giá' : 'Sửa', availability: actions.edit },
+    { action: 'cancel', label: 'Hủy', availability: actions.cancel },
+    isPaused
+      ? { action: 'resume', label: 'Tiếp tục', availability: actions.resume }
+      : { action: 'pause', label: 'Tạm dừng', availability: actions.pause },
+  ]
+}
+
 /** Bảng hành động ở mục 5 của spec. UI và API giả lập dùng chung hàm này. */
 export function getAllowedActions(
   status: ParentOrderStatus,

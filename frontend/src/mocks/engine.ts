@@ -8,6 +8,7 @@ import type {
   ChildOrderType,
   CreateOrderRequest,
   Execution,
+  FillDetail,
   MarketSnapshot,
   MarketState,
   Notification,
@@ -28,9 +29,9 @@ import type {
 import { formatDate, formatNumber } from '@/lib/format'
 import { isAuctionSession, parseTimeToSeconds, validatePrice } from '@/utils/hose'
 import { getAllowedActions, isRepriceRequired, isTerminalStatus, type OrderAction } from '@/utils/orderActions'
+import { getTwapTarget, getVwapTarget } from '@/utils/schedule'
 
 const LOT = QTY_LOT_SIZE
-const VWAP_CYCLE_SECONDS = 300
 const SECONDS_PER_DAY = 86_400
 /** Mỗi nhịp, một lệnh con khớp tối đa từng này lô, để thấy khớp dần. */
 const MAX_FILL_LOTS_PER_TICK = 5
@@ -115,35 +116,6 @@ export interface EngineState {
 
 export function isChildLive(status: ChildOrderStatus): boolean {
   return !TERMINAL_CHILD_STATUSES.has(status)
-}
-
-function roundUpToLot(numerator: number, denominator: number) {
-  return Math.ceil(numerator / (denominator * LOT)) * LOT
-}
-
-/** KL lũy kế phải đạt đến chu kỳ `index`, chia theo tỷ trọng. Luôn là bội số lô, chu kỳ cuối bằng total. */
-function getScheduleTarget(totalQty: number, weights: number[], index: number) {
-  const last = weights.length - 1
-  if (index >= last) return totalQty
-  const sumAll = weights.reduce((sum, weight) => sum + weight, 0)
-  const sumDone = weights.slice(0, index + 1).reduce((sum, weight) => sum + weight, 0)
-  return Math.min(totalQty, roundUpToLot(totalQty * sumDone, sumAll))
-}
-
-export function getTwapTarget(totalQty: number, windowSeconds: number, intervalSeconds: number, elapsedSeconds: number) {
-  const cycles = Math.max(1, Math.floor(windowSeconds / intervalSeconds))
-  const index = Math.floor(elapsedSeconds / intervalSeconds)
-  return getScheduleTarget(totalQty, Array<number>(cycles).fill(1), index)
-}
-
-export function getVwapTarget(totalQty: number, windowSeconds: number, elapsedSeconds: number) {
-  const cycles = Math.max(1, Math.floor(windowSeconds / VWAP_CYCLE_SECONDS))
-  // Tỷ trọng hình chữ U: hai đầu khung giờ nhiều gấp 3 lần ở giữa, mô phỏng thanh khoản trong ngày.
-  const weights = Array.from({ length: cycles }, (_, cycle) => {
-    const position = (cycle + 0.5) / cycles
-    return 1 + 2 * Math.abs(2 * position - 1)
-  })
-  return getScheduleTarget(totalQty, weights, Math.floor(elapsedSeconds / VWAP_CYCLE_SECONDS))
 }
 
 /** Điều kiện đã chạm giá chưa. Với Bracket, `side` là chiều của lệnh thoát. */
@@ -259,6 +231,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
     oldValue: string | null,
     newValue: string | null,
     userId = 'SYSTEM',
+    fillDetail?: FillDetail,
   ) {
     eventSequence += 1
     events.push({
@@ -271,6 +244,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
       old_value: oldValue,
       new_value: newValue,
       event_time: nowIso(),
+      ...(fillDetail && { fill_detail: fillDetail }),
     })
   }
 
@@ -281,10 +255,16 @@ export function createOrderEngine(options: EngineOptions = {}) {
     logEvent(parent.parent_order_id, null, action, previous, next, userId)
   }
 
-  function setChildStatus(child: ChildOrder, next: ChildOrderStatus, action: OrderEventAction, userId?: string) {
+  function setChildStatus(
+    child: ChildOrder,
+    next: ChildOrderStatus,
+    action: OrderEventAction,
+    userId?: string,
+    fillDetail?: FillDetail,
+  ) {
     const previous = child.status
     child.status = next
-    logEvent(child.parent_order_id, child.child_order_id, action, previous, next, userId)
+    logEvent(child.parent_order_id, child.child_order_id, action, previous, next, userId, fillDetail)
   }
 
   function createChild(parent: ParentOrder, side: Side, orderType: ChildOrderType, price: number | null, quantity: number) {
@@ -399,7 +379,11 @@ export function createOrderEngine(options: EngineOptions = {}) {
       match_time: now,
     })
     child.filled_qty += qty
-    setChildStatus(child, child.filled_qty >= child.quantity ? 'FILLED' : 'PARTIAL_FILLED', 'FILL')
+    setChildStatus(child, child.filled_qty >= child.quantity ? 'FILLED' : 'PARTIAL_FILLED', 'FILL', undefined, {
+      qty,
+      price: report.price,
+      exchange_match_id: report.exchange_match_id,
+    })
 
     if (!exit) parent.executed_qty += qty
     parent.updated_at = now
@@ -1145,6 +1129,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
     getNotifications: (parentOrderId: string) =>
       notifications.filter((item) => item.parent_order_id === parentOrderId),
     getSnapshot: (parentOrderId: string) => snapshots.get(parentOrderId),
+    getParameters: (parentOrderId: string) => parameters.get(parentOrderId) ?? [],
     getWorkingQty: (parentOrderId: string) => workingOf(requireParent(parentOrderId)),
     getAllowedQty: (parentOrderId: string) => allowedOf(requireParent(parentOrderId)),
   }

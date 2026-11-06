@@ -4,6 +4,7 @@ import type {
   CreateOrderRequest,
   DemoUser,
   Notification,
+  OrderDetailData,
   OrderPriceField,
   ParentOrder,
   RepriceOrderRequest,
@@ -32,7 +33,7 @@ function errorResponse(message: string, status: number) {
 function handleOrderAction(
   request: Request,
   parentOrderId: string,
-  action: (username: string) => ParentOrder | OrderPriceField[] | Notification[],
+  action: (username: string) => ParentOrder | OrderPriceField[] | Notification[] | OrderDetailData,
 ) {
   const user = getUser(request)
   if (!user) return errorResponse('Chưa đăng nhập', 401)
@@ -93,6 +94,19 @@ export const handlers = [
 
   http.get('*/api/orders/:id', ({ request, params }) =>
     handleOrderAction(request, String(params.id), () => orderEngine.getOrder(String(params.id))),
+  ),
+
+  http.get('*/api/orders/:id/detail', ({ request, params }) =>
+    handleOrderAction(request, String(params.id), () => {
+      const id = String(params.id)
+      return {
+        parameters: orderEngine.getParameters(id),
+        children: orderEngine.getChildren(id),
+        executions: orderEngine.getExecutions(id),
+        snapshot: orderEngine.getSnapshot(id) ?? null,
+        events: orderEngine.getEvents(id),
+      }
+    }),
   ),
 
   http.get('*/api/orders/:id/notifications', ({ request, params }) =>

@@ -9,10 +9,9 @@ import type {
   SymbolQuote,
 } from '@/types'
 import { getSessionAt, isValidTick } from '@/utils/hose'
+import { getTwapTarget, getVwapTarget } from '@/utils/schedule'
 import {
   createOrderEngine,
-  getTwapTarget,
-  getVwapTarget,
   isChildLive,
   isConditionHit,
   type OrderEngine,
@@ -1547,6 +1546,74 @@ describe('nhật ký OrderEvent', () => {
       verify()
     }
     expect(lastStatus.size).toBeGreaterThan(ids.length)
+  })
+
+  describe('event FILL', () => {
+    const fillEvents = (engine: OrderEngine, id: string) =>
+      engine.getEvents(id).filter((event) => event.action === 'FILL')
+
+    function placeWithChild() {
+      const engine = newEngine()
+      const id = place(engine, 'ICEBERG', [intParam('slice_qty', 1_000)], { limit_price: 90_000 })
+      run(engine, 2) // Nhịp đầu sinh lệnh con, nhịp sau mới gửi đi. Giá đặt thấp nên chưa khớp.
+      return { engine, id, childId: engine.getChildren(id)[0].child_order_id }
+    }
+
+    it('ghi KL, giá, mã khớp, và vẫn giữ trạng thái lệnh con trước, sau', () => {
+      const { engine, id, childId } = placeWithChild()
+      engine.applyExecution({ child_order_id: childId, exchange_match_id: 'M-1', price: 89_900, qty: 300 })
+
+      expect(fillEvents(engine, id)).toHaveLength(1)
+      expect(fillEvents(engine, id)[0]).toMatchObject({
+        child_order_id: childId,
+        old_value: 'ACKNOWLEDGED',
+        new_value: 'PARTIAL_FILLED',
+        fill_detail: { qty: 300, price: 89_900, exchange_match_id: 'M-1' },
+      })
+    })
+
+    it('báo khớp vượt KL bị cắt bớt thì ghi KL thực nhận, không ghi KL trong báo khớp', () => {
+      const { engine, id, childId } = placeWithChild()
+      engine.applyExecution({ child_order_id: childId, exchange_match_id: 'M-1', price: 89_900, qty: 5_000 })
+
+      expect(fillEvents(engine, id)[0].fill_detail?.qty).toBe(1_000)
+    })
+
+    it('báo khớp trùng không ghi thêm event', () => {
+      const { engine, id, childId } = placeWithChild()
+      const report = { child_order_id: childId, exchange_match_id: 'M-1', price: 89_900, qty: 300 }
+      engine.applyExecution(report)
+      engine.applyExecution(report)
+
+      expect(fillEvents(engine, id)).toHaveLength(1)
+    })
+
+    it('khi engine tự chạy, mỗi Execution có đúng một event FILL cùng số liệu', () => {
+      const engine = newEngine()
+      const id = place(engine, 'ICEBERG', [intParam('slice_qty', 500)], { limit_price: 100_000 })
+      run(engine, 30)
+
+      const details = fillEvents(engine, id).map((event) => event.fill_detail)
+      const executions = engine.getExecutions(id).map(({ qty, price, exchange_match_id }) => ({ qty, price, exchange_match_id }))
+      expect(executions.length).toBeGreaterThan(0)
+      expect(details).toEqual(executions)
+    })
+
+    it('lệnh mẫu: mỗi Execution có đúng một event FILL cùng số liệu', () => {
+      const seed = createSeedData(new Date(2026, 10, 6))
+      const details = seed.events.filter((event) => event.action === 'FILL').map((event) => event.fill_detail)
+      const executions = seed.executions.map(({ qty, price, exchange_match_id }) => ({ qty, price, exchange_match_id }))
+      expect(details).toEqual(executions)
+    })
+
+    it('giữ nguyên chi tiết sau khi lưu và nạp lại trạng thái', () => {
+      const { engine, id, childId } = placeWithChild()
+      engine.applyExecution({ child_order_id: childId, exchange_match_id: 'M-1', price: 89_900, qty: 300 })
+      const restored = createOrderEngine()
+      restored.importState(JSON.parse(JSON.stringify(engine.exportState())))
+
+      expect(fillEvents(restored, id)[0].fill_detail).toEqual({ qty: 300, price: 89_900, exchange_match_id: 'M-1' })
+    })
   })
 
   it('event ghi đúng người thao tác và mã event không trùng', () => {

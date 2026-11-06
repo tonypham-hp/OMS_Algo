@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useMarketStore } from '@/store/market.store'
 import type { ParentOrder } from '@/types'
-import { getAllowedActions, isRepriceRequired, type ActionAvailability } from '@/utils/orderActions'
+import { getOrderActionItems } from '@/utils/orderActions'
 
 interface OrderActionsProps {
   order: ParentOrder
@@ -20,20 +20,8 @@ interface OrderActionsProps {
 
 export function OrderActions({ order, isBusy, onEdit, onCancel, onPause, onResume }: OrderActionsProps) {
   const session = useMarketStore((state) => state.session)
-  const actions = getAllowedActions(order.status, session, order.reason_code)
-  const isPaused = order.status === 'PAUSED_USER' || order.status === 'PAUSED_SYSTEM'
-
-  const items: Array<{ label: string; availability: ActionAvailability; run: () => void }> = [
-    {
-      label: isRepriceRequired(order.status, order.reason_code) ? 'Sửa giá' : 'Sửa',
-      availability: actions.edit,
-      run: () => onEdit(order),
-    },
-    { label: 'Hủy', availability: actions.cancel, run: () => onCancel(order) },
-    isPaused
-      ? { label: 'Tiếp tục', availability: actions.resume, run: () => onResume(order) }
-      : { label: 'Tạm dừng', availability: actions.pause, run: () => onPause(order) },
-  ]
+  const items = getOrderActionItems(order.status, session, order.reason_code)
+  const handlers = { edit: onEdit, cancel: onCancel, pause: onPause, resume: onResume }
   const hasAllowedAction = items.some((item) => item.availability.allowed)
 
   return (
@@ -59,7 +47,7 @@ export function OrderActions({ order, isBusy, onEdit, onCancel, onPause, onResum
               key={item.label}
               disabled={!item.availability.allowed}
               className="flex-col items-start gap-0"
-              onSelect={item.run}
+              onSelect={() => handlers[item.action](order)}
             >
               <span>{item.label}</span>
               {item.availability.reason && <span className="text-xs">{item.availability.reason}</span>}
