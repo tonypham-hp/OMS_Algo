@@ -17,6 +17,26 @@ export function useOrders() {
   })
 }
 
+export function useOrder(parentOrderId: string) {
+  const username = useAuthStore((state) => state.user?.username)
+  return useQuery({
+    queryKey: [ORDERS_KEY, username, parentOrderId],
+    queryFn: () => ordersService.getOrder(parentOrderId),
+    refetchInterval: ORDERS_REFETCH_MS,
+    retry: false,
+  })
+}
+
+export function useOrderNotifications(parentOrderId: string, enabled: boolean) {
+  const username = useAuthStore((state) => state.user?.username)
+  return useQuery({
+    queryKey: [ORDERS_KEY, username, parentOrderId, 'notifications'],
+    queryFn: () => ordersService.getNotifications(parentOrderId),
+    enabled,
+    refetchInterval: ORDERS_REFETCH_MS,
+  })
+}
+
 function useInvalidateOrders() {
   const queryClient = useQueryClient()
   return () => queryClient.invalidateQueries({ queryKey: [ORDERS_KEY] })

@@ -1,6 +1,7 @@
 import type {
   CreateOrderRequest,
   CreateOrderResponse,
+  Notification,
   OrderPriceField,
   ParentOrder,
   RepriceOrderRequest,
@@ -10,6 +11,9 @@ import { http } from './http'
 
 export const ordersService = {
   listOrders: () => http.get<ParentOrder[]>('/api/orders'),
+  getOrder: (parentOrderId: string) => http.get<ParentOrder>(`/api/orders/${parentOrderId}`),
+  getNotifications: (parentOrderId: string) =>
+    http.get<Notification[]>(`/api/orders/${parentOrderId}/notifications`),
   createOrder: (request: CreateOrderRequest) =>
     http.post<CreateOrderResponse>('/api/orders', request),
   updateOrder: (parentOrderId: string, request: UpdateOrderRequest) =>

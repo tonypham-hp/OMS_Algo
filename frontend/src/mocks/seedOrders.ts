@@ -4,6 +4,7 @@ import type {
   ChildOrderStatus,
   Execution,
   MarketSnapshot,
+  Notification,
   OrderCondition,
   OrderEvent,
   ParentOrder,
@@ -36,6 +37,8 @@ interface SeedOrder {
   params: Array<[code: string, value: string, type: StrategyParameter['data_type']]>
   conditions?: Array<[type: string, price: number, status: OrderCondition['status']]>
   children?: SeedChild[]
+  /** Lý do tạm dừng, ghi thành Notification. */
+  pauseReason?: string
   arrival_price: number
 }
 
@@ -126,6 +129,7 @@ const SEED_ORDERS: SeedOrder[] = [
       { price: 41_500, quantity: 1_000, filled: 1_000, status: 'FILLED' },
       { price: 41_500, quantity: 1_000, filled: 0, status: 'UNKNOWN' },
     ],
+    pauseReason: 'một lệnh con mất phản hồi từ Core, đang chờ đối soát.',
     arrival_price: 41_200,
   },
   {
@@ -196,6 +200,7 @@ export function createSeedData(now: Date): SeedData {
   const executions: Execution[] = []
   const snapshots = new Map<string, MarketSnapshot>()
   const events: OrderEvent[] = []
+  const notifications: Notification[] = []
 
   const addEvent = (event: Omit<OrderEvent, 'event_id' | 'user_id' | 'channel'>, userId = 'SYSTEM') => {
     events.push({
@@ -291,10 +296,19 @@ export function createSeedData(now: Date): SeedData {
       }
     })
 
+    if (seed.pauseReason) {
+      notifications.push({
+        notification_type: 'PARENT_PAUSED',
+        parent_order_id: id,
+        message: `Lệnh ${id} tạm dừng: ${seed.pauseReason}`,
+        sent_at: createdAt,
+      })
+    }
+
     if (seed.status !== 'ACTIVE') {
       addEvent({ parent_order_id: id, child_order_id: null, action: 'DECISION', old_value: 'ACTIVE', new_value: seed.status, event_time: createdAt })
     }
   })
 
-  return { orders, parameters, conditions, children, executions, snapshots, events }
+  return { orders, parameters, conditions, children, executions, snapshots, events, notifications }
 }

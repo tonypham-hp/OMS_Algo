@@ -1599,6 +1599,17 @@ describe('lệnh mẫu', () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
+  it('lệnh mẫu PAUSED_SYSTEM có Notification lý do, engine nạp được', () => {
+    const paused = seed.orders.find((order) => order.status === 'PAUSED_SYSTEM')
+    const engine = createOrderEngine({ random: seededRandom(1) })
+    engine.load(seed)
+
+    const notifications = engine.getNotifications(paused?.parent_order_id ?? '')
+    expect(notifications).toHaveLength(1)
+    expect(notifications[0].notification_type).toBe('PARENT_PAUSED')
+    expect(notifications[0].message).toContain('Core')
+  })
+
   it('có Child UNKNOWN để demo, và lệnh ACTIVE chưa có khớp', () => {
     expect(seed.children.some((child) => child.status === 'UNKNOWN')).toBe(true)
     for (const order of seed.orders.filter((item) => item.status === 'ACTIVE')) {

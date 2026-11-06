@@ -68,6 +68,7 @@ export interface SeedData {
   executions: Execution[]
   snapshots: Map<string, MarketSnapshot>
   events: OrderEvent[]
+  notifications: Notification[]
 }
 
 interface EngineOptions {
@@ -1066,7 +1067,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
     runtimes.clear()
     seenMatchIds.clear()
     executions.forEach((execution) => seenMatchIds.add(execution.exchange_match_id))
-    notifications = []
+    notifications = seed.notifications.map((notification) => ({ ...notification }))
     closedDate = null
     currentDate = null
     previousSession = null

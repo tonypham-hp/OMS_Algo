@@ -3,6 +3,7 @@ import { fromCreateOrderRequest, validateOrderValues } from '@/pages/PlaceOrder/
 import type {
   CreateOrderRequest,
   DemoUser,
+  Notification,
   OrderPriceField,
   ParentOrder,
   RepriceOrderRequest,
@@ -31,7 +32,7 @@ function errorResponse(message: string, status: number) {
 function handleOrderAction(
   request: Request,
   parentOrderId: string,
-  action: (username: string) => ParentOrder | OrderPriceField[],
+  action: (username: string) => ParentOrder | OrderPriceField[] | Notification[],
 ) {
   const user = getUser(request)
   if (!user) return errorResponse('Chưa đăng nhập', 401)
@@ -89,6 +90,14 @@ export const handlers = [
       orderEngine.updateOrder(String(params.id), body, username),
     )
   }),
+
+  http.get('*/api/orders/:id', ({ request, params }) =>
+    handleOrderAction(request, String(params.id), () => orderEngine.getOrder(String(params.id))),
+  ),
+
+  http.get('*/api/orders/:id/notifications', ({ request, params }) =>
+    handleOrderAction(request, String(params.id), () => orderEngine.getNotifications(String(params.id))),
+  ),
 
   http.get('*/api/orders/:id/price-fields', ({ request, params }) =>
     handleOrderAction(request, String(params.id), () => orderEngine.getRepriceFields(String(params.id))),
