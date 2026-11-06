@@ -301,8 +301,8 @@ export function OrderTicket() {
 
           {strategy.usesMtl && !isMtlAllowed(session) && (
             <p role="status" className="rounded-md bg-amber-500/15 p-2 text-xs text-amber-300">
-              Hiện tại: {SESSION_LABELS[session]}. Lệnh {strategy.label} sinh lệnh con MTL, mà MTL chỉ
-              hợp lệ trong phiên liên tục, nên lệnh con chỉ được gửi khi vào phiên liên tục.
+              Hiện tại: {SESSION_LABELS[session]}. Lệnh {strategy.label} có thể sinh lệnh con MTL, mà MTL
+              chỉ hợp lệ trong phiên liên tục, nên lệnh con đó chỉ được gửi khi vào phiên liên tục.
             </p>
           )}
 

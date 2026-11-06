@@ -135,3 +135,10 @@ export interface CreateOrderRequest {
 export interface CreateOrderResponse {
   parent_order: ParentOrder
 }
+
+/** Dữ liệu gửi lên khi sửa lệnh. `version` để phát hiện lệnh đã bị đổi ở nơi khác. */
+export interface UpdateOrderRequest {
+  version: number
+  total_qty: number
+  limit_price: number | null
+}

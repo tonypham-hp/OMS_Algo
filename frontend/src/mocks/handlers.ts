@@ -1,58 +1,42 @@
 import { http, HttpResponse } from 'msw/http'
-import { formatClock, toDateString } from '@/lib/format'
+import { toDateString } from '@/lib/format'
 import { fromCreateOrderRequest, validateOrderValues } from '@/pages/PlaceOrder/orderSchema'
-import type { CreateOrderRequest, OrderCondition, ParentOrder, StrategyParameter } from '@/types'
-import { DEMO_USERS, mockDb } from './data'
+import type { CreateOrderRequest, DemoUser, ParentOrder, UpdateOrderRequest } from '@/types'
+import { DEMO_USERS } from './data'
+import { EngineError } from './engine'
+import { orderEngine } from './runtime'
 import { marketSimulator } from './simulator'
 
-let orderSequence = 0
-
-function nowIso() {
-  const { sim_seconds: seconds } = marketSimulator.getState()
-  return `${toDateString(new Date())}T${formatClock(seconds)}`
+function getUser(request: Request): DemoUser | undefined {
+  const username = request.headers.get('X-User-Id')
+  return DEMO_USERS.find((user) => user.username === username)
 }
 
-function getParameter(parameters: StrategyParameter[], code: string) {
-  const parameter = parameters.find((item) => item.parameter_code === code)
-  return parameter ? Number(parameter.parameter_value) : null
+/** Khách hàng và dealer chỉ thấy tài khoản của mình, vận hành thấy tất cả. */
+function canSeeOrder(user: DemoUser, order: ParentOrder) {
+  return user.role === 'OPS' || user.accounts.includes(order.account_no)
 }
 
-function buildConditions(order: ParentOrder, parameters: StrategyParameter[]): OrderCondition[] {
-  const create = (
-    index: number,
-    conditionType: string,
-    triggerPrice: number | null,
-    ocoGroupId: string | null = null,
-  ): OrderCondition => ({
-    condition_id: `${order.parent_order_id}-C${index}`,
-    parent_order_id: order.parent_order_id,
-    condition_type: conditionType,
-    trigger_price: triggerPrice,
-    oco_group_id: ocoGroupId,
-    status: 'ACTIVE',
-    triggered_at: null,
-  })
+function errorResponse(message: string, status: number) {
+  return HttpResponse.json({ message }, { status })
+}
 
-  switch (order.strategy_type) {
-    case 'STOP':
-    case 'STOP_LIMIT':
-      return [create(1, 'STOP', getParameter(parameters, 'trigger_price'))]
-    case 'TAKE_PROFIT':
-      return [create(1, 'TAKE_PROFIT', getParameter(parameters, 'trigger_price'))]
-    case 'TRAILING_STOP':
-      return [create(1, 'TRAILING_STOP', null)]
-    case 'HUNT':
-      return [create(1, 'HUNT', getParameter(parameters, 'hunt_price'))]
-    case 'OCO':
-    case 'BRACKET': {
-      const group = `OCO-${order.parent_order_id}`
-      return [
-        create(1, 'TAKE_PROFIT', getParameter(parameters, 'tp_price'), group),
-        create(2, 'STOP', getParameter(parameters, 'sl_price'), group),
-      ]
+/** Khung chung của các thao tác trên một lệnh: kiểm tra quyền, đổi lỗi nghiệp vụ thành phản hồi HTTP. */
+function handleOrderAction(
+  request: Request,
+  parentOrderId: string,
+  action: (username: string) => ParentOrder,
+) {
+  const user = getUser(request)
+  if (!user) return errorResponse('Chưa đăng nhập', 401)
+  try {
+    if (!canSeeOrder(user, orderEngine.getOrder(parentOrderId))) {
+      return errorResponse('Không tìm thấy lệnh', 404)
     }
-    default:
-      return []
+    return HttpResponse.json(action(user.username))
+  } catch (error) {
+    if (error instanceof EngineError) return errorResponse(error.message, error.status)
+    throw error
   }
 }
 
@@ -62,71 +46,59 @@ export const handlers = [
   http.post('*/api/auth/login', async ({ request }) => {
     const { username } = (await request.json()) as { username: string }
     const user = DEMO_USERS.find((item) => item.username === username)
-    if (!user) return HttpResponse.json({ message: 'Tài khoản không tồn tại' }, { status: 401 })
+    if (!user) return errorResponse('Tài khoản không tồn tại', 401)
     return HttpResponse.json(user)
   }),
 
+  http.get('*/api/orders', ({ request }) => {
+    const user = getUser(request)
+    if (!user) return errorResponse('Chưa đăng nhập', 401)
+    const orders = orderEngine
+      .listOrders()
+      .filter((order) => canSeeOrder(user, order))
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    return HttpResponse.json(orders)
+  }),
+
   http.post('*/api/orders', async ({ request }) => {
+    const user = getUser(request)
+    if (!user) return errorResponse('Chưa đăng nhập', 401)
     const body = (await request.json()) as CreateOrderRequest
     const market = marketSimulator.getState()
-    const today = toDateString(new Date())
 
     // Kiểm tra lại bằng đúng luật của form: giá có thể đã đổi từ lúc người dùng nhập.
     const errors = validateOrderValues(fromCreateOrderRequest(body), {
       getQuote: (symbol) => market.quotes.find((quote) => quote.symbol === symbol),
-      today,
+      today: toDateString(new Date()),
     })
     if (errors.length > 0) {
       return HttpResponse.json({ message: errors[0].message, errors }, { status: 422 })
     }
-
-    orderSequence += 1
-    const now = nowIso()
-    const parentOrderId = `PO-${today.replaceAll('-', '')}-${String(orderSequence).padStart(4, '0')}`
-    const order: ParentOrder = {
-      parent_order_id: parentOrderId,
-      client_request_id: body.client_request_id,
-      account_no: body.account_no,
-      symbol: body.symbol,
-      side: body.side,
-      total_qty: body.total_qty,
-      executed_qty: 0,
-      limit_price: body.limit_price,
-      strategy_type: body.strategy_type,
-      status: 'ACTIVE',
-      valid_from: now,
-      valid_to: body.valid_to ?? today,
-      persistence_mode: body.persistence_mode,
-      version: 1,
-      created_at: now,
-      updated_at: now,
-    }
-    const quote = market.quotes.find((item) => item.symbol === body.symbol)
-
-    mockDb.parentOrders.push(order)
-    mockDb.parameters.set(parentOrderId, body.parameters)
-    mockDb.conditions.push(...buildConditions(order, body.parameters))
-    if (quote) {
-      mockDb.snapshots.set(parentOrderId, {
-        arrival_price: quote.last_price,
-        arrival_bid: quote.bid_price,
-        arrival_ask: quote.ask_price,
-        arrival_timestamp: now,
-      })
-    }
-    // Mọi thay đổi trạng thái đều ghi một OrderEvent (mục 8 của spec).
-    mockDb.events.push({
-      event_id: `${parentOrderId}-E${mockDb.events.length + 1}`,
-      parent_order_id: parentOrderId,
-      child_order_id: null,
-      action: 'CREATE',
-      user_id: request.headers.get('X-User-Id') ?? 'unknown',
-      channel: 'WEB',
-      old_value: null,
-      new_value: 'ACTIVE',
-      event_time: now,
-    })
-
-    return HttpResponse.json({ parent_order: order }, { status: 201 })
+    return HttpResponse.json({ parent_order: orderEngine.createOrder(body, user.username) }, { status: 201 })
   }),
+
+  http.patch('*/api/orders/:id', async ({ request, params }) => {
+    const body = (await request.json()) as UpdateOrderRequest
+    return handleOrderAction(request, String(params.id), (username) =>
+      orderEngine.updateOrder(String(params.id), body, username),
+    )
+  }),
+
+  http.post('*/api/orders/:id/pause', ({ request, params }) =>
+    handleOrderAction(request, String(params.id), (username) =>
+      orderEngine.pauseOrder(String(params.id), username),
+    ),
+  ),
+
+  http.post('*/api/orders/:id/resume', ({ request, params }) =>
+    handleOrderAction(request, String(params.id), (username) =>
+      orderEngine.resumeOrder(String(params.id), username),
+    ),
+  ),
+
+  http.post('*/api/orders/:id/cancel', ({ request, params }) =>
+    handleOrderAction(request, String(params.id), (username) =>
+      orderEngine.cancelOrder(String(params.id), username),
+    ),
+  ),
 ]

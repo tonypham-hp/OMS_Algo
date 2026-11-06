@@ -1,0 +1,61 @@
+import { describe, expect, it } from 'vitest'
+import type { ParentOrderStatus, SessionCode } from '@/types'
+import { getAllowedActions, type OrderAction } from './orderActions'
+
+const ALL_STATUSES: ParentOrderStatus[] = [
+  'DRAFT',
+  'ACTIVE',
+  'PARTIALLY_EXECUTED',
+  'PAUSED_USER',
+  'PAUSED_SYSTEM',
+  'CANCEL_PENDING',
+  'COMPLETED',
+  'CANCELLED',
+  'EXPIRED',
+]
+
+function allowedStatuses(action: OrderAction, session: SessionCode) {
+  return ALL_STATUSES.filter((status) => getAllowedActions(status, session)[action].allowed)
+}
+
+describe('bảng hành động trong phiên liên tục', () => {
+  it('Sửa: ACTIVE, PARTIALLY_EXECUTED, PAUSED_USER', () => {
+    expect(allowedStatuses('edit', 'CONTINUOUS')).toEqual(['ACTIVE', 'PARTIALLY_EXECUTED', 'PAUSED_USER'])
+  })
+
+  it('Hủy: mọi trạng thái chưa kết thúc, trừ lệnh đang hủy', () => {
+    expect(allowedStatuses('cancel', 'CONTINUOUS')).toEqual([
+      'DRAFT',
+      'ACTIVE',
+      'PARTIALLY_EXECUTED',
+      'PAUSED_USER',
+      'PAUSED_SYSTEM',
+    ])
+  })
+
+  it('Tạm dừng: ACTIVE, PARTIALLY_EXECUTED', () => {
+    expect(allowedStatuses('pause', 'CONTINUOUS')).toEqual(['ACTIVE', 'PARTIALLY_EXECUTED'])
+  })
+
+  it('Tiếp tục: chỉ PAUSED_USER, không gồm PAUSED_SYSTEM', () => {
+    expect(allowedStatuses('resume', 'CONTINUOUS')).toEqual(['PAUSED_USER'])
+  })
+})
+
+describe('khóa theo phiên', () => {
+  it.each(['ATO', 'ATC'] as const)('%s khóa Sửa và Hủy, kèm lý do', (session) => {
+    expect(allowedStatuses('edit', session)).toEqual([])
+    expect(allowedStatuses('cancel', session)).toEqual([])
+    expect(getAllowedActions('ACTIVE', session).edit.reason).toContain(session)
+  })
+
+  it.each(['ATO', 'ATC'] as const)('%s vẫn cho Tạm dừng và Tiếp tục', (session) => {
+    expect(allowedStatuses('pause', session)).toEqual(['ACTIVE', 'PARTIALLY_EXECUTED'])
+    expect(allowedStatuses('resume', session)).toEqual(['PAUSED_USER'])
+  })
+
+  it.each(['PRE_OPEN', 'LUNCH', 'CLOSED'] as const)('%s không khóa Sửa và Hủy', (session) => {
+    expect(getAllowedActions('ACTIVE', session).edit.allowed).toBe(true)
+    expect(getAllowedActions('ACTIVE', session).cancel.allowed).toBe(true)
+  })
+})

@@ -1,11 +1,4 @@
-import type {
-  DemoUser,
-  MarketSnapshot,
-  OrderCondition,
-  OrderEvent,
-  ParentOrder,
-  StrategyParameter,
-} from '@/types'
+import type { DemoUser } from '@/types'
 
 /** Mã demo và giá tham chiếu (đồng). Các con số là giả lập, không phải giá thật. */
 export const DEMO_SYMBOLS: ReadonlyArray<{ symbol: string; ref_price: number }> = [
@@ -41,12 +34,3 @@ export const DEMO_USERS: DemoUser[] = [
     accounts: ['058C999999'],
   },
 ]
-
-/** "Cơ sở dữ liệu" trong bộ nhớ trình duyệt. Tải lại trang là mất. */
-export const mockDb = {
-  parentOrders: [] as ParentOrder[],
-  parameters: new Map<string, StrategyParameter[]>(),
-  conditions: [] as OrderCondition[],
-  snapshots: new Map<string, MarketSnapshot>(),
-  events: [] as OrderEvent[],
-}
