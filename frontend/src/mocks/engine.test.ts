@@ -50,8 +50,15 @@ function quoteAt(last: number, totalVolume = 0): SymbolQuote {
   }
 }
 
-function marketAt(seconds: number, last = 100_000, totalVolume = 0, session?: SessionCode): MarketState {
+function marketAt(
+  seconds: number,
+  last = 100_000,
+  totalVolume = 0,
+  session?: SessionCode,
+  tradingDate = TODAY,
+): MarketState {
   return {
+    trading_date: tradingDate,
     sim_seconds: seconds,
     session: session ?? getSessionAt(seconds),
     speed: 1,
@@ -60,7 +67,7 @@ function marketAt(seconds: number, last = 100_000, totalVolume = 0, session?: Se
 }
 
 function newEngine(seed = 1) {
-  const engine = createOrderEngine({ random: seededRandom(seed), getToday: () => TODAY })
+  const engine = createOrderEngine({ random: seededRandom(seed) })
   engine.onMarketTick(marketAt(AT_1000))
   return engine
 }
@@ -149,16 +156,26 @@ describe('không khớp vượt total_qty', () => {
     const random = seededRandom(seed)
     const simulator = createMarketSimulator({
       random,
+      startDate: new Date(2026, 10, 6),
       symbols: [{ symbol: 'FPT', ref_price: 100_000 }],
     })
-    const engine = createOrderEngine({ random, getToday: () => TODAY })
+    const engine = createOrderEngine({ random })
     simulator.setSpeed(60)
     const ids: string[] = []
 
-    for (let day = 0; day < 6; day += 1) {
+    for (let day = 0; day < 3; day += 1) {
       engine.onMarketTick(simulator.getState())
       for (const [strategy, parameters, limit, side] of ALL_STRATEGIES) {
         ids.push(place(engine, strategy, parameters, { limit_price: limit, side, total_qty: 2_000 }))
+        ids.push(
+          place(engine, strategy, parameters, {
+            limit_price: limit,
+            side,
+            total_qty: 2_000,
+            persistence_mode: 'MULTI_SESSION',
+            valid_to: '2026-12-31',
+          }),
+        )
       }
       while (simulator.getState().session !== 'CLOSED') {
         simulator.tick(1000)
@@ -180,7 +197,7 @@ describe('không khớp vượt total_qty', () => {
       }
       simulator.tick(1000)
       engine.onMarketTick(simulator.getState())
-      simulator.reset()
+      simulator.nextDay()
     }
 
     const matchIds = ids.flatMap((id) => engine.getExecutions(id).map((item) => item.exchange_match_id))
@@ -193,7 +210,7 @@ describe('không khớp vượt total_qty', () => {
         if (child.price !== null) expect(isValidTick(child.price)).toBe(true)
       }
     }
-  })
+  }, 60_000)
 })
 
 describe('không khớp trùng', () => {
@@ -506,27 +523,245 @@ describe('phiên giao dịch', () => {
     expect(engine.getOrder(id).executed_qty).toBe(0)
   })
 
-  it('đóng cửa: lệnh DAY và lệnh con hết hạn', () => {
-    const engine = newEngine()
-    const id = place(engine, 'ICEBERG', [intParam('slice_qty', 300)], { limit_price: 90_000 })
+})
+
+describe('hết hạn theo persistence_mode', () => {
+  const CLOSE = hhmm(14, 45)
+  const NEXT_DAY = '2026-11-09'
+  const closeOn = (engine: OrderEngine, date = TODAY) =>
+    engine.onMarketTick(marketAt(CLOSE, 100_000, 0, undefined, date))
+  const tickOn = (engine: OrderEngine, date: string, offset = 0, last = 100_000, volume = 0) =>
+    engine.onMarketTick(marketAt(AT_1000 + offset, last, volume, undefined, date))
+  const carryEvents = (engine: OrderEngine, id: string) =>
+    engine.getEvents(id).filter((event) => event.new_value?.startsWith('CARRY_OVER'))
+
+  /** Iceberg đã khớp 200/1.000, còn một lệnh con đang chờ. */
+  function partlyFilled(engine: OrderEngine, extra: Partial<CreateOrderRequest>) {
+    const id = place(engine, 'ICEBERG', [intParam('slice_qty', 500)], { limit_price: 90_000, ...extra })
     run(engine, 2)
-    engine.onMarketTick(marketAt(hhmm(14, 45)))
-    expect(engine.getOrder(id).status).toBe('EXPIRED')
+    engine.applyExecution({
+      child_order_id: engine.getChildren(id)[0].child_order_id,
+      exchange_match_id: `M-${id}`,
+      price: 90_000,
+      qty: 200,
+    })
+    return id
+  }
+
+  it('DAY: cuối phiên hết hạn, lệnh con hết hạn, không mang sang ngày sau', () => {
+    const engine = newEngine()
+    const id = partlyFilled(engine, { persistence_mode: 'DAY' })
+    closeOn(engine)
+
+    expect(engine.getOrder(id)).toMatchObject({ status: 'EXPIRED', executed_qty: 200 })
     expect(engine.getChildren(id)[0].status).toBe('EXPIRED')
+    expect(carryEvents(engine, id)).toHaveLength(0)
+
+    tickOn(engine, NEXT_DAY)
+    expect(engine.getChildren(id)).toHaveLength(1)
   })
 
-  it('đóng cửa: GTD chưa tới hạn vẫn sống, lệnh con hết hạn', () => {
+  it('GTD: chưa tới valid_to thì mang phần còn lại sang phiên sau, tới valid_to thì hết hạn', () => {
     const engine = newEngine()
-    const id = place(engine, 'ICEBERG', [intParam('slice_qty', 300)], {
-      limit_price: 90_000,
-      persistence_mode: 'GTD',
-      valid_to: '2026-11-20',
-    })
-    run(engine, 2)
-    engine.onMarketTick(marketAt(hhmm(14, 45)))
-    expect(engine.getOrder(id).status).toBe('ACTIVE')
+    const id = partlyFilled(engine, { persistence_mode: 'GTD', valid_to: NEXT_DAY })
+    closeOn(engine)
+
+    expect(engine.getOrder(id)).toMatchObject({ status: 'PARTIALLY_EXECUTED', executed_qty: 200 })
     expect(engine.getChildren(id)[0].status).toBe('EXPIRED')
     expect(engine.getWorkingQty(id)).toBe(0)
+    expect(engine.getAllowedQty(id)).toBe(800)
+    expect(carryEvents(engine, id)).toHaveLength(1)
+
+    tickOn(engine, NEXT_DAY)
+    const carried = liveChildren(engine, id)
+    expect(carried).toHaveLength(1)
+    expect(carried[0].created_at.startsWith(NEXT_DAY)).toBe(true)
+    expect(engine.getAllowedQty(id)).toBe(300)
+
+    closeOn(engine, NEXT_DAY)
+    expect(engine.getOrder(id).status).toBe('EXPIRED')
+    expect(carryEvents(engine, id)).toHaveLength(1)
+  })
+
+  it('MULTI_SESSION: mang phần còn lại sang phiên sau, ghi OrderEvent đúng phần còn lại', () => {
+    const engine = newEngine()
+    const id = partlyFilled(engine, { persistence_mode: 'MULTI_SESSION', valid_to: '2026-12-31' })
+    closeOn(engine)
+
+    expect(engine.getOrder(id)).toMatchObject({ status: 'PARTIALLY_EXECUTED', executed_qty: 200 })
+    expect(carryEvents(engine, id)[0]).toMatchObject({
+      action: 'DECISION',
+      old_value: `SESSION:${TODAY}`,
+      new_value: 'CARRY_OVER:800',
+      user_id: 'SYSTEM',
+    })
+
+    tickOn(engine, NEXT_DAY)
+    expect(liveChildren(engine, id)[0]).toMatchObject({ quantity: 500, price: 90_000 })
+
+    closeOn(engine, NEXT_DAY)
+    expect(engine.getOrder(id).status).toBe('PARTIALLY_EXECUTED')
+    expect(carryEvents(engine, id)).toHaveLength(2)
+  })
+
+  it('đồng hồ đứng ở giờ đóng cửa nhiều nhịp thì chỉ mang sang một lần', () => {
+    const engine = newEngine()
+    const id = partlyFilled(engine, { persistence_mode: 'MULTI_SESSION', valid_to: '2026-12-31' })
+    for (let index = 0; index < 5; index += 1) closeOn(engine)
+    expect(carryEvents(engine, id)).toHaveLength(1)
+  })
+
+  it('Child UNKNOWN được giữ lại qua đêm và vẫn tính là working', () => {
+    const engine = newEngine()
+    const id = partlyFilled(engine, { persistence_mode: 'MULTI_SESSION', valid_to: '2026-12-31' })
+    engine.markChildUnknown(engine.getChildren(id)[0].child_order_id)
+    closeOn(engine)
+
+    expect(engine.getChildren(id)[0].status).toBe('UNKNOWN')
+    expect(engine.getWorkingQty(id)).toBe(300)
+    expect(engine.getAllowedQty(id)).toBe(500)
+  })
+
+  it('lệnh đang tạm dừng vẫn được mang sang và giữ nguyên tạm dừng', () => {
+    const engine = newEngine()
+    const id = partlyFilled(engine, { persistence_mode: 'GTD', valid_to: '2026-12-31' })
+    engine.pauseOrder(id, 'tester')
+    closeOn(engine)
+    tickOn(engine, NEXT_DAY)
+
+    expect(engine.getOrder(id).status).toBe('PAUSED_USER')
+    expect(liveChildren(engine, id)).toHaveLength(0)
+    expect(carryEvents(engine, id)).toHaveLength(1)
+  })
+
+  it('TWAP nhiều phiên: hết khung giờ không hết hạn, phiên sau chia lịch mới theo phần còn lại', () => {
+    const engine = newEngine()
+    const id = place(
+      engine,
+      'TWAP',
+      [timeParam('start_time', '10:30'), timeParam('end_time', '11:00'), intParam('interval_min', 15)],
+      { limit_price: 90_000, total_qty: 2_000, persistence_mode: 'MULTI_SESSION', valid_to: '2026-12-31' },
+    )
+    engine.onMarketTick(marketAt(hhmm(10, 30)))
+    const firstChild = engine.getChildren(id)[0]
+    expect(firstChild.quantity).toBe(1_000)
+    engine.applyExecution({ child_order_id: firstChild.child_order_id, exchange_match_id: 'M-T1', price: 90_000, qty: 400 })
+
+    engine.onMarketTick(marketAt(hhmm(11, 0)))
+    expect(engine.getOrder(id).status).toBe('PARTIALLY_EXECUTED')
+    expect(liveChildren(engine, id)).toHaveLength(0)
+
+    closeOn(engine)
+    engine.onMarketTick(marketAt(hhmm(10, 30), 100_000, 0, undefined, NEXT_DAY))
+    // Còn 1.600, chia 2 chu kỳ: chu kỳ đầu 800, không phải bù một lần lên lịch cũ.
+    expect(liveChildren(engine, id)[0].quantity).toBe(800)
+  })
+
+  it('TWAP trong ngày: hết khung giờ thì hết hạn ngay', () => {
+    const engine = newEngine()
+    const id = place(
+      engine,
+      'TWAP',
+      [timeParam('start_time', '10:30'), timeParam('end_time', '11:00'), intParam('interval_min', 15)],
+      { limit_price: 90_000 },
+    )
+    engine.onMarketTick(marketAt(hhmm(11, 0)))
+    expect(engine.getOrder(id).status).toBe('EXPIRED')
+  })
+
+  it('POV nhiều phiên: KL thị trường đếm lại từ 0 vào ngày mới không làm hỏng phép tính', () => {
+    const engine = newEngine()
+    const id = place(engine, 'POV', [intParam('participation_pct', 10), intParam('max_pct', 20)], {
+      limit_price: 90_000,
+      total_qty: 5_000,
+      persistence_mode: 'MULTI_SESSION',
+      valid_to: '2026-12-31',
+    })
+    engine.onMarketTick(marketAt(AT_1000 + 1, 100_000, 50_000))
+    closeOn(engine)
+    tickOn(engine, NEXT_DAY, 1, 100_000, 0)
+    tickOn(engine, NEXT_DAY, 2, 100_000, 2_000)
+    expect(liveChildren(engine, id).map((child) => child.quantity)).toEqual([200])
+  })
+
+  it('HUNT nhiều phiên: hạn chờ tính liên tục qua ngày', () => {
+    const engine = newEngine()
+    const id = place(engine, 'HUNT', [intParam('hunt_price', 99_000), intParam('max_wait_min', 60 * 24 + 10)], {
+      limit_price: 99_200,
+      persistence_mode: 'MULTI_SESSION',
+      valid_to: '2026-12-31',
+    })
+    closeOn(engine)
+    tickOn(engine, NEXT_DAY, 0)
+    expect(engine.getOrder(id).status).toBe('ACTIVE')
+    tickOn(engine, NEXT_DAY, 600)
+    expect(engine.getOrder(id).status).toBe('EXPIRED')
+  })
+})
+
+describe('lưu và nạp lại trạng thái', () => {
+  const roundTrip = (engine: OrderEngine) => {
+    const restored = createOrderEngine({ random: seededRandom(5) })
+    restored.importState(JSON.parse(JSON.stringify(engine.exportState())))
+    restored.onMarketTick(marketAt(AT_1000 + 500, 100_000))
+    return restored
+  }
+
+  it('giữ nguyên lệnh, lệnh con, khớp, nhật ký và số thứ tự', () => {
+    const engine = newEngine()
+    const id = place(engine, 'ICEBERG', [intParam('slice_qty', 300)], { limit_price: 100_500 })
+    run(engine, 10)
+    const before = JSON.parse(JSON.stringify(engine.exportState()))
+
+    const restored = createOrderEngine({ random: seededRandom(5) })
+    restored.importState(JSON.parse(JSON.stringify(engine.exportState())))
+    expect(restored.exportState()).toEqual(before)
+    expect(restored.getOrder(id).executed_qty).toBe(engine.getOrder(id).executed_qty)
+
+    const created = restored.createOrder(request('ICEBERG', [intParam('slice_qty', 100)]), 'tester')
+    expect(created.parent_order_id).not.toBe(id)
+  })
+
+  it('mã khớp đã thấy vẫn bị bỏ qua sau khi nạp lại', () => {
+    const engine = newEngine()
+    const id = place(engine, 'ICEBERG', [intParam('slice_qty', 500)], { limit_price: 90_000 })
+    run(engine, 2)
+    const report = { child_order_id: engine.getChildren(id)[0].child_order_id, exchange_match_id: 'DUP', price: 90_000, qty: 100 }
+    engine.applyExecution(report)
+
+    const restored = roundTrip(engine)
+    expect(restored.applyExecution(report)).toBe(false)
+    expect(restored.getOrder(id).executed_qty).toBe(100)
+  })
+
+  it('điều kiện đã kích hoạt không bị kích hoạt lại, Tiếp tục vẫn sinh đúng lệnh con', () => {
+    const engine = newEngine()
+    const id = place(engine, 'OCO', [intParam('tp_price', 100_500), intParam('sl_price', 99_500)], { side: 'SELL' })
+    engine.onMarketTick(marketAt(AT_1000 + 1, 99_500))
+    engine.pauseOrder(id, 'tester')
+
+    const restored = roundTrip(engine)
+    restored.resumeOrder(id, 'tester')
+    restored.onMarketTick(marketAt(AT_1000 + 600, 100_500))
+    const live = restored.getChildren(id).filter((child) => isChildLive(child.status))
+    expect(live.map((child) => child.order_type)).toEqual(['MTL'])
+    expect(restored.getEvents(id).filter((event) => event.action === 'TRIGGER')).toHaveLength(1)
+  })
+
+  it('đã xử lý đóng cửa thì nạp lại cũng không mang sang lần hai', () => {
+    const engine = newEngine()
+    const id = place(engine, 'ICEBERG', [intParam('slice_qty', 500)], {
+      limit_price: 90_000,
+      persistence_mode: 'MULTI_SESSION',
+      valid_to: '2026-12-31',
+    })
+    engine.onMarketTick(marketAt(hhmm(14, 45)))
+
+    const restored = createOrderEngine({ random: seededRandom(5) })
+    restored.importState(JSON.parse(JSON.stringify(engine.exportState())))
+    restored.onMarketTick(marketAt(hhmm(14, 45)))
+    const carries = restored.getEvents(id).filter((event) => event.new_value?.startsWith('CARRY_OVER'))
+    expect(carries).toHaveLength(1)
   })
 })
 
@@ -667,7 +902,7 @@ describe('nhật ký OrderEvent', () => {
   it('mọi lần đổi trạng thái của lệnh cha và lệnh con đều có event đúng giá trị mới', () => {
     const random = seededRandom(9)
     const simulator = createMarketSimulator({ random, symbols: [{ symbol: 'FPT', ref_price: 100_000 }] })
-    const engine = createOrderEngine({ random, getToday: () => TODAY })
+    const engine = createOrderEngine({ random })
     simulator.setSpeed(60)
     engine.onMarketTick(simulator.getState())
     const ids = ALL_STRATEGIES.map(([strategy, parameters, limit, side]) =>
@@ -759,11 +994,11 @@ describe('lệnh mẫu', () => {
   })
 
   it('engine nạp lệnh mẫu rồi chạy được, mã lệnh mới không trùng', () => {
-    const engine = createOrderEngine({ random: seededRandom(1), getToday: () => '2026-11-06' })
+    const engine = createOrderEngine({ random: seededRandom(1) })
     engine.load(seed)
     engine.onMarketTick({
       sim_seconds: AT_1000,
-      session: 'CONTINUOUS',
+      trading_date: TODAY, session: 'CONTINUOUS',
       speed: 1,
       quotes: [{ ...quoteAt(27_500), symbol: 'HPG', ref_price: 27_500, ceiling_price: 29_400, floor_price: 25_600 }],
     })
@@ -775,10 +1010,10 @@ describe('lệnh mẫu', () => {
   })
 
   it('nạp lại thì lệnh đã đặt biến mất và dữ liệu mẫu gốc không bị đổi', () => {
-    const engine = createOrderEngine({ random: seededRandom(1), getToday: () => '2026-11-06' })
+    const engine = createOrderEngine({ random: seededRandom(1) })
     engine.load(seed)
     const before = seed.orders[0].status
-    engine.onMarketTick({ sim_seconds: AT_1000, session: 'CONTINUOUS', speed: 1, quotes: [] })
+    engine.onMarketTick({ sim_seconds: AT_1000, trading_date: TODAY, session: 'CONTINUOUS', speed: 1, quotes: [] })
     engine.cancelOrder(seed.orders[0].parent_order_id, 'tester')
     engine.createOrder(request('ICEBERG', [intParam('slice_qty', 100)]), 'tester')
 

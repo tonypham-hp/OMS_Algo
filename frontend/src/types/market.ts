@@ -18,6 +18,8 @@ export interface SymbolQuote {
 }
 
 export interface MarketState {
+  /** Ngày giao dịch giả lập, dạng YYYY-MM-DD. */
+  trading_date: string
   /** Giờ giả lập, tính bằng số giây kể từ 00:00. */
   sim_seconds: number
   session: SessionCode

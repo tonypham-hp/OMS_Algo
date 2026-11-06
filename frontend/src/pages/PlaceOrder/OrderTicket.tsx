@@ -18,7 +18,7 @@ import { SESSION_LABELS } from '@/config/hose'
 import { getPriceColor, PRICE_COLOR } from '@/config/priceColors'
 import { PERSISTENCE_LABELS, STRATEGIES, STRATEGY_TYPES } from '@/config/strategies'
 import { useCreateOrder } from '@/hooks/useOrders'
-import { formatNumber, toDateString } from '@/lib/format'
+import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth.store'
 import { useMarketStore } from '@/store/market.store'
@@ -32,7 +32,7 @@ import { StrategyFields } from './StrategyFields'
 // Luôn đọc giá mới nhất ở thời điểm kiểm tra, không giữ bản cũ.
 const orderSchema = createOrderSchema(() => ({
   getQuote: (symbol) => useMarketStore.getState().quotes.find((quote) => quote.symbol === symbol),
-  today: toDateString(new Date()),
+  today: useMarketStore.getState().trading_date,
 }))
 
 const PERSISTENCE_MODES = Object.keys(PERSISTENCE_LABELS) as PersistenceMode[]

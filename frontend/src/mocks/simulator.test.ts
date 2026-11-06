@@ -85,6 +85,47 @@ describe('bộ giả lập giá', () => {
     }
   })
 
+  it('sang ngày mới: bỏ qua cuối tuần, giá đóng cửa thành giá tham chiếu, trần sàn tính lại', () => {
+    const simulator = createMarketSimulator({
+      random: seededRandom(8),
+      startDate: new Date(2026, 10, 6), // Thứ Sáu.
+      symbols: [{ symbol: 'TEST', ref_price: 100_000 }],
+    })
+    for (let index = 0; index < 400; index += 1) {
+      simulator.setSpeed(60)
+      simulator.tick(1000)
+    }
+    const close = simulator.getState().quotes[0].last_price
+
+    simulator.nextDay()
+    const state = simulator.getState()
+    const quote = state.quotes[0]
+    expect(state.trading_date).toBe('2026-11-09')
+    expect(state.session).toBe('ATO')
+    expect(quote.ref_price).toBe(close)
+    expect(quote.last_price).toBe(close)
+    expect(quote.total_volume).toBe(0)
+    expect(isValidTick(quote.ceiling_price)).toBe(true)
+    expect(quote.ceiling_price).toBeGreaterThan(close)
+    expect(quote.floor_price).toBeLessThan(close)
+
+    simulator.reset()
+    expect(simulator.getState().trading_date).toBe('2026-11-06')
+    expect(simulator.getState().quotes[0].ref_price).toBe(100_000)
+  })
+
+  it('xuất rồi nạp lại giữ nguyên ngày, giờ, tốc độ và giá', () => {
+    const source = createMarketSimulator({ random: seededRandom(9), startDate: new Date(2026, 10, 6) })
+    source.setSpeed(10)
+    for (let index = 0; index < 50; index += 1) source.tick()
+    source.nextDay()
+    source.tick()
+
+    const target = createMarketSimulator({ random: seededRandom(9) })
+    target.importState(JSON.parse(JSON.stringify(source.exportState())))
+    expect(target.getState()).toEqual(source.getState())
+  })
+
   it('subscribe nhận ngay trạng thái hiện tại và ngừng nhận sau khi hủy', () => {
     const simulator = createMarketSimulator({ random: seededRandom(7) })
     let calls = 0

@@ -99,7 +99,7 @@ const SEED_ORDERS: SeedOrder[] = [
     total_qty: 10_000,
     limit_price: 24_800,
     status: 'PAUSED_USER',
-    persistence_mode: 'MULTI_SESSION',
+    persistence_mode: 'GTD',
     createdYesterday: true,
     params: [
       ['participation_pct', '10', 'INTEGER'],

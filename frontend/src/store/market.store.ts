@@ -6,6 +6,7 @@ interface MarketStore extends MarketState {
 }
 
 export const useMarketStore = create<MarketStore>()((set) => ({
+  trading_date: '',
   sim_seconds: 0,
   session: 'PRE_OPEN',
   speed: 1,

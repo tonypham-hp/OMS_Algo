@@ -15,4 +15,5 @@ export const marketService = {
   },
   setSpeed: (speed: SimSpeed) => marketSimulator.setSpeed(speed),
   resetDay: () => resetDemoDay(),
+  nextDay: () => marketSimulator.nextDay(),
 }

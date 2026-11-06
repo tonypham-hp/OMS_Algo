@@ -25,6 +25,7 @@ import { getAllowedActions, isTerminalStatus, type OrderAction } from '@/utils/o
 
 const LOT = QTY_LOT_SIZE
 const VWAP_CYCLE_SECONDS = 300
+const SECONDS_PER_DAY = 86_400
 /** Mỗi nhịp, một lệnh con khớp tối đa từng này lô, để thấy khớp dần. */
 const MAX_FILL_LOTS_PER_TICK = 5
 
@@ -66,7 +67,6 @@ export interface SeedData {
 interface EngineOptions {
   /** Truyền hàm random có seed khi test để kết quả lặp lại được. */
   random?: () => number
-  getToday?: () => string
 }
 
 /** Dữ liệu engine tự nhớ cho từng lệnh cha, không thuộc ERD. */
@@ -74,13 +74,33 @@ interface ParentRuntime {
   createdAtSeconds: number
   cycleNo: number
   /** Điều kiện đã kích hoạt: từ đây lệnh chỉ còn việc sinh lệnh con cho phần còn lại. */
-  triggered: OrderCondition | null
+  triggeredConditionId: string | null
+  /** TWAP, VWAP: KL đã khớp lúc bắt đầu lịch hiện tại. Sang phiên mới, lịch chia lại phần còn lại. */
+  scheduleBaseQty: number
   /** Đỉnh (lệnh bán) hoặc đáy (lệnh mua) của Trailing Stop. */
   trailingExtreme: number | null
   /** POV: tổng KL thị trường đã thấy ở nhịp trước. */
   lastVolume: number | null
   /** POV: phần được phép tham gia đang cộng dồn, tính bằng (cổ phiếu x %) để giữ số nguyên. */
   povAccumulated: number
+}
+
+/** Toàn bộ trạng thái của engine ở dạng JSON được, để lưu lại khi tải lại trang. */
+export interface EngineState {
+  parents: ParentOrder[]
+  children: ChildOrder[]
+  conditions: OrderCondition[]
+  executions: Execution[]
+  events: OrderEvent[]
+  parameters: Array<[string, StrategyParameter[]]>
+  snapshots: Array<[string, MarketSnapshot]>
+  runtimes: Array<[string, ParentRuntime]>
+  seenMatchIds: string[]
+  closedDate: string | null
+  orderSequence: number
+  eventSequence: number
+  matchSequence: number
+  coreSequence: number
 }
 
 export function isChildLive(status: ChildOrderStatus): boolean {
@@ -124,7 +144,7 @@ export function isConditionHit(conditionType: string, side: Side, lastPrice: num
 
 export function createOrderEngine(options: EngineOptions = {}) {
   const random = options.random ?? Math.random
-  const getToday = options.getToday ?? (() => toDateString(new Date()))
+  const getToday = () => market?.trading_date ?? toDateString(new Date())
 
   let parents: ParentOrder[] = []
   let children: ChildOrder[] = []
@@ -136,6 +156,8 @@ export function createOrderEngine(options: EngineOptions = {}) {
   const runtimes = new Map<string, ParentRuntime>()
   const seenMatchIds = new Set<string>()
   let market: MarketState | null = null
+  /** Ngày đã xử lý đóng cửa, để lệnh nhiều phiên chỉ được mang sang một lần mỗi ngày. */
+  let closedDate: string | null = null
   let orderSequence = 0
   let eventSequence = 0
   let matchSequence = 0
@@ -184,7 +206,8 @@ export function createOrderEngine(options: EngineOptions = {}) {
       runtime = {
         createdAtSeconds: currentSeconds(),
         cycleNo: childrenOf(parent).length,
-        triggered: null,
+        triggeredConditionId: null,
+        scheduleBaseQty: parent.executed_qty,
         trailingExtreme: null,
         lastVolume: null,
         povAccumulated: 0,
@@ -192,6 +215,11 @@ export function createOrderEngine(options: EngineOptions = {}) {
       runtimes.set(parent.parent_order_id, runtime)
     }
     return runtime
+  }
+
+  function getTriggeredCondition(parent: ParentOrder) {
+    const id = runtimeOf(parent).triggeredConditionId
+    return id === null ? undefined : conditions.find((condition) => condition.condition_id === id)
   }
 
   // ===== Luật lõi (mục 8 của spec) =====
@@ -396,15 +424,14 @@ export function createOrderEngine(options: EngineOptions = {}) {
   function triggerCondition(parent: ParentOrder, condition: OrderCondition) {
     condition.status = 'TRIGGERED'
     condition.triggered_at = nowIso()
-    runtimeOf(parent).triggered = condition
+    runtimeOf(parent).triggeredConditionId = condition.condition_id
     logEvent(parent.parent_order_id, null, 'TRIGGER', `CONDITION:${condition.condition_type}:ACTIVE`, 'TRIGGERED')
     // OCO: một bên kích hoạt thì bên kia bị hủy.
     cancelConditions(parent, condition)
   }
 
   function checkConditions(parent: ParentOrder, side: Side, last: number) {
-    const runtime = runtimeOf(parent)
-    if (runtime.triggered) return
+    if (runtimeOf(parent).triggeredConditionId !== null) return
     for (const condition of conditions) {
       if (condition.parent_order_id !== parent.parent_order_id || condition.status !== 'ACTIVE') continue
       if (condition.trigger_price === null) continue
@@ -418,7 +445,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
   function updateTrailing(parent: ParentOrder, last: number) {
     const runtime = runtimeOf(parent)
     const condition = conditions.find((item) => item.parent_order_id === parent.parent_order_id)
-    if (!condition || runtime.triggered) return
+    if (!condition || runtime.triggeredConditionId !== null) return
     const value = getNumberParam(parent, 'trailing_value')
     if (parent.side === 'SELL') {
       runtime.trailingExtreme = Math.max(runtime.trailingExtreme ?? last, last)
@@ -448,7 +475,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
   function stepConditional(parent: ParentOrder, last: number) {
     if (parent.strategy_type === 'TRAILING_STOP') updateTrailing(parent, last)
     checkConditions(parent, parent.side, last)
-    const { triggered } = runtimeOf(parent)
+    const triggered = getTriggeredCondition(parent)
     if (!triggered) return
     const spec = getTriggeredChildSpec(parent, triggered)
     createChild(parent, parent.side, spec.type, spec.price, allowedOf(parent))
@@ -465,7 +492,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
     // Lệnh vào đã khớp đủ: chuyển sang theo dõi cặp TP/SL với chiều ngược lại.
     const exitSide: Side = parent.side === 'BUY' ? 'SELL' : 'BUY'
     checkConditions(parent, exitSide, last)
-    const { triggered } = runtimeOf(parent)
+    const triggered = getTriggeredCondition(parent)
     if (!triggered) return
     const exitChildren = childrenOf(parent).filter((child) => isExitChild(parent, child))
     const covered = exitChildren.reduce(
@@ -485,13 +512,16 @@ export function createOrderEngine(options: EngineOptions = {}) {
   function stepSchedule(parent: ParentOrder) {
     const window = getWindow(parent)
     const seconds = currentSeconds()
-    if (!window || seconds < window.start) return
+    if (!window || seconds < window.start || seconds >= window.end) return
     const elapsed = seconds - window.start
     const windowSeconds = window.end - window.start
+    const base = runtimeOf(parent).scheduleBaseQty
+    const planQty = parent.total_qty - base
     const target =
-      parent.strategy_type === 'TWAP'
-        ? getTwapTarget(parent.total_qty, windowSeconds, getNumberParam(parent, 'interval_min') * 60, elapsed)
-        : getVwapTarget(parent.total_qty, windowSeconds, elapsed)
+      base +
+      (parent.strategy_type === 'TWAP'
+        ? getTwapTarget(planQty, windowSeconds, getNumberParam(parent, 'interval_min') * 60, elapsed)
+        : getVwapTarget(planQty, windowSeconds, elapsed))
     const qty = Math.min(target - parent.executed_qty - workingOf(parent), allowedOf(parent))
     createChild(parent, parent.side, 'LO', parent.limit_price, qty)
   }
@@ -550,23 +580,44 @@ export function createOrderEngine(options: EngineOptions = {}) {
     const seconds = currentSeconds()
     if (parent.strategy_type === 'TWAP' || parent.strategy_type === 'VWAP') {
       const window = getWindow(parent)
-      if (window && seconds >= window.end) expireParent(parent)
-    } else if (parent.strategy_type === 'HUNT' && !runtimeOf(parent).triggered) {
+      if (!window || seconds < window.end) return
+      // Hết khung giờ: lệnh trong ngày kết thúc, còn lệnh nhiều phiên chờ khung giờ của phiên sau.
+      if (parent.persistence_mode === 'DAY') expireParent(parent)
+      else cancelOpenChildren(parent)
+    } else if (parent.strategy_type === 'HUNT' && runtimeOf(parent).triggeredConditionId === null) {
       const deadline = runtimeOf(parent).createdAtSeconds + getNumberParam(parent, 'max_wait_min') * 60
       if (seconds >= deadline) expireParent(parent)
     }
   }
 
+  /**
+   * Hết ngày giao dịch, xử lý theo persistence_mode:
+   * DAY hết hạn. GTD và MULTI_SESSION chưa tới valid_to thì mang phần còn lại sang phiên sau.
+   */
   function closeDay(parent: ParentOrder) {
-    const endsToday = parent.persistence_mode === 'DAY' || parent.valid_to <= getToday()
-    if (endsToday) {
+    const today = getToday()
+    if (parent.persistence_mode === 'DAY' || parent.valid_to <= today) {
       expireParent(parent)
       return
     }
-    // Lệnh nhiều ngày sống tiếp, nhưng lệnh con không qua được ngày mới.
+
+    // Lệnh con không qua được ngày mới. Child UNKNOWN giữ nguyên vì chưa đối soát xong.
     for (const child of childrenOf(parent)) {
       if (isChildLive(child.status) && child.status !== 'UNKNOWN') setChildStatus(child, 'EXPIRED', 'DECISION')
     }
+
+    const runtime = runtimeOf(parent)
+    runtime.scheduleBaseQty = parent.executed_qty
+    runtime.lastVolume = null // KL thị trường đếm lại từ 0 vào ngày mới.
+    runtime.povAccumulated = 0
+    runtime.createdAtSeconds -= SECONDS_PER_DAY // Giữ đúng hạn chờ của HUNT khi giờ trong ngày quay về đầu.
+    logEvent(
+      parent.parent_order_id,
+      null,
+      'DECISION',
+      `SESSION:${today}`,
+      `CARRY_OVER:${parent.total_qty - parent.executed_qty}`,
+    )
   }
 
   /** Một nhịp của thị trường: gửi lệnh con, khớp, kiểm tra điều kiện, sinh lệnh con mới, chốt trạng thái. */
@@ -581,7 +632,10 @@ export function createOrderEngine(options: EngineOptions = {}) {
     }
 
     if (state.session === 'CLOSED') {
-      for (const parent of liveParents) if (!isTerminalStatus(parent.status)) closeDay(parent)
+      if (closedDate !== state.trading_date) {
+        closedDate = state.trading_date
+        for (const parent of liveParents) if (!isTerminalStatus(parent.status)) closeDay(parent)
+      }
       return
     }
 
@@ -806,8 +860,49 @@ export function createOrderEngine(options: EngineOptions = {}) {
     runtimes.clear()
     seenMatchIds.clear()
     executions.forEach((execution) => seenMatchIds.add(execution.exchange_match_id))
+    closedDate = null
     orderSequence = seed.orders.length
     eventSequence = seed.events.length
+  }
+
+  function exportState(): EngineState {
+    return {
+      parents,
+      children,
+      conditions,
+      executions,
+      events,
+      parameters: [...parameters],
+      snapshots: [...snapshots],
+      runtimes: [...runtimes],
+      seenMatchIds: [...seenMatchIds],
+      closedDate,
+      orderSequence,
+      eventSequence,
+      matchSequence,
+      coreSequence,
+    }
+  }
+
+  function importState(state: EngineState) {
+    parents = state.parents
+    children = state.children
+    conditions = state.conditions
+    executions = state.executions
+    events = state.events
+    parameters.clear()
+    state.parameters.forEach(([key, value]) => parameters.set(key, value))
+    snapshots.clear()
+    state.snapshots.forEach(([key, value]) => snapshots.set(key, value))
+    runtimes.clear()
+    state.runtimes.forEach(([key, value]) => runtimes.set(key, value))
+    seenMatchIds.clear()
+    state.seenMatchIds.forEach((id) => seenMatchIds.add(id))
+    closedDate = state.closedDate
+    orderSequence = state.orderSequence
+    eventSequence = state.eventSequence
+    matchSequence = state.matchSequence
+    coreSequence = state.coreSequence
   }
 
   return {
@@ -821,6 +916,8 @@ export function createOrderEngine(options: EngineOptions = {}) {
     markChildUnknown,
     reconcileUnknownChild,
     load,
+    exportState,
+    importState,
     listOrders: () => parents,
     getOrder: requireParent,
     getChildren: (parentOrderId: string) => children.filter((child) => child.parent_order_id === parentOrderId),

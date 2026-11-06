@@ -1,5 +1,4 @@
 import { http, HttpResponse } from 'msw/http'
-import { toDateString } from '@/lib/format'
 import { fromCreateOrderRequest, validateOrderValues } from '@/pages/PlaceOrder/orderSchema'
 import type { CreateOrderRequest, DemoUser, ParentOrder, UpdateOrderRequest } from '@/types'
 import { DEMO_USERS } from './data'
@@ -69,7 +68,7 @@ export const handlers = [
     // Kiểm tra lại bằng đúng luật của form: giá có thể đã đổi từ lúc người dùng nhập.
     const errors = validateOrderValues(fromCreateOrderRequest(body), {
       getQuote: (symbol) => market.quotes.find((quote) => quote.symbol === symbol),
-      today: toDateString(new Date()),
+      today: market.trading_date,
     })
     if (errors.length > 0) {
       return HttpResponse.json({ message: errors[0].message, errors }, { status: 422 })

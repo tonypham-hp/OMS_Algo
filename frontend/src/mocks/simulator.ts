@@ -1,4 +1,5 @@
 import { QTY_LOT_SIZE } from '@/config/hose'
+import { toDateString } from '@/lib/format'
 import type { MarketState, SimSpeed, SymbolQuote } from '@/types'
 import { getCeilingPrice, getFloorPrice, getSessionAt, getTickSize } from '@/utils/hose'
 import { DEMO_SYMBOLS } from './data'
@@ -20,6 +21,19 @@ interface SimulatorOptions {
   /** Truyền hàm random cố định khi test để kết quả lặp lại được. */
   random?: RandomFn
   symbols?: ReadonlyArray<{ symbol: string; ref_price: number }>
+  /** Ngày giao dịch đầu tiên. Không truyền thì lấy ngày hiện tại. */
+  startDate?: Date
+}
+
+/** Phần trạng thái cần lưu lại để tải lại trang không mất. */
+export type SimulatorState = Pick<MarketState, 'trading_date' | 'sim_seconds' | 'speed' | 'quotes'>
+
+/** Ngày làm việc kế tiếp, bỏ qua thứ Bảy và Chủ nhật. */
+function getNextTradingDate(date: string): string {
+  const [year, month, day] = date.split('-').map(Number)
+  const next = new Date(year, month - 1, day + 1)
+  while (next.getDay() === 0 || next.getDay() === 6) next.setDate(next.getDate() + 1)
+  return toDateString(next)
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -89,13 +103,21 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
   const symbols = options.symbols ?? DEMO_SYMBOLS
   const listeners = new Set<Listener>()
 
+  const getStartDate = () => toDateString(options.startDate ?? new Date())
+  let tradingDate = getStartDate()
   let simSeconds = START_SECONDS
   let speed: SimSpeed = 1
   let quotes = symbols.map((item) => createInitialQuote(item.symbol, item.ref_price))
   let timer: ReturnType<typeof setInterval> | null = null
 
   function getState(): MarketState {
-    return { sim_seconds: simSeconds, session: getSessionAt(simSeconds), speed, quotes }
+    return {
+      trading_date: tradingDate,
+      sim_seconds: simSeconds,
+      session: getSessionAt(simSeconds),
+      speed,
+      quotes,
+    }
   }
 
   function notify() {
@@ -136,11 +158,28 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
       speed = next
       notify()
     },
-    /** Về đầu ngày: đồng hồ về 09:10, giá về tham chiếu, giữ nguyên tốc độ. */
+    /** Về đầu ngày: ngày về hiện tại, đồng hồ về 09:10, giá về tham chiếu, giữ nguyên tốc độ. */
     reset() {
+      tradingDate = getStartDate()
       simSeconds = START_SECONDS
       quotes = symbols.map((item) => createInitialQuote(item.symbol, item.ref_price))
       notify()
+    },
+    /** Sang ngày giao dịch mới: giá đóng cửa hôm trước thành giá tham chiếu hôm nay. */
+    nextDay() {
+      tradingDate = getNextTradingDate(tradingDate)
+      simSeconds = START_SECONDS
+      quotes = quotes.map((quote) => createInitialQuote(quote.symbol, quote.last_price))
+      notify()
+    },
+    exportState(): SimulatorState {
+      return { trading_date: tradingDate, sim_seconds: simSeconds, speed, quotes }
+    },
+    importState(state: SimulatorState) {
+      tradingDate = state.trading_date
+      simSeconds = state.sim_seconds
+      speed = state.speed
+      quotes = state.quotes
     },
   }
 }
