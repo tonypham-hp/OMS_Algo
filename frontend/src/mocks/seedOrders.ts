@@ -224,6 +224,7 @@ export function createSeedData(now: Date): SeedData {
       limit_price: seed.limit_price,
       strategy_type: seed.strategy_type,
       status: seed.status,
+      reason_code: null,
       valid_from: createdAt,
       valid_to: multiDay ? nextWeek : date,
       persistence_mode: seed.persistence_mode,

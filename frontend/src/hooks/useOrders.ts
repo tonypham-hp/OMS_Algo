@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ordersService } from '@/services/orders.service'
 import { useAuthStore } from '@/store/auth.store'
-import type { UpdateOrderRequest } from '@/types'
+import type { RepriceOrderRequest, UpdateOrderRequest } from '@/types'
 
 const ORDERS_KEY = 'orders'
 /** Hỏi lại API mỗi giây để bảng tự cập nhật khi engine chạy. */
@@ -32,6 +32,24 @@ export function useUpdateOrder() {
   return useMutation({
     mutationFn: ({ id, request }: { id: string; request: UpdateOrderRequest }) =>
       ordersService.updateOrder(id, request),
+    onSuccess: invalidate,
+  })
+}
+
+export function useOrderPriceFields(parentOrderId: string) {
+  return useQuery({
+    queryKey: ['order-price-fields', parentOrderId],
+    queryFn: () => ordersService.getPriceFields(parentOrderId),
+    // Luôn lấy mới mỗi lần mở form, vì giá đã có thể được sửa trước đó.
+    gcTime: 0,
+  })
+}
+
+export function useRepriceOrder() {
+  const invalidate = useInvalidateOrders()
+  return useMutation({
+    mutationFn: ({ id, request }: { id: string; request: RepriceOrderRequest }) =>
+      ordersService.repriceOrder(id, request),
     onSuccess: invalidate,
   })
 }

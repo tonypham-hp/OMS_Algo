@@ -67,14 +67,21 @@ Làm theo thứ tự 1 → 2 → 3 → 4 → 5, mỗi màn xong mới sang màn 
 ### Hành động ở sổ lệnh (màn 2)
 | Hành động | Cho phép khi trạng thái | Khóa thêm khi |
 |---|---|---|
-| Sửa | ACTIVE, PARTIALLY_EXECUTED, PAUSED_USER | phiên ATO/ATC |
+| Sửa | ACTIVE, PARTIALLY_EXECUTED, PAUSED_USER; PAUSED_SYSTEM có reason_code = PRICE_OUT_OF_BAND (chỉ sửa giá, xem dưới) | phiên ATO/ATC |
 | Hủy | mọi trạng thái chưa kết thúc | phiên ATO/ATC |
 | Tạm dừng | ACTIVE, PARTIALLY_EXECUTED | — |
-| Tiếp tục | PAUSED_USER | — |
+| Tiếp tục | PAUSED_USER (không áp dụng cho PAUSED_SYSTEM) | — |
+
+Lệnh PAUSED_SYSTEM do giá ngoài biên độ (reason_code = PRICE_OUT_OF_BAND):
+- Phát sinh đầu ngày mới, khi limit_price, trigger_price, giá TP, giá SL hoặc giá săn còn dùng tới của lệnh mang sang
+  nằm ngoài trần/sàn mới. Lệnh không sinh lệnh con, ghi OrderEvent và Notification lý do.
+- Sửa: chỉ sửa các giá trên, không sửa khối lượng. Giá mới hợp lệ trong biên độ ngày hiện tại thì lệnh tự chuyển lại
+  ACTIVE (hoặc PARTIALLY_EXECUTED nếu đã khớp một phần), ghi OrderEvent MODIFY và RESUME.
+- PAUSED_SYSTEM vì lý do khác không được Sửa.
 
 ## 6. Mô hình dữ liệu (dùng đúng tên trường, đặt trong src/types)
 - **ParentOrder**: parent_order_id, client_request_id, account_no, symbol, side (BUY|SELL),
-  total_qty, executed_qty, limit_price, strategy_type, status, valid_from, valid_to,
+  total_qty, executed_qty, limit_price, strategy_type, status, reason_code, valid_from, valid_to,
   persistence_mode (DAY|GTD|MULTI_SESSION), version, created_at, updated_at
   - status: DRAFT, ACTIVE, PARTIALLY_EXECUTED, PAUSED_USER, PAUSED_SYSTEM,
     CANCEL_PENDING, COMPLETED, CANCELLED, EXPIRED

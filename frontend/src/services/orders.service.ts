@@ -1,7 +1,9 @@
 import type {
   CreateOrderRequest,
   CreateOrderResponse,
+  OrderPriceField,
   ParentOrder,
+  RepriceOrderRequest,
   UpdateOrderRequest,
 } from '@/types'
 import { http } from './http'
@@ -12,6 +14,10 @@ export const ordersService = {
     http.post<CreateOrderResponse>('/api/orders', request),
   updateOrder: (parentOrderId: string, request: UpdateOrderRequest) =>
     http.patch<ParentOrder>(`/api/orders/${parentOrderId}`, request),
+  getPriceFields: (parentOrderId: string) =>
+    http.get<OrderPriceField[]>(`/api/orders/${parentOrderId}/price-fields`),
+  repriceOrder: (parentOrderId: string, request: RepriceOrderRequest) =>
+    http.post<ParentOrder>(`/api/orders/${parentOrderId}/reprice`, request),
   pauseOrder: (parentOrderId: string) => http.post<ParentOrder>(`/api/orders/${parentOrderId}/pause`),
   resumeOrder: (parentOrderId: string) => http.post<ParentOrder>(`/api/orders/${parentOrderId}/resume`),
   cancelOrder: (parentOrderId: string) => http.post<ParentOrder>(`/api/orders/${parentOrderId}/cancel`),

@@ -6,11 +6,13 @@ import { usePermission } from '@/hooks/usePermission'
 import { useMarketStore } from '@/store/market.store'
 import type { ParentOrder } from '@/types'
 import { isModifyCancelAllowed } from '@/utils/hose'
+import { isRepriceRequired } from '@/utils/orderActions'
 import { CancelOrderDialog } from './CancelOrderDialog'
 import { EditOrderDialog } from './EditOrderDialog'
 import { EMPTY_FILTERS, filterOrders } from './filterOrders'
 import { OrderFilters } from './OrderFilters'
 import { OrderTable } from './OrderTable'
+import { RepriceOrderDialog } from './RepriceOrderDialog'
 
 export default function OrderBook() {
   const orders = useOrders()
@@ -73,9 +75,12 @@ export default function OrderBook() {
           />
         )}
 
-        {editing && (
-          <EditOrderDialog key={editing.parent_order_id} order={editing} onClose={() => setEditing(null)} />
-        )}
+        {editing &&
+          (isRepriceRequired(editing.status, editing.reason_code) ? (
+            <RepriceOrderDialog key={editing.parent_order_id} order={editing} onClose={() => setEditing(null)} />
+          ) : (
+            <EditOrderDialog key={editing.parent_order_id} order={editing} onClose={() => setEditing(null)} />
+          ))}
         {cancelling && <CancelOrderDialog order={cancelling} onClose={() => setCancelling(null)} />}
       </CardContent>
     </Card>

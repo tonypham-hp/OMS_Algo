@@ -1,6 +1,13 @@
 import { http, HttpResponse } from 'msw/http'
 import { fromCreateOrderRequest, validateOrderValues } from '@/pages/PlaceOrder/orderSchema'
-import type { CreateOrderRequest, DemoUser, ParentOrder, UpdateOrderRequest } from '@/types'
+import type {
+  CreateOrderRequest,
+  DemoUser,
+  OrderPriceField,
+  ParentOrder,
+  RepriceOrderRequest,
+  UpdateOrderRequest,
+} from '@/types'
 import { DEMO_USERS } from './data'
 import { EngineError } from './engine'
 import { orderEngine } from './runtime'
@@ -24,7 +31,7 @@ function errorResponse(message: string, status: number) {
 function handleOrderAction(
   request: Request,
   parentOrderId: string,
-  action: (username: string) => ParentOrder,
+  action: (username: string) => ParentOrder | OrderPriceField[],
 ) {
   const user = getUser(request)
   if (!user) return errorResponse('Chưa đăng nhập', 401)
@@ -80,6 +87,17 @@ export const handlers = [
     const body = (await request.json()) as UpdateOrderRequest
     return handleOrderAction(request, String(params.id), (username) =>
       orderEngine.updateOrder(String(params.id), body, username),
+    )
+  }),
+
+  http.get('*/api/orders/:id/price-fields', ({ request, params }) =>
+    handleOrderAction(request, String(params.id), () => orderEngine.getRepriceFields(String(params.id))),
+  ),
+
+  http.post('*/api/orders/:id/reprice', async ({ request, params }) => {
+    const body = (await request.json()) as RepriceOrderRequest
+    return handleOrderAction(request, String(params.id), (username) =>
+      orderEngine.repriceOrder(String(params.id), body, username),
     )
   }),
 

@@ -1,5 +1,5 @@
 import { SESSION_LABELS } from '@/config/hose'
-import type { ParentOrderStatus, SessionCode } from '@/types'
+import type { OrderReasonCode, ParentOrderStatus, SessionCode } from '@/types'
 import { isModifyCancelAllowed } from './hose'
 
 export type OrderAction = 'edit' | 'cancel' | 'pause' | 'resume'
@@ -28,10 +28,16 @@ export function isTerminalStatus(status: ParentOrderStatus): boolean {
   return TERMINAL_STATUSES.has(status)
 }
 
+/** Lệnh hệ thống tạm dừng vì giá ngoài biên độ: chỉ được sửa giá, sửa hợp lệ thì tự chạy lại. */
+export function isRepriceRequired(status: ParentOrderStatus, reasonCode: OrderReasonCode | null): boolean {
+  return status === 'PAUSED_SYSTEM' && reasonCode === 'PRICE_OUT_OF_BAND'
+}
+
 /** Bảng hành động ở mục 5 của spec. UI và API giả lập dùng chung hàm này. */
 export function getAllowedActions(
   status: ParentOrderStatus,
   session: SessionCode,
+  reasonCode: OrderReasonCode | null = null,
 ): Record<OrderAction, ActionAvailability> {
   const sessionLock: ActionAvailability = {
     allowed: false,
@@ -43,7 +49,8 @@ export function getAllowedActions(
     reason: 'Trạng thái hiện tại của lệnh không cho phép thao tác này',
   }
 
-  const edit = EDITABLE_STATUSES.has(status) ? (sessionOpen ? { allowed: true } : sessionLock) : wrongStatus
+  const canEdit = EDITABLE_STATUSES.has(status) || isRepriceRequired(status, reasonCode)
+  const edit = canEdit ? (sessionOpen ? { allowed: true } : sessionLock) : wrongStatus
 
   let cancel: ActionAvailability
   if (isTerminalStatus(status)) cancel = wrongStatus

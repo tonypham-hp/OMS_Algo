@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ParentOrder } from '@/types'
 import { validateEditOrder } from './editOrderSchema'
 import { ALL, EMPTY_FILTERS, filterOrders } from './filterOrders'
+import { validateReprice } from './repriceOrderSchema'
 
 function order(extra: Partial<ParentOrder>): ParentOrder {
   return {
@@ -15,6 +16,7 @@ function order(extra: Partial<ParentOrder>): ParentOrder {
     limit_price: 100_000,
     strategy_type: 'ICEBERG',
     status: 'ACTIVE',
+    reason_code: null,
     valid_from: '',
     valid_to: '',
     persistence_mode: 'DAY',
@@ -50,6 +52,26 @@ describe('lọc sổ lệnh', () => {
   it('nhiều tiêu chí cùng lúc là phép VÀ', () => {
     expect(ids({ status: 'COMPLETED', symbol: 'FPT' })).toEqual(['C'])
     expect(ids({ status: 'ACTIVE', symbol: 'HPG' })).toEqual([])
+  })
+})
+
+describe('kiểm tra form Sửa giá', () => {
+  const FIELDS = [
+    { name: 'tp_price', value: 120_000 },
+    { name: 'sl_price', value: 90_000 },
+  ] as const
+  const check = (tp: number | null, sl: number | null) =>
+    validateReprice({ tp_price: tp, sl_price: sl }, [...FIELDS], 100_000).map((error) => error.field)
+
+  it('mọi giá trong biên độ, đúng bước thì hợp lệ', () => {
+    expect(check(105_000, 95_000)).toEqual([])
+  })
+
+  it('báo đúng ô nằm ngoài biên độ, sai bước hoặc bỏ trống', () => {
+    expect(check(120_000, 95_000)).toEqual(['tp_price'])
+    expect(check(105_000, 90_000)).toEqual(['sl_price'])
+    expect(check(105_050, 95_000)).toEqual(['tp_price'])
+    expect(check(null, 95_000)).toEqual(['tp_price'])
   })
 })
 

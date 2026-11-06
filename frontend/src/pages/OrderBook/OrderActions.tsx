@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useMarketStore } from '@/store/market.store'
 import type { ParentOrder } from '@/types'
-import { getAllowedActions, type ActionAvailability } from '@/utils/orderActions'
+import { getAllowedActions, isRepriceRequired, type ActionAvailability } from '@/utils/orderActions'
 
 interface OrderActionsProps {
   order: ParentOrder
@@ -20,11 +20,15 @@ interface OrderActionsProps {
 
 export function OrderActions({ order, isBusy, onEdit, onCancel, onPause, onResume }: OrderActionsProps) {
   const session = useMarketStore((state) => state.session)
-  const actions = getAllowedActions(order.status, session)
+  const actions = getAllowedActions(order.status, session, order.reason_code)
   const isPaused = order.status === 'PAUSED_USER' || order.status === 'PAUSED_SYSTEM'
 
   const items: Array<{ label: string; availability: ActionAvailability; run: () => void }> = [
-    { label: 'Sửa', availability: actions.edit, run: () => onEdit(order) },
+    {
+      label: isRepriceRequired(order.status, order.reason_code) ? 'Sửa giá' : 'Sửa',
+      availability: actions.edit,
+      run: () => onEdit(order),
+    },
     { label: 'Hủy', availability: actions.cancel, run: () => onCancel(order) },
     isPaused
       ? { label: 'Tiếp tục', availability: actions.resume, run: () => onResume(order) }

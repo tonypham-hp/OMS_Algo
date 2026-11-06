@@ -14,8 +14,11 @@ import type {
   OrderCondition,
   OrderEvent,
   OrderEventAction,
+  OrderPriceField,
   ParentOrder,
   ParentOrderStatus,
+  PriceFieldName,
+  RepriceOrderRequest,
   Side,
   StrategyParameter,
   SessionCode,
@@ -23,8 +26,8 @@ import type {
   UpdateOrderRequest,
 } from '@/types'
 import { formatDate, formatNumber } from '@/lib/format'
-import { isAuctionSession, parseTimeToSeconds } from '@/utils/hose'
-import { getAllowedActions, isTerminalStatus, type OrderAction } from '@/utils/orderActions'
+import { isAuctionSession, parseTimeToSeconds, validatePrice } from '@/utils/hose'
+import { getAllowedActions, isRepriceRequired, isTerminalStatus, type OrderAction } from '@/utils/orderActions'
 
 const LOT = QTY_LOT_SIZE
 const VWAP_CYCLE_SECONDS = 300
@@ -461,32 +464,61 @@ export function createOrderEngine(options: EngineOptions = {}) {
   }
 
   /**
-   * Đầu ngày mới: giá giới hạn của lệnh mang sang có thể nằm ngoài trần, sàn mới.
+   * Các giá lệnh còn dùng tới, nên phải nằm trong biên độ. Giá đã hết tác dụng không tính:
+   * giá giới hạn khi đã vào đủ KL (Bracket đang chờ thoát), giá kích hoạt khi đã kích hoạt,
+   * giá SL sau khi kích hoạt (lệnh con là MTL). Giá TP vẫn tính vì lệnh con LO đặt đúng giá đó.
+   * Trailing Stop không có ở đây vì giá kích hoạt do engine tính, bám theo thị trường.
+   */
+  function getActivePriceFields(parent: ParentOrder): OrderPriceField[] {
+    const triggered = getTriggeredCondition(parent)
+    const isUsed: Record<PriceFieldName, boolean> = {
+      limit_price: parent.executed_qty < parent.total_qty,
+      trigger_price: !triggered,
+      hunt_price: !triggered,
+      sl_price: !triggered,
+      tp_price: !triggered || triggered.condition_type === 'TAKE_PROFIT',
+    }
+    const fields: OrderPriceField[] = []
+    for (const field of STRATEGIES[parent.strategy_type].fields) {
+      if (field.kind !== 'price') continue
+      const name = field.name as PriceFieldName
+      if (!isUsed[name]) continue
+      const value = name === 'limit_price' ? parent.limit_price : getNumberParam(parent, name)
+      if (value !== null) fields.push({ name, value })
+    }
+    return fields
+  }
+
+  /**
+   * Đầu ngày mới: giá của lệnh mang sang có thể nằm ngoài trần, sàn mới.
    * Lệnh đó không được sinh lệnh con nữa, chuyển PAUSED_SYSTEM và báo lý do.
    */
-  function checkCarriedLimitPrice(parent: ParentOrder) {
-    const limit = parent.limit_price
+  function checkCarriedPrices(parent: ParentOrder) {
     const quote = getQuote(parent.symbol)
-    if (limit === null || !quote) return
+    if (!quote) return
     if (parent.status === 'PAUSED_SYSTEM' || parent.status === 'CANCEL_PENDING') return
-    // Đã vào đủ KL thì giá giới hạn không còn được dùng, ví dụ Bracket đang chờ thoát.
-    if (parent.executed_qty >= parent.total_qty) return
-    if (limit >= quote.floor_price && limit <= quote.ceiling_price) return
+    const outOfBand = getActivePriceFields(parent).filter(
+      (field) => field.value < quote.floor_price || field.value > quote.ceiling_price,
+    )
+    if (outOfBand.length === 0) return
 
-    const floor = formatNumber(quote.floor_price)
-    const ceiling = formatNumber(quote.ceiling_price)
+    parent.reason_code = 'PRICE_OUT_OF_BAND'
     setParentStatus(parent, 'PAUSED_SYSTEM', 'PAUSE')
     logEvent(
       parent.parent_order_id,
       null,
       'DECISION',
-      `LIMIT_PRICE:${limit}`,
-      `OUT_OF_BAND:floor=${quote.floor_price},ceiling=${quote.ceiling_price}`,
+      outOfBand.map((field) => `${field.name}=${field.value}`).join(','),
+      `PRICE_OUT_OF_BAND:floor=${quote.floor_price},ceiling=${quote.ceiling_price}`,
     )
+    const labels = STRATEGIES[parent.strategy_type].fields
+    const prices = outOfBand
+      .map((item) => `${labels.find((field) => field.name === item.name)?.label} ${formatNumber(item.value)}`)
+      .join(', ')
     notifications.push({
       notification_type: 'PARENT_PAUSED',
       parent_order_id: parent.parent_order_id,
-      message: `Lệnh ${parent.parent_order_id} tạm dừng: giá giới hạn ${formatNumber(limit)} nằm ngoài biên độ ngày ${formatDate(getToday())} (sàn ${floor}, trần ${ceiling}).`,
+      message: `Lệnh ${parent.parent_order_id} tạm dừng: ${prices} nằm ngoài biên độ ngày ${formatDate(getToday())} (sàn ${formatNumber(quote.floor_price)}, trần ${formatNumber(quote.ceiling_price)}).`,
       sent_at: nowIso(),
     })
   }
@@ -705,7 +737,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
     currentDate = state.trading_date
     const liveParents = parents.filter((parent) => !isTerminalStatus(parent.status))
 
-    if (isNewDay) for (const parent of liveParents) checkCarriedLimitPrice(parent)
+    if (isNewDay) for (const parent of liveParents) checkCarriedPrices(parent)
 
     for (const parent of liveParents) {
       sendCreatedChildren(parent)
@@ -757,7 +789,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
   // ===== Thao tác của người dùng =====
 
   function assertAllowed(parent: ParentOrder, action: OrderAction) {
-    const availability = getAllowedActions(parent.status, market?.session ?? 'CLOSED')[action]
+    const availability = getAllowedActions(parent.status, market?.session ?? 'CLOSED', parent.reason_code)[action]
     if (!availability.allowed) throw new EngineError(availability.reason ?? 'Không được phép thao tác')
   }
 
@@ -810,6 +842,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
       limit_price: request.limit_price,
       strategy_type: request.strategy_type,
       status: 'ACTIVE',
+      reason_code: null,
       valid_from: now,
       valid_to: request.valid_to ?? today,
       persistence_mode: request.persistence_mode,
@@ -867,6 +900,9 @@ export function createOrderEngine(options: EngineOptions = {}) {
   function updateOrder(parentOrderId: string, request: UpdateOrderRequest, userId: string) {
     const parent = requireParent(parentOrderId)
     assertAllowed(parent, 'edit')
+    if (isRepriceRequired(parent.status, parent.reason_code)) {
+      throw new EngineError('Lệnh đang tạm dừng vì giá ngoài biên độ, chỉ được sửa giá')
+    }
     if (request.version !== parent.version) {
       throw new EngineError('Lệnh vừa được thay đổi ở nơi khác, vui lòng mở lại để sửa')
     }
@@ -911,7 +947,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
     parent.limit_price = limitPrice
     parent.version += 1
     parent.updated_at = nowIso()
-    logEvent(
+    logEvent(  
       parent.parent_order_id,
       null,
       'MODIFY',
@@ -919,6 +955,82 @@ export function createOrderEngine(options: EngineOptions = {}) {
       JSON.stringify({ total_qty: parent.total_qty, limit_price: parent.limit_price }),
       userId,
     )
+    settleParent(parent)
+    return parent
+  }
+
+  /** Các giá cần sửa của lệnh đang tạm dừng vì giá ngoài biên độ. */
+  function getRepriceFields(parentOrderId: string) {
+    return getActivePriceFields(requireParent(parentOrderId))
+  }
+
+  /**
+   * Sửa giá lệnh PAUSED_SYSTEM do giá ngoài biên độ. Mọi giá còn dùng tới phải hợp lệ trong biên độ
+   * ngày hiện tại thì mới nhận, và lệnh tự chạy lại. KL không đổi. Giá không còn dùng tới bị bỏ qua.
+   */
+  function repriceOrder(parentOrderId: string, request: RepriceOrderRequest, userId: string) {
+    const parent = requireParent(parentOrderId)
+    assertAllowed(parent, 'edit')
+    if (!isRepriceRequired(parent.status, parent.reason_code)) {
+      throw new EngineError('Chỉ sửa giá được với lệnh tạm dừng vì giá ngoài biên độ')
+    }
+    if (request.version !== parent.version) {
+      throw new EngineError('Lệnh vừa được thay đổi ở nơi khác, vui lòng mở lại để sửa')
+    }
+    const quote = getQuote(parent.symbol)
+    if (!quote) throw new EngineError('Chưa có giá của mã này, vui lòng thử lại')
+
+    const before = getActivePriceFields(parent)
+    const after = before.map((field) => ({ ...field, value: request.prices[field.name] ?? field.value }))
+    const newParameters = (parameters.get(parent.parent_order_id) ?? []).map((parameter) => {
+      const changed = after.find((field) => field.name === parameter.parameter_code)
+      return changed ? { ...parameter, parameter_value: String(changed.value) } : parameter
+    })
+    const newLimit = after.find((field) => field.name === 'limit_price')?.value ?? parent.limit_price
+
+    // Đã kích hoạt hoặc đã vào đủ KL thì các giá gốc không còn so sánh được với nhau, chỉ xét biên độ.
+    const checkBandOnly = getTriggeredCondition(parent) !== undefined || parent.executed_qty >= parent.total_qty
+    const activeNames = new Set<string>(before.map((field) => field.name))
+    const errors = checkBandOnly
+      ? after.map((field) => validatePrice(field.value, quote.ref_price)).filter((message) => message !== null)
+      : validateOrderValues(
+          fromCreateOrderRequest({
+            client_request_id: parent.client_request_id,
+            account_no: parent.account_no,
+            symbol: parent.symbol,
+            side: parent.side,
+            total_qty: parent.total_qty,
+            limit_price: newLimit,
+            strategy_type: parent.strategy_type,
+            persistence_mode: parent.persistence_mode,
+            valid_to: parent.valid_to,
+            parameters: newParameters,
+          }),
+          { getQuote, today: getToday() },
+        )
+          .filter((error) => activeNames.has(error.field))
+          .map((error) => error.message)
+    if (errors.length > 0) throw new EngineError(errors[0], 422)
+
+    const toText = (fields: OrderPriceField[]) =>
+      JSON.stringify(Object.fromEntries(fields.map((field) => [field.name, field.value])))
+    parameters.set(parent.parent_order_id, newParameters)
+    parent.limit_price = newLimit
+    for (const field of after) {
+      const condition = conditions.find(
+        (item) =>
+          item.parent_order_id === parent.parent_order_id &&
+          (field.name === 'trigger_price' ||
+            (field.name === 'tp_price' && item.condition_type === 'TAKE_PROFIT') ||
+            (field.name === 'sl_price' && item.condition_type === 'STOP') ||
+            (field.name === 'hunt_price' && item.condition_type === 'HUNT')),
+      )
+      if (condition) condition.trigger_price = field.value
+    }
+    parent.version += 1
+    parent.reason_code = null
+    logEvent(parent.parent_order_id, null, 'MODIFY', toText(before), toText(after), userId)
+    setParentStatus(parent, parent.executed_qty > 0 ? 'PARTIALLY_EXECUTED' : 'ACTIVE', 'RESUME', userId)
     settleParent(parent)
     return parent
   }
@@ -931,7 +1043,6 @@ export function createOrderEngine(options: EngineOptions = {}) {
     if (!child || !isChildLive(child.status)) throw new EngineError('Không tìm thấy lệnh con đang chờ', 404)
     setChildStatus(child, 'UNKNOWN', 'CHILD_UNKNOWN')
   }
-
   /** Đối soát xong: phần chưa khớp của Child UNKNOWN được giải phóng để sinh lại. */
   function reconcileUnknownChild(childOrderId: string) {
     const child = children.find((item) => item.child_order_id === childOrderId)
@@ -940,7 +1051,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
     settleParent(requireParent(child.parent_order_id))
   }
 
-  // ===== Dữ liệu =====
+  // ===== Dữ liệu ===== 
 
   function load(seed: SeedData) {
     parents = seed.orders.map((order) => ({ ...order }))
@@ -1017,6 +1128,8 @@ export function createOrderEngine(options: EngineOptions = {}) {
     resumeOrder,
     cancelOrder,
     updateOrder,
+    repriceOrder,
+    getRepriceFields,
     markChildUnknown,
     reconcileUnknownChild,
     load,
