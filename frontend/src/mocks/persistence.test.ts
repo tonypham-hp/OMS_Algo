@@ -70,7 +70,7 @@ describe('lưu trạng thái giả lập', () => {
   })
 
   it('hết dung lượng khi lưu: trả về false, không ném lỗi', () => {
-    const { market, engine } = currentStates()     
+    const { market, engine } = currentStates()
     const fullStorage = {
       ...fakeStorage(),
       setItem: () => {
