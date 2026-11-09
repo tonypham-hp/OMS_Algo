@@ -3,7 +3,8 @@
 Danh sách những gì frontend đang dùng (qua API giả lập MSW trong `frontend/src/mocks`) mà backend FastAPI cần bổ sung,
 vì ERD chưa có.
 
-> **Cơ sở đối chiếu:** tài liệu ERD 14 bảng và bộ TestCase chưa có trong repo (`docs/test-cases` đang rỗng).
+> **Cơ sở đối chiếu:** tài liệu ERD 14 bảng chưa có trong repo. Bộ TestCase đã có ở `docs/test-cases/TC-E2E.md`,
+> bảng phủ test ở `docs/test-cases/coverage.md`.
 > File này được đối chiếu với mô hình dữ liệu ở `docs/frontend-spec.md` mục 6, nên cần rà lại với ERD 14 bảng thật:
 > mục nào ERD đã có thì bỏ khỏi danh sách.
 > Cột "Luồng E2E" chỉ ghi các mã đã được nêu trong yêu cầu làm Màn 4. "Chưa có mã" nghĩa là chưa biết mã TestCase tương ứng.
@@ -94,5 +95,74 @@ Backend thật không cần các API này nếu lỗi được tạo từ simula
 - **Mở lại lệnh:** khách hàng không được gọi API này. Frontend chỉ hiện nút ở Màn 4, nhưng backend vẫn phải tự kiểm tra role.
 - **TC-E2E-140:** Core chưa tạo lệnh → hủy Child UNKNOWN, sinh đúng 1 Child mới.
 - **TC-E2E-141:** Core đã tạo lệnh → giữ Child, về `ACKNOWLEDGED`, không sinh Child mới. Nếu lệnh cha đã ngừng chạy lúc đối soát xong thì hủy Child đó.
-- **Từ chối lặp lại:** 2 lần liên tiếp trên cùng lệnh cha thì tạm dừng. Một Child được Core nhận thì đếm lại từ đầu.
+- **Từ chối lặp lại:** `MAX_CONSECUTIVE_REJECTS` lần liên tiếp (mặc định 2) trên cùng lệnh cha thì tạm dừng.
+  Một Child được Core nhận thì đếm lại từ đầu.
 - **Đặt lệnh khi kill switch bật:** `POST /api/orders` trả lỗi nghiệp vụ, kèm `message`.
+- **Chờ ACK:** Child đã gửi mà chưa có phản hồi nằm ở `SENDING`; quá `ACK_TIMEOUT_SECONDS` giây thật mới sang `UNKNOWN`
+  và bắt đầu đối soát. `SENDING` tính là working như `UNKNOWN`, và giống `UNKNOWN` không bị hủy khi tạm dừng, kill switch
+  hay hết phiên (chưa biết Core có giữ lệnh không). Thời gian đối soát sau `UNKNOWN` (5 giây) là của giả lập, không phải tham số.
+
+## 7. Cấu hình hệ thống (Màn 5, maker-checker)
+
+Frontend giả lập ở `frontend/src/mocks/systemConfig.ts`; định nghĩa tham số (mô tả, kiểu, min/max, mặc định) ở
+`frontend/src/config/systemParams.ts`. ERD chưa có hai bảng dưới đây.
+
+### Bảng `SystemParameter`
+
+| Trường | Kiểu | Ghi chú |
+|---|---|---|
+| `parameter_code` | chuỗi, khóa chính | Xem danh sách tham số bên dưới |
+| `value` | JSON | Số nguyên, hoặc mảng `strategy_type` với `ENABLED_STRATEGIES` |
+| `data_type` | `INTEGER` \| `STRATEGY_LIST` | |
+| `min`, `max`, `step` | số, có thể null | Backend phải tự kiểm tra lại, không tin frontend |
+| `updated_by`, `approved_by`, `updated_at` | | Người tạo, người duyệt và thời điểm của lần đổi gần nhất |
+
+### Bảng `ParameterChangeRequest`
+
+| Trường | Kiểu | Ghi chú |
+|---|---|---|
+| `request_id` | chuỗi, khóa chính | |
+| `parameter_code` | chuỗi | |
+| `old_value`, `new_value` | JSON | `old_value` ghi lại lúc duyệt, là giá trị thật sự bị thay |
+| `reason` | chuỗi, bắt buộc | Lý do của người tạo |
+| `maker`, `checker` | chuỗi | `checker` null khi chưa xử lý |
+| `note` | chuỗi | Ghi chú của người duyệt; bắt buộc khi từ chối |
+| `status` | `PENDING` \| `APPROVED` \| `REJECTED` | |
+| `created_at`, `decided_at` | thời điểm | |
+
+Ràng buộc:
+- **Một yêu cầu chờ cho mỗi tham số:** unique partial index trên `parameter_code` với `status = 'PENDING'`. Trùng thì 409.
+- **Maker ≠ checker:** người tạo duyệt hoặc từ chối yêu cầu của chính mình thì 403. Kiểm ở backend, không chỉ ẩn nút.
+- **Kiểm lại lúc duyệt** theo giá trị đang áp dụng (ví dụ `ICEBERG_MIN_SLICE` ≤ `ICEBERG_MAX_SLICE`), sai thì 422.
+- **Không sửa ngược:** tham số `ENGINE` áp cho quyết định mới của engine ngay sau khi duyệt; tham số `ORDER_ENTRY`
+  chỉ áp khi tạo lệnh mới. Lệnh đang chạy giữ tham số lúc đặt, kể cả khi loại lệnh bị tắt.
+
+### Tham số
+
+| Mã | Mặc định | Giới hạn | Áp ở |
+|---|---|---|---|
+| `MAX_CONSECUTIVE_REJECTS` | 2 | 1–10 | Engine: số lần Core từ chối liên tiếp trước khi `PAUSED_SYSTEM` |
+| `MAX_DATA_DELAY_SECONDS` | 5 | 1–60 giây thật | Engine: ngưỡng dữ liệu giá trễ (TC-E2E-180), chặn mở lại lệnh |
+| `ACK_TIMEOUT_SECONDS` | 3 | 1–60 giây thật | Engine: `SENDING` → `UNKNOWN` |
+| `POV_MAX_PARTICIPATION_PCT` | 50 | 1–100 % | Tạo lệnh: trần cho `participation_pct`, `max_pct` |
+| `ICEBERG_MIN_SLICE` | 100 | 100–500.000, bội 100 | Tạo lệnh: `slice_qty` tối thiểu |
+| `ICEBERG_MAX_SLICE` | 500.000 | 100–500.000, bội 100 | Tạo lệnh: `slice_qty` tối đa |
+| `ENABLED_STRATEGIES` | cả 11 loại | ít nhất 1 | Tạo lệnh: loại lệnh được đặt mới |
+
+### API
+
+Mọi API dưới đây chỉ role OPS, trừ `order-rules`. Lỗi nghiệp vụ trả `{ "message": "..." }` bằng tiếng Việt.
+
+| API | Dữ liệu gửi | Lý do cần |
+|---|---|---|
+| `GET /api/config/parameters` | | Bảng tham số: giá trị, mô tả, giới hạn, người sửa gần nhất, yêu cầu đang chờ |
+| `GET /api/config/requests` | query `parameter_code`, `user` (người tạo hoặc người duyệt), `status` | Tab Lịch sử thay đổi, mới nhất trước |
+| `POST /api/config/requests` | `{parameter_code, new_value, reason}` | Tạo yêu cầu (`PENDING`) |
+| `POST /api/config/requests/:id/approve` | `{note}` | Duyệt: áp giá trị ngay |
+| `POST /api/config/requests/:id/reject` | `{note}` (bắt buộc) | Từ chối: giá trị không đổi |
+| `GET /api/config/order-rules` | | Mọi người dùng đã đăng nhập: form đặt lệnh cần loại lệnh đang bật, khoảng slice, trần POV |
+| `POST /api/orders` (đã có) | | Phải kiểm thêm luật đặt lệnh ở trên, sai thì 422 |
+
+### Tài khoản demo
+
+Thêm `vanhanh2` (OPS) để demo maker-checker: một người tạo, người kia duyệt.

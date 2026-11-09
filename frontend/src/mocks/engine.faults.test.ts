@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 import type { MarketState, NotificationType, OrderEventAction, SessionCode, StrategyParameter, SymbolQuote } from '@/types'
 import { getSessionAt } from '@/utils/hose'
 import { getReopenBlock } from '@/utils/orderActions'
-import { createOrderEngine, isChildLive, MAX_DATA_DELAY, type OrderEngine } from './engine'
+import { SYSTEM_PARAM_DEFAULTS } from '@/config/systemParams'
+import { createOrderEngine, isChildLive, type OrderEngine } from './engine'
+
+const MAX_DATA_DELAY = SYSTEM_PARAM_DEFAULTS.MAX_DATA_DELAY_SECONDS
+const ACK = SYSTEM_PARAM_DEFAULTS.ACK_TIMEOUT_SECONDS
 import { createSeedData } from './seedOrders'
 import { createMarketSimulator } from './simulator'
 
@@ -136,7 +140,7 @@ describe('TC-E2E-140 timeout trước khi Core tạo lệnh', () => {
     const { engine, place, tick } = setup()
     const id = place()
     engine.injectTimeout(id, 'TIMEOUT_BEFORE_CORE')
-    tick(2)
+    tick(2 + ACK) // Nhịp 1 sinh, nhịp 2 gửi (SENDING), chờ ACK rồi mới UNKNOWN.
     expect(childStatuses(engine, id)).toEqual(['UNKNOWN'])
     expect(hasEvent(engine, id, 'CHILD_UNKNOWN')).toBe(true)
     expect(hasNotification(engine, id, 'CHILD_UNKNOWN')).toBe(true)
@@ -154,7 +158,7 @@ describe('TC-E2E-140 timeout trước khi Core tạo lệnh', () => {
     const { engine, place, tick } = setup(ACCOUNT_A, 90_000, () => value)
     const id = place()
     engine.injectTimeout(id, 'TIMEOUT_BEFORE_CORE')
-    tick(10)
+    tick(10 + ACK)
     expect(childStatuses(engine, id)).toEqual(['CANCELLED', 'ACKNOWLEDGED'])
   })
 })
@@ -164,7 +168,7 @@ describe('TC-E2E-141 timeout nhưng Core đã tạo lệnh', () => {
     const { engine, place, tick } = setup()
     const id = place()
     engine.injectTimeout(id, 'TIMEOUT_AFTER_CORE')
-    tick(2)
+    tick(2 + ACK) // Nhịp 1 sinh, nhịp 2 gửi (SENDING), chờ ACK rồi mới UNKNOWN.
 
     expect(childStatuses(engine, id)).toEqual(['UNKNOWN'])
     expect(engine.getWorkingQty(id)).toBe(500)
@@ -178,7 +182,7 @@ describe('TC-E2E-141 timeout nhưng Core đã tạo lệnh', () => {
     const { engine, place, tick } = setup()
     const id = place()
     engine.injectTimeout(id, 'TIMEOUT_AFTER_CORE')
-    tick(2)
+    tick(2 + ACK) // Nhịp 1 sinh, nhịp 2 gửi (SENDING), chờ ACK rồi mới UNKNOWN.
     const before = engine.getChildren(id)[0]
     tick(8)
 
@@ -198,7 +202,7 @@ describe('TC-E2E-141 timeout nhưng Core đã tạo lệnh', () => {
     const { engine, place, tick } = setup(ACCOUNT_A, 90_000, () => value)
     const id = place()
     engine.injectTimeout(id, 'TIMEOUT_AFTER_CORE')
-    tick(10)
+    tick(10 + ACK)
     expect(childStatuses(engine, id)).toEqual(['ACKNOWLEDGED'])
   })
 
@@ -206,7 +210,7 @@ describe('TC-E2E-141 timeout nhưng Core đã tạo lệnh', () => {
     const { engine, place, tick } = setup()
     const id = place()
     engine.injectTimeout(id, 'TIMEOUT_AFTER_CORE')
-    tick(2)
+    tick(2 + ACK) // Nhịp 1 sinh, nhịp 2 gửi (SENDING), chờ ACK rồi mới UNKNOWN.
     engine.pauseOrder(id, 'tester')
     tick(6)
 
@@ -498,7 +502,7 @@ describe('Đối soát ngay Child UNKNOWN', () => {
     const { engine, place, tick } = setup()
     const id = place()
     engine.injectTimeout(id, 'TIMEOUT_AFTER_CORE')
-    tick(2)
+    tick(2 + ACK) // Nhịp 1 sinh, nhịp 2 gửi (SENDING), chờ ACK rồi mới UNKNOWN.
     engine.reconcileChildNow(engine.getChildren(id)[0].child_order_id, 'vanhanh')
     expect(childStatuses(engine, id)).toEqual(['ACKNOWLEDGED'])
     tick(8)
@@ -509,7 +513,7 @@ describe('Đối soát ngay Child UNKNOWN', () => {
     const { engine, place, tick } = setup()
     const id = place()
     engine.injectTimeout(id, 'TIMEOUT_BEFORE_CORE')
-    tick(2)
+    tick(2 + ACK) // Nhịp 1 sinh, nhịp 2 gửi (SENDING), chờ ACK rồi mới UNKNOWN.
     engine.reconcileChildNow(engine.getChildren(id)[0].child_order_id, 'vanhanh')
     tick(8)
     expect(childStatuses(engine, id)).toEqual(['CANCELLED', 'ACKNOWLEDGED'])
@@ -563,7 +567,7 @@ describe('Kill switch', () => {
     const { engine, place, tick } = setup()
     const id = place()
     engine.injectTimeout(id, 'TIMEOUT_AFTER_CORE')
-    tick(2)
+    tick(2 + ACK) // Nhịp 1 sinh, nhịp 2 gửi (SENDING), chờ ACK rồi mới UNKNOWN.
     engine.activateKillSwitch({ scope: 'ALL' }, 'vanhanh')
     expect(childStatuses(engine, id)).toEqual(['UNKNOWN'])
 
@@ -639,7 +643,7 @@ describe('tổng quan vận hành', () => {
     const paused = place(ACCOUNT_B)
     engine.injectRejectNext(rejected)
     engine.injectTimeout(unknown, 'TIMEOUT_AFTER_CORE')
-    tick(2)
+    tick(2 + ACK) // Nhịp 1 sinh, nhịp 2 gửi (SENDING), chờ ACK rồi mới UNKNOWN.
     engine.activateKillSwitch({ scope: 'ACCOUNT', account_no: ACCOUNT_B }, 'vanhanh')
 
     const overview = engine.getOpsOverview()

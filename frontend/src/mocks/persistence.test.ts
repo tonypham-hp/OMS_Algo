@@ -1,8 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { createOrderEngine } from './engine'
-import { clearSimState, loadSimState, saveSimState, SIM_STATE_KEY } from './persistence'
+import {
+  clearConfigState,
+  clearSimState,
+  CONFIG_STATE_KEY,
+  loadConfigState,
+  loadSimState,
+  saveConfigState,
+  saveSimState,
+  SIM_STATE_KEY,
+} from './persistence'
 import { createSeedData } from './seedOrders'
 import { createMarketSimulator } from './simulator'
+import { createConfigStore } from './systemConfig'
 
 function fakeStorage(initial?: string) {
   const data = new Map<string, string>(initial === undefined ? [] : [[SIM_STATE_KEY, initial]])
@@ -81,5 +91,38 @@ describe('lưu trạng thái giả lập', () => {
     const storage = fakeStorage('{}')
     clearSimState(() => storage)
     expect(storage.data.has(SIM_STATE_KEY)).toBe(false)
+  })
+})
+
+describe('lưu cấu hình hệ thống', () => {
+  function changedConfig() {
+    const store = createConfigStore({ now: () => '2026-11-06T10:00:00' })
+    const request = store.createRequest({ parameter_code: 'MAX_CONSECUTIVE_REJECTS', new_value: 3, reason: 'A' }, 'vanhanh')
+    store.approveRequest(request.request_id, 'OK', 'vanhanh2')
+    return store.exportState()
+  }
+
+  it('lưu riêng khóa của cấu hình, đọc lại đúng giá trị và lịch sử', () => {
+    const storage = fakeStorage()
+    const config = changedConfig()
+    expect(saveConfigState(config, () => storage)).toBe(true)
+    expect([...storage.data.keys()]).toEqual([CONFIG_STATE_KEY])
+    expect(loadConfigState(() => storage)).toEqual(JSON.parse(JSON.stringify(config)))
+  })
+
+  it('chưa có, hỏng, sai phiên bản hoặc bị chặn thì trả về null; xóa thì không còn', () => {
+    const storage = fakeStorage()
+    expect(loadConfigState(() => storage)).toBeNull()
+    storage.setItem(CONFIG_STATE_KEY, '{hỏng')
+    expect(loadConfigState(() => storage)).toBeNull()
+    storage.setItem(CONFIG_STATE_KEY, JSON.stringify({ version: 99, config: changedConfig() }))
+    expect(loadConfigState(() => storage)).toBeNull()
+    expect(loadConfigState(throwingStorage)).toBeNull()
+    expect(saveConfigState(changedConfig(), throwingStorage)).toBe(false)
+
+    saveConfigState(changedConfig(), () => storage)
+    clearConfigState(() => storage)
+    expect(loadConfigState(() => storage)).toBeNull()
+    expect(() => clearConfigState(throwingStorage)).not.toThrow()
   })
 })

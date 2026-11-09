@@ -2,7 +2,11 @@ import type { JsonBodyType } from 'msw'
 import { http, HttpResponse } from 'msw/http'
 import { fromCreateOrderRequest, validateOrderValues } from '@/pages/PlaceOrder/orderSchema'
 import type {
+  ChangeRequestFilter,
+  ChangeRequestStatus,
+  CreateChangeRequest,
   CreateOrderRequest,
+  DecideChangeRequest,
   DemoUser,
   FaultTargetRequest,
   KillSwitchRequest,
@@ -12,11 +16,12 @@ import type {
   ParentOrder,
   ReopenOrderRequest,
   RepriceOrderRequest,
+  SystemParameterCode,
   UpdateOrderRequest,
 } from '@/types'
 import { DEMO_USERS } from './data'
 import { EngineError } from './engine'
-import { orderEngine } from './runtime'
+import { configStore, orderEngine, persistConfig } from './runtime'
 import { marketSimulator } from './simulator'
 
 function getUser(request: Request): DemoUser | undefined {
@@ -65,7 +70,47 @@ function handleOps(request: Request, action: (username: string) => unknown) {
   }
 }
 
+/** Thao tác đổi cấu hình: lưu ngay sau khi thành công. */
+function handleConfigChange(request: Request, action: (username: string) => unknown) {
+  const response = handleOps(request, action)
+  if (response.ok) persistConfig()
+  return response
+}
+
 export const handlers = [
+  http.get('*/api/config/parameters', ({ request }) => handleOps(request, () => configStore.listParameters())),
+
+  http.get('*/api/config/requests', ({ request }) => {
+    const params = new URL(request.url).searchParams
+    const filter: ChangeRequestFilter = {
+      parameter_code: (params.get('parameter_code') as SystemParameterCode | null) ?? undefined,
+      user: params.get('user') ?? undefined,
+      status: (params.get('status') as ChangeRequestStatus | null) ?? undefined,
+    }
+    return handleOps(request, () => configStore.listRequests(filter))
+  }),
+
+  http.post('*/api/config/requests', async ({ request }) => {
+    const body = (await request.json()) as CreateChangeRequest
+    return handleConfigChange(request, (username) => configStore.createRequest(body, username))
+  }),
+
+  http.post('*/api/config/requests/:id/approve', async ({ request, params }) => {
+    const { note } = (await request.json()) as DecideChangeRequest
+    return handleConfigChange(request, (username) => configStore.approveRequest(String(params.id), note ?? '', username))
+  }),
+
+  http.post('*/api/config/requests/:id/reject', async ({ request, params }) => {
+    const { note } = (await request.json()) as DecideChangeRequest
+    return handleConfigChange(request, (username) => configStore.rejectRequest(String(params.id), note ?? '', username))
+  }),
+
+  /** Form đặt lệnh cần luật đặt lệnh, nên mọi người dùng đã đăng nhập đều đọc được. */
+  http.get('*/api/config/order-rules', ({ request }) => {
+    if (!getUser(request)) return errorResponse('Chưa đăng nhập', 401)
+    return HttpResponse.json(configStore.getOrderRules())
+  }),
+
   http.get('*/api/ops/overview', ({ request }) =>
     handleOps(request, () => ({
       ...orderEngine.getOpsOverview(),
@@ -149,6 +194,7 @@ export const handlers = [
     const errors = validateOrderValues(fromCreateOrderRequest(body), {
       getQuote: (symbol) => market.quotes.find((quote) => quote.symbol === symbol),
       today: market.trading_date,
+      orderRules: configStore.getOrderRules(),
     })
     if (errors.length > 0) {
       return HttpResponse.json({ message: errors[0].message, errors }, { status: 422 })

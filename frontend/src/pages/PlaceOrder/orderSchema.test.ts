@@ -184,3 +184,37 @@ describe('đổi sang dữ liệu API', () => {
     expect(request.valid_to).toBeNull()
   })
 })
+
+describe('luật đặt lệnh từ cấu hình hệ thống', () => {
+  const rules = { enabledStrategies: ['TWAP', 'ICEBERG', 'POV'] as StrategyType[], povMaxPct: 20, icebergMinSlice: 500, icebergMaxSlice: 2_000 }
+  const fields = (values: OrderFormValues) =>
+    validateOrderValues(values, { ...CONTEXT, orderRules: rules }).map((error) => error.field)
+
+  it('loại lệnh đang tắt thì báo lỗi ở ô loại lệnh', () => {
+    expect(fields(order('STOP', { trigger_price: 101_000 }))).toEqual(['strategy_type'])
+    expect(
+      validateOrderValues(order('STOP', { trigger_price: 101_000 }), { ...CONTEXT, orderRules: rules })[0].message,
+    ).toBe('Loại lệnh Stop đang tạm ngừng, chưa đặt mới được')
+  })
+
+  it('Iceberg: KL mỗi phần phải nằm trong khoảng tối thiểu, tối đa', () => {
+    expect(fields(order('ICEBERG', { slice_qty: 400, limit_price: 100_000 }))).toEqual(['slice_qty'])
+    expect(fields(order('ICEBERG', { slice_qty: 500, limit_price: 100_000 }))).toEqual([])
+    expect(fields(order('ICEBERG', { slice_qty: 2_100, limit_price: 100_000 }, 'BUY'))).toEqual(['slice_qty'])
+  })
+
+  it('Iceberg: lỗi luật HOSE của ô đã có thì không báo thêm lỗi cấu hình', () => {
+    const errors = validateOrderValues(order('ICEBERG', { slice_qty: 150, limit_price: 100_000 }), { ...CONTEXT, orderRules: rules })
+    expect(errors).toEqual([{ field: 'slice_qty', message: 'Khối lượng phải là bội số của 100' }])
+  })
+
+  it('POV: tỷ lệ tham gia và tỷ lệ tối đa không vượt trần hệ thống', () => {
+    expect(fields(order('POV', { participation_pct: 10, max_pct: 30, limit_price: 100_000 }))).toEqual(['max_pct'])
+    expect(fields(order('POV', { participation_pct: 25, max_pct: 30, limit_price: 100_000 }))).toEqual(['participation_pct', 'max_pct'])
+    expect(fields(order('POV', { participation_pct: 10, max_pct: 20, limit_price: 100_000 }))).toEqual([])
+  })
+
+  it('không truyền luật thì dùng mặc định: mọi loại lệnh được bật', () => {
+    expect(validateOrderValues(order('STOP', { trigger_price: 101_000 }), CONTEXT)).toEqual([])
+  })
+})

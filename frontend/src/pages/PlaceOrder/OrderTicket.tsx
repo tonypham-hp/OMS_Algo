@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useState } from 'react'
-import { Controller, useForm, useWatch } from 'react-hook-form'
+import { Controller, useForm, useWatch, type Resolver } from 'react-hook-form'
 import { FieldError } from '@/components/FieldError'
 import { NumberInput } from '@/components/NumberInput'
 import { Button } from '@/components/ui/button'
@@ -18,31 +18,42 @@ import { SESSION_LABELS } from '@/config/hose'
 import { getPriceColor, PRICE_COLOR } from '@/config/priceColors'
 import { PERSISTENCE_LABELS, STRATEGIES, STRATEGY_TYPES } from '@/config/strategies'
 import { useCreateOrder } from '@/hooks/useOrders'
+import { useOrderRules } from '@/hooks/useSystemConfig'
 import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth.store'
 import { useMarketStore } from '@/store/market.store'
 import { useUiStore } from '@/store/ui.store'
-import type { PersistenceMode, Side, StrategyType } from '@/types'
+import type { OrderRules, PersistenceMode, Side, StrategyType } from '@/types'
 import { getDisplayPrice, getTickSize, isAuctionSession, isMtlAllowed } from '@/utils/hose'
 import { ConfirmDialog } from './ConfirmDialog'
 import { createOrderSchema, toCreateOrderRequest, type OrderFormValues } from './orderSchema'
 import { StrategyFields } from './StrategyFields'
 
-// Luôn đọc giá mới nhất ở thời điểm kiểm tra, không giữ bản cũ.
-const orderSchema = createOrderSchema(() => ({
-  getQuote: (symbol) => useMarketStore.getState().quotes.find((quote) => quote.symbol === symbol),
-  today: useMarketStore.getState().trading_date,
-}))
+interface OrderResolverContext {
+  /** Luật đặt lệnh từ cấu hình hệ thống. Chưa tải xong thì dùng mặc định. */
+  orderRules: OrderRules | undefined
+}
+
+// Luôn đọc giá và luật đặt lệnh mới nhất ở thời điểm kiểm tra, không giữ bản cũ.
+const orderResolver: Resolver<OrderFormValues, OrderResolverContext> = (values, context, options) =>
+  zodResolver(
+    createOrderSchema(() => ({
+      getQuote: (symbol) => useMarketStore.getState().quotes.find((quote) => quote.symbol === symbol),
+      today: useMarketStore.getState().trading_date,
+      orderRules: context?.orderRules,
+    })),
+  )(values, context, options)
 
 const PERSISTENCE_MODES = Object.keys(PERSISTENCE_LABELS) as PersistenceMode[]
+const DEFAULT_STRATEGY: StrategyType = 'STOP_LIMIT'
 
-function buildDefaults(accountNo: string, symbol: string): OrderFormValues {
+function buildDefaults(accountNo: string, symbol: string, strategyType: StrategyType): OrderFormValues {
   return {
     account_no: accountNo,
     symbol,
     side: 'BUY',
-    strategy_type: 'STOP_LIMIT',
+    strategy_type: strategyType,
     total_qty: undefined,
     persistence_mode: 'DAY',
     valid_to: '',
@@ -58,11 +69,15 @@ export function OrderTicket() {
   const setSelectedSymbol = useUiStore((state) => state.setSelectedSymbol)
   const createOrder = useCreateOrder()
   const [pendingValues, setPendingValues] = useState<OrderFormValues | null>(null)
+  const orderRules = useOrderRules().data
+  const enabledTypes = STRATEGY_TYPES.filter((type) => !orderRules || orderRules.enabledStrategies.includes(type))
+  const defaultStrategy = enabledTypes.includes(DEFAULT_STRATEGY) ? DEFAULT_STRATEGY : (enabledTypes[0] ?? DEFAULT_STRATEGY)
 
-  const form = useForm<OrderFormValues>({
-    resolver: zodResolver(orderSchema),
+  const form = useForm<OrderFormValues, OrderResolverContext>({
+    resolver: orderResolver,
+    context: { orderRules },
     mode: 'onChange',
-    defaultValues: buildDefaults(accounts[0] ?? '', selectedSymbol),
+    defaultValues: buildDefaults(accounts[0] ?? '', selectedSymbol, defaultStrategy),
   })
   const { control, getValues, handleSubmit, reset, setValue, trigger } = form
   const values = useWatch({ control })
@@ -70,6 +85,13 @@ export function OrderTicket() {
   const strategy = STRATEGIES[strategyType]
   const persistenceMode = values.persistence_mode ?? 'DAY'
   const quote = quotes.find((item) => item.symbol === selectedSymbol)
+
+  // Loại lệnh đang chọn vừa bị vận hành tắt: chuyển sang loại đầu tiên còn bật.
+  useEffect(() => {
+    if (orderRules && !orderRules.enabledStrategies.includes(getValues('strategy_type'))) {
+      setValue('strategy_type', defaultStrategy, { shouldValidate: true })
+    }
+  }, [orderRules, defaultStrategy, getValues, setValue])
 
   // Bấm vào bảng giá thì ticket đổi theo mã vừa chọn.
   useEffect(() => {
@@ -97,7 +119,7 @@ export function OrderTicket() {
   function confirmOrder() {
     if (!pendingValues) return
     createOrder.mutate(toCreateOrderRequest(pendingValues, crypto.randomUUID()), {
-      onSuccess: () => reset(buildDefaults(pendingValues.account_no, selectedSymbol)),
+      onSuccess: () => reset(buildDefaults(pendingValues.account_no, selectedSymbol, defaultStrategy)),
     })
   }
 
@@ -160,24 +182,25 @@ export function OrderTicket() {
             <Controller
               control={control}
               name="strategy_type"
-              render={({ field }) => (
+              render={({ field, fieldState }) => (
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="strategy_type">Loại lệnh</Label>
                   <Select
                     value={field.value}
                     onValueChange={(value) => field.onChange(value as StrategyType)}
                   >
-                    <SelectTrigger id="strategy_type" className="w-full">
+                    <SelectTrigger id="strategy_type" className="w-full" aria-invalid={fieldState.invalid}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {STRATEGY_TYPES.map((type) => (
+                      {enabledTypes.map((type) => (
                         <SelectItem key={type} value={type}>
                           {STRATEGIES[type].label}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  <FieldError message={fieldState.error?.message} />
                 </div>
               )}
             />
