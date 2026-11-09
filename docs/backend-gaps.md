@@ -166,3 +166,43 @@ Mọi API dưới đây chỉ role OPS, trừ `order-rules`. Lỗi nghiệp vụ
 ### Tài khoản demo
 
 Thêm `vanhanh2` (OPS) để demo maker-checker: một người tạo, người kia duyệt.
+
+## 8. Tồn đọng kỹ thuật
+
+### `npm audit` của frontend (09/11/2026)
+
+Chạy `npm audit` trong `frontend/` trên `package-lock.json` hiện tại: **15 lỗ hổng, 2 low, 13 moderate, không có high hay critical**.
+`npm audit --omit=dev` (chỉ tính `dependencies`): 6 lỗ hổng (2 low, 4 moderate), đều thuộc nhánh `shadcn`.
+
+Chỉ có **2 lỗ hổng gốc**; 13 dòng còn lại là các gói bị kéo theo vì phụ thuộc vào 2 gói này:
+
+| Gói gốc | Phiên bản | Mức độ | Lỗi | Advisory |
+|---|---|---|---|---|
+| `minimatch` | 10.2.6 | moderate | Có thể bị từ chối dịch vụ khi xử lý glob pattern (globparts amplification) | GHSA-g3hv-75wg-m249 |
+| `deepmerge` | 4.3.1 | low | `mergeObject()` cho phép prototype poisoning | GHSA-gcqx-w48m-w2h4 |
+
+| Gói báo lỗi | Mức độ | Khai báo ở | Đường đi phụ thuộc |
+|---|---|---|---|
+| `eslint` | moderate | devDependencies, trực tiếp | `eslint` → `minimatch`; `eslint` → `@eslint/config-array` → `minimatch` |
+| `@eslint/js` | moderate | devDependencies, trực tiếp | `@eslint/js` → `eslint` |
+| `@eslint/config-array` | moderate | dev, gián tiếp | `eslint` → `@eslint/config-array` → `minimatch` |
+| `typescript-eslint` | moderate | devDependencies, trực tiếp | `typescript-eslint` → `@typescript-eslint/*` |
+| `@typescript-eslint/eslint-plugin`, `parser`, `type-utils`, `utils`, `typescript-estree` | moderate | dev, gián tiếp | `typescript-eslint` → … → `@typescript-eslint/typescript-estree` → `minimatch` |
+| `shadcn` | moderate | **dependencies**, trực tiếp | `shadcn` → `deepmerge`; `shadcn` → `@shadcn/registry` → `deepmerge`; `shadcn` → `ts-morph` → `@ts-morph/common` → `minimatch` |
+| `@shadcn/registry` | low | gián tiếp qua `shadcn` | `shadcn` → `@shadcn/registry` → `deepmerge` |
+| `ts-morph`, `@ts-morph/common` | moderate | gián tiếp qua `shadcn` | `shadcn` → `ts-morph` → `@ts-morph/common` → `minimatch` |
+| `minimatch` | moderate | gián tiếp | Như trên (eslint, typescript-eslint, shadcn) |
+| `deepmerge` | low | gián tiếp | Như trên (shadcn) |
+
+Đánh giá:
+- **Không có gì lọt vào bản build chạy trên trình duyệt.** Nhóm `eslint` / `typescript-eslint` chỉ dùng khi lint.
+  `shadcn` nằm ở `dependencies` nhưng app chỉ dùng file CSS của nó (`@import "shadcn/tailwind.css"` trong `src/index.css`);
+  phần JS (`ts-morph`, `deepmerge`, registry) là của CLI `npx shadcn add`, chỉ chạy trên máy dev.
+- Rủi ro thực tế thấp: `minimatch` chỉ nhận glob do chính dự án khai báo, `deepmerge` chỉ gộp cấu hình registry của shadcn.
+
+Chưa sửa, và **không chạy `npm audit fix --force`**: "bản sửa" npm đề xuất đều là **hạ phiên bản major**
+(`eslint` 10 → 9.39.5, `@eslint/js` → 9.39.5, `typescript-eslint` 8.72 → 8.36.0, `shadcn` 4 → 1.0.0),
+sẽ làm hỏng cấu hình lint và lệnh thêm component. Việc nên làm:
+1. Chờ `minimatch` / `deepmerge` có bản vá rồi `npm update` (không dùng `--force`), chạy lại lint, build, test.
+2. Cân nhắc chuyển `shadcn` sang `devDependencies` nếu chỉ cần file CSS lúc build, để `npm audit --omit=dev` sạch.
+3. Chạy lại `npm audit` trước mỗi lần phát hành và cập nhật mục này.
