@@ -1,4 +1,5 @@
 export * from './auth'
+export * from './config'
 export * from './event'
 export * from './market'
 export * from './ops'

@@ -23,7 +23,10 @@ import type {
 } from '@/types'
 import { getSessionAt } from '@/utils/hose'
 import { getVwapTarget } from '@/utils/schedule'
-import { createOrderEngine, isChildLive, MAX_DATA_DELAY, type OrderEngine } from './engine'
+import { SYSTEM_PARAM_DEFAULTS } from '@/config/systemParams'
+import { createOrderEngine, isChildLive, type OrderEngine } from './engine'
+
+const MAX_DATA_DELAY = SYSTEM_PARAM_DEFAULTS.MAX_DATA_DELAY_SECONDS
 
 const deviation = import.meta.env.VITE_TC_DEVIATIONS ? it : it.skip
 
@@ -1060,6 +1063,7 @@ describe('Kịch bản E2E', () => {
     engine.injectTimeout(id, 'TIMEOUT_AFTER_CORE')
     tick()
     tick()
+    ticks(SYSTEM_PARAM_DEFAULTS.ACK_TIMEOUT_SECONDS) // Chờ ACK hết hạn rồi mới UNKNOWN.
     const first = engine.getChildren(id)[0]
     expect(first.status).toBe('UNKNOWN')
     ticks(5)

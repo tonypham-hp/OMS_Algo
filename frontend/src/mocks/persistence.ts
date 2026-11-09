@@ -1,9 +1,10 @@
 import type { EngineState } from './engine'
 import type { SimulatorState } from './simulator'
+import type { ConfigState } from './systemConfig'
 
 // Đổi số phiên bản khi cấu trúc dữ liệu đổi, để dữ liệu cũ bị bỏ qua thay vì làm hỏng app.
 export const SIM_STATE_KEY = 'oms-sim-state-v1'
-const SIM_STATE_VERSION = 5
+const SIM_STATE_VERSION = 6
 
 export interface SavedSimState {
   version: number
@@ -35,6 +36,7 @@ function isSavedSimState(value: unknown): value is SavedSimState {
     Array.isArray(saved.engine.runtimes) &&
     Array.isArray(saved.engine.seenMatchIds) &&
     Array.isArray(saved.engine.pendingFaults) &&
+    Array.isArray(saved.engine.pendingAcks) &&
     Array.isArray(saved.engine.pendingRecoveries) &&
     Array.isArray(saved.engine.killSwitch?.accounts)
   )
@@ -72,5 +74,48 @@ export function clearSimState(getStorage: GetStorage = getBrowserStorage): void 
     getStorage().removeItem(SIM_STATE_KEY)
   } catch {
     // Không xóa được thì thôi: lần lưu kế tiếp sẽ ghi đè dữ liệu cũ.
+  }
+}
+
+// Cấu hình hệ thống lưu riêng, giống một bảng riêng ở backend: đổi cấu trúc sim state không làm mất cấu hình.
+export const CONFIG_STATE_KEY = 'oms-config-state-v1'
+const CONFIG_STATE_VERSION = 1
+
+function isSavedConfigState(value: unknown): value is { version: number; config: ConfigState } {
+  const saved = value as { version?: number; config?: ConfigState } | null
+  return (
+    saved?.version === CONFIG_STATE_VERSION &&
+    typeof saved.config?.values === 'object' &&
+    Array.isArray(saved.config.lastChanges) &&
+    Array.isArray(saved.config.requests) &&
+    typeof saved.config.requestSequence === 'number'
+  )
+}
+
+export function loadConfigState(getStorage: GetStorage = getBrowserStorage): ConfigState | null {
+  try {
+    const raw = getStorage().getItem(CONFIG_STATE_KEY)
+    if (raw === null) return null
+    const parsed: unknown = JSON.parse(raw)
+    return isSavedConfigState(parsed) ? parsed.config : null
+  } catch {
+    return null
+  }
+}
+
+export function saveConfigState(config: ConfigState, getStorage: GetStorage = getBrowserStorage): boolean {
+  try {
+    getStorage().setItem(CONFIG_STATE_KEY, JSON.stringify({ version: CONFIG_STATE_VERSION, config }))
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function clearConfigState(getStorage: GetStorage = getBrowserStorage): void {
+  try {
+    getStorage().removeItem(CONFIG_STATE_KEY)
+  } catch {
+    // Không xóa được thì thôi: lần lưu kế tiếp sẽ ghi đè.
   }
 }

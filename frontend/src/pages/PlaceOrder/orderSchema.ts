@@ -1,8 +1,9 @@
 import { z } from 'zod'
 import { MARKET_CLOSE_SECONDS, MARKET_OPEN_SECONDS } from '@/config/hose'
 import { STRATEGIES, type StrategyField, type StrategyFieldName } from '@/config/strategies'
+import { DEFAULT_ORDER_RULES } from '@/config/systemParams'
 import { formatNumber } from '@/lib/format'
-import type { CreateOrderRequest, StrategyParameter, SymbolQuote } from '@/types'
+import type { CreateOrderRequest, OrderRules, StrategyParameter, SymbolQuote } from '@/types'
 import { getTickSize, parseTimeToSeconds, validatePrice, validateQuantity } from '@/utils/hose'
 
 // Mọi trường đều để optional ở đây để luôn chạy hết phần kiểm tra bên dưới
@@ -48,6 +49,8 @@ export interface OrderValidationContext {
   getQuote: (symbol: string) => SymbolQuote | undefined
   /** Ngày hiện tại, dạng YYYY-MM-DD. */
   today: string
+  /** Luật đặt lệnh của cấu hình hệ thống. Không truyền thì dùng giá trị mặc định. */
+  orderRules?: OrderRules
 }
 
 export interface OrderFieldError {
@@ -212,6 +215,9 @@ export function validateOrderValues(
   }
 
   const fieldErrors: OrderFieldError[] = []
+  const ruleErrors = validateOrderRules(values, context.orderRules ?? DEFAULT_ORDER_RULES)
+  const strategyError = ruleErrors.find((error) => error.field === 'strategy_type')
+  if (strategyError) errors.push(strategyError)
   for (const field of STRATEGIES[values.strategy_type].fields) {
     const value = values[field.name]
     if (isMissing(value)) {
@@ -225,9 +231,45 @@ export function validateOrderValues(
 
   // Trường đã sai thì không so sánh tiếp, tránh báo hai lỗi cho cùng một ô.
   const invalid = new Set(fieldErrors.map((error) => error.field))
+  for (const error of ruleErrors) {
+    if (error.field === 'strategy_type' || invalid.has(error.field)) continue
+    errors.push(error)
+    invalid.add(error.field)
+  }
   const crossErrors = validateCrossFields(onlyValidFields(values, invalid), quote)
   errors.push(...crossErrors)
 
+  return errors
+}
+
+/**
+ * Luật đặt lệnh của cấu hình hệ thống: loại lệnh đang bật, khoảng KL mỗi phần Iceberg, trần tỷ lệ POV.
+ * Chỉ áp cho lệnh mới, nên engine gọi riêng hàm này khi tạo lệnh, còn lệnh đang chạy giữ tham số lúc đặt.
+ */
+export function validateOrderRules(values: OrderFormValues, rules: OrderRules): OrderFieldError[] {
+  const errors: OrderFieldError[] = []
+  if (!rules.enabledStrategies.includes(values.strategy_type)) {
+    errors.push({
+      field: 'strategy_type',
+      message: `Loại lệnh ${STRATEGIES[values.strategy_type].label} đang tạm ngừng, chưa đặt mới được`,
+    })
+  }
+  if (values.strategy_type === 'ICEBERG' && typeof values.slice_qty === 'number') {
+    if (values.slice_qty < rules.icebergMinSlice) {
+      errors.push({ field: 'slice_qty', message: `KL mỗi phần tối thiểu là ${formatNumber(rules.icebergMinSlice)} CP` })
+    } else if (values.slice_qty > rules.icebergMaxSlice) {
+      errors.push({ field: 'slice_qty', message: `KL mỗi phần tối đa là ${formatNumber(rules.icebergMaxSlice)} CP` })
+    }
+  }
+  if (values.strategy_type === 'POV') {
+    const cap = `${rules.povMaxPct}%`
+    if (typeof values.participation_pct === 'number' && values.participation_pct > rules.povMaxPct) {
+      errors.push({ field: 'participation_pct', message: `Tỷ lệ tham gia không được vượt trần hệ thống ${cap}` })
+    }
+    if (typeof values.max_pct === 'number' && values.max_pct > rules.povMaxPct) {
+      errors.push({ field: 'max_pct', message: `Tỷ lệ tối đa không được vượt trần hệ thống ${cap}` })
+    }
+  }
   return errors
 }
 

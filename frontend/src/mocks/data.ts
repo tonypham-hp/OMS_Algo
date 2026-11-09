@@ -33,4 +33,11 @@ export const DEMO_USERS: DemoUser[] = [
     role: 'OPS',
     accounts: ['058C999999'],
   },
+  {
+    // Người thứ hai của maker-checker: duyệt yêu cầu đổi cấu hình do vanhanh tạo, và ngược lại.
+    username: 'vanhanh2',
+    display_name: 'Vận hành demo 2',
+    role: 'OPS',
+    accounts: ['058C999999'],
+  },
 ]
