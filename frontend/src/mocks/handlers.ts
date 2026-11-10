@@ -6,6 +6,7 @@ import type {
   ChangeRequestStatus,
   CreateChangeRequest,
   CreateOrderRequest,
+  DashboardData,
   DecideChangeRequest,
   DemoUser,
   FaultTargetRequest,
@@ -32,6 +33,30 @@ function getUser(request: Request): DemoUser | undefined {
 /** Khách hàng và dealer chỉ thấy tài khoản của mình, vận hành thấy tất cả. */
 function canSeeOrder(user: DemoUser, order: ParentOrder) {
   return user.role === 'OPS' || user.accounts.includes(order.account_no)
+}
+
+/** Số event gần nhất trả về cho Trung tâm lệnh và chuông thông báo. */
+const DASHBOARD_EVENT_LIMIT = 200
+
+function buildDashboard(user: DemoUser): DashboardData {
+  const orders = orderEngine.listOrders().filter((order) => canSeeOrder(user, order))
+  const visible = new Set(orders.map((order) => order.parent_order_id))
+  const snapshots: DashboardData['snapshots'] = {}
+  for (const id of visible) {
+    const snapshot = orderEngine.getSnapshot(id)
+    if (snapshot) snapshots[id] = snapshot
+  }
+  return {
+    trading_date: marketSimulator.getState().trading_date,
+    orders,
+    children: orderEngine.listChildren().filter((child) => visible.has(child.parent_order_id)),
+    executions: orderEngine.listExecutions().filter((item) => visible.has(item.parent_order_id)),
+    snapshots,
+    events: orderEngine
+      .listEvents()
+      .filter((event) => visible.has(event.parent_order_id))
+      .slice(-DASHBOARD_EVENT_LIMIT),
+  }
 }
 
 function errorResponse(message: string, status: number) {
@@ -172,6 +197,12 @@ export const handlers = [
     const user = DEMO_USERS.find((item) => item.username === username)
     if (!user) return errorResponse('Tài khoản không tồn tại', 401)
     return HttpResponse.json(user)
+  }),
+
+  http.get('*/api/dashboard', ({ request }) => {
+    const user = getUser(request)
+    if (!user) return errorResponse('Chưa đăng nhập', 401)
+    return HttpResponse.json(buildDashboard(user))
   }),
 
   http.get('*/api/orders', ({ request }) => {
