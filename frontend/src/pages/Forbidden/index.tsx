@@ -7,8 +7,8 @@ export default function Forbidden() {
       <p className="text-muted-foreground mt-2 text-sm">
         Tài khoản của bạn không được phép xem màn hình này.
       </p>
-      <Link to="/dat-lenh" className="mt-4 inline-block text-sm underline">
-        Về trang đặt lệnh
+      <Link to="/trung-tam" className="mt-4 inline-block text-sm underline">
+        Về Trung tâm lệnh
       </Link>
     </section>
   )

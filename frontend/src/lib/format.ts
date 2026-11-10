@@ -56,3 +56,9 @@ export function formatBps(value: number): string {
   const text = `${bpsFormatter.format(rounded)} bps`
   return rounded > 0 ? `+${text}` : text
 }
+
+/** Giờ thật theo máy, dạng hh:mm:ss. */
+export function formatWallClock(epochMs: number): string {
+  const date = new Date(epochMs)
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}

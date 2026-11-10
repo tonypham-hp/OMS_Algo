@@ -1,3 +1,4 @@
+import { EmptyState } from '@/components/states'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { SIDE_LABELS } from '@/config/strategies'
 import { formatDateTime, formatNumber } from '@/lib/format'
@@ -12,7 +13,7 @@ interface ExecutionTableProps {
 /** Các lần khớp, mới nhất ở trên. Cột Chiều để phân biệt lệnh thoát của Bracket. */
 export function ExecutionTable({ items, childOrders }: ExecutionTableProps) {
   if (items.length === 0) {
-    return <p className="text-muted-foreground py-8 text-center text-sm">Chưa có lần khớp nào.</p>
+    return <EmptyState title="Chưa có lần khớp nào." />
   }
 
   const sideOf = new Map(childOrders.map((child) => [child.child_order_id, child.side]))

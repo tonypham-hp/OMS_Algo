@@ -40,22 +40,54 @@ frontend/
 ```
 
 ## 4. Đăng nhập và phân quyền (demo)
-- Trang /login: chọn 1 trong 3 tài khoản demo, không cần mật khẩu thật.
+- Trang "/" (chưa đăng nhập) và "/login" là cùng một màn hai cột.
+  - Bên trái giới thiệu: logo ALGO OMS, tiêu đề, 3 thẻ tính năng, chân trang "Bản demo · dữ liệu mô phỏng".
+  - Bên phải chọn 1 trong 3 tài khoản demo, mỗi thẻ ghi các màn xem được; thẻ được chọn có viền màu nhấn.
+  - Nút "Vào hệ thống với vai trò …". Không cần mật khẩu thật.
+  - Đã đăng nhập mà vào "/" hoặc "/login" thì chuyển sang /trung-tam.
   - `khachhang` (role CUSTOMER): màn 1, 2, 3
   - `dealer` (role DEALER): màn 1, 2, 3 + xem lệnh của nhiều tài khoản
   - `vanhanh` (role OPS): thêm màn 4, 5
+  - `vanhanh2` (role OPS): người duyệt thứ hai cho maker-checker ở màn 5; hiện ở dòng nhỏ dưới 3 thẻ
+  - Mọi vai trò đều vào được Trung tâm lệnh (/trung-tam).
 - ProtectedRoute: chưa đăng nhập → /login. PermissionRoute: thiếu quyền → trang 403.
 
 ## 5. Màn hình
 | # | Route | Màn hình | Nội dung chính |
 |---|---|---|---|
+| 0 | /trung-tam | Trung tâm lệnh | Trang mặc định sau đăng nhập: 4 KPI, bảng lệnh cần chú ý, 10 hoạt động gần nhất |
 | 1 | /dat-lenh | Đặt lệnh nâng cao | Bảng giá VN30 thu gọn (giá trần/sàn/TC, giá khớp, nháy màu khi đổi) + ticket đặt lệnh |
 | 2 | /so-lenh | Sổ lệnh nâng cao | Bảng lệnh cha: mã, chiều, loại lệnh, KL đặt/khớp, thanh tiến độ, trạng thái; lọc + hành động |
 | 3 | /so-lenh/:id | Chi tiết lệnh | Thông tin lệnh cha, timeline lệnh con, bảng khớp, biểu đồ thực hiện vs kế hoạch, giá BQ vs arrival, nhật ký |
-| 4 | /van-hanh | Màn vận hành | Cảnh báo (Child UNKNOWN, REJECTED, dữ liệu giá trễ), kill switch, nút bơm lỗi cho demo |
-| 5 | /cau-hinh | Cấu hình strategy | Danh sách tham số theo strategy; tạo yêu cầu thay đổi → người khác duyệt (maker-checker) |
+| 4 | /van-hanh | Giám sát hệ thống | Cảnh báo (Child UNKNOWN, REJECTED, dữ liệu giá trễ), kill switch, nút bơm lỗi cho demo |
+| 5 | /cau-hinh | Cấu hình chiến lược | Danh sách tham số theo strategy; tạo yêu cầu thay đổi → người khác duyệt (maker-checker) |
 
 Làm theo thứ tự 1 → 2 → 3 → 4 → 5, mỗi màn xong mới sang màn sau.
+
+### Khung ứng dụng (AppLayout, dùng chung cho mọi trang sau đăng nhập)
+- Thanh bên rộng 232px, thu gọn còn icon (nhớ trong localStorage).
+  - Nhóm menu: Trung tâm lệnh · GIAO DỊCH: Đặt lệnh, Sổ lệnh, Mẫu chiến lược · BÁO CÁO: Hiệu quả thực hiện,
+    Lịch sử và đối soát · VẬN HÀNH (chỉ OPS): Giám sát hệ thống (màn 4), Cấu hình chiến lược (màn 5).
+  - Mẫu chiến lược, Hiệu quả thực hiện, Lịch sử và đối soát chưa làm: bị khóa, ghi "Sắp có", không điều hướng.
+- Thanh trên cao 56px: chấm màu + tên phiên HOSE + giờ giả lập, nút tua x1/x10/x60, breadcrumb,
+  nhãn "Dữ liệu demo · cập nhật hh:mm:ss", chuông thông báo, tài khoản, đăng xuất.
+- Thông báo sinh từ OrderEvent theo loại Notification (mục 6): PARENT_ACTIVATED, CONDITION_TRIGGERED,
+  CHILD_REJECTED, PARENT_PAUSED (hệ thống tạm dừng), PARENT_COMPLETED, PARENT_CANCELLED, PARENT_EXPIRED.
+  - Mỗi event chỉ sinh một thông báo.
+  - Chuông có badge số chưa đọc. Bấm một mục thì mục đó được đánh dấu đã đọc và mở lệnh.
+  - Có nút "Đánh dấu tất cả đã đọc".
+- Trạng thái dùng chung: LoadingState, EmptyState, ErrorState.
+
+### Trung tâm lệnh (/trung-tam)
+- 4 KPI:
+  - Lệnh đang chạy, kèm số đang tạm dừng.
+  - Khối lượng khớp hôm nay, trên tổng KL đã đặt.
+  - Cần chú ý, chia theo số UNKNOWN / REJECTED / PAUSED_SYSTEM.
+  - Slippage trung bình so với arrival, gia quyền theo KL; dương là bất lợi. Không có dữ liệu thì hiện "—".
+- Bảng "Lệnh cần chú ý" (mã lệnh, mã CK, vấn đề, trạng thái); bấm dòng mở /so-lenh/:id.
+- "Hoạt động gần nhất": 10 OrderEvent mới nhất.
+- Phạm vi dữ liệu giống sổ lệnh: khách hàng thấy tài khoản mình, dealer thấy các tài khoản quản lý, OPS thấy tất cả.
+- Mọi số tính bằng hàm thuần (src/utils/dashboard.ts).
 
 ### Ticket đặt lệnh (màn 1)
 - Loại lệnh: Stop, Stop Limit, Take Profit, Trailing Stop, OCO, Bracket, Iceberg, TWAP, VWAP, POV, HUNT.

@@ -1,5 +1,6 @@
 export * from './auth'
 export * from './config'
+export * from './dashboard'
 export * from './event'
 export * from './market'
 export * from './ops'

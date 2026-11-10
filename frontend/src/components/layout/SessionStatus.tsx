@@ -1,24 +1,35 @@
 import { Button } from '@/components/ui/button'
 import { SESSION_LABELS } from '@/config/hose'
-import { formatClock, formatDate } from '@/lib/format'
+import { formatClock } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import { marketService } from '@/services/market.service'
 import { useMarketStore } from '@/store/market.store'
-import type { SimSpeed } from '@/types'
+import type { SessionCode, SimSpeed } from '@/types'
 
 const SPEEDS: SimSpeed[] = [1, 10, 60]
 
-/** Đồng hồ phiên giả lập và các nút tua nhanh. */
-export function SessionClock() {
-  const tradingDate = useMarketStore((state) => state.trading_date)
+/** Màu chấm phiên: xanh lá khi khớp liên tục, vàng khi phiên định kỳ, xám khi không giao dịch. */
+const SESSION_DOT: Record<SessionCode, string> = {
+  PRE_OPEN: 'bg-slate-500',
+  ATO: 'bg-price-ref',
+  CONTINUOUS: 'bg-price-up',
+  LUNCH: 'bg-slate-500',
+  ATC: 'bg-price-ref',
+  CLOSED: 'bg-price-down',
+}
+
+/** Phiên HOSE + giờ giả lập + nút tua nhanh. Logic giữ nguyên như đồng hồ cũ ở header. */
+export function SessionStatus() {
   const seconds = useMarketStore((state) => state.sim_seconds)
   const session = useMarketStore((state) => state.session)
   const speed = useMarketStore((state) => state.speed)
 
   return (
-    <div className="flex flex-wrap items-center gap-2 text-sm">
-      <span className="font-medium whitespace-nowrap">{SESSION_LABELS[session]}</span>
-      <span className="font-mono tabular-nums">
-        {tradingDate && formatDate(tradingDate)} {formatClock(seconds)}
+    <div className="flex items-center gap-3 text-sm">
+      <span className="flex items-center gap-2 whitespace-nowrap">
+        <span className={cn('size-2 rounded-full', SESSION_DOT[session])} aria-hidden />
+        <span className="font-medium">{SESSION_LABELS[session]}</span>
+        <span className="tabular-nums">{formatClock(seconds)}</span>
       </span>
       <div className="flex gap-1" role="group" aria-label="Tốc độ giả lập">
         {SPEEDS.map((item) => (
@@ -38,7 +49,7 @@ export function SessionClock() {
           Sang ngày mới
         </Button>
       )}
-      <Button size="xs" variant="ghost" onClick={() => marketService.resetDay()}>
+      <Button size="xs" variant="ghost" className="whitespace-nowrap" onClick={() => marketService.resetDay()}>
         Về đầu ngày
       </Button>
     </div>

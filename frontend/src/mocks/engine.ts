@@ -1539,6 +1539,10 @@ export function createOrderEngine(options: EngineOptions = {}) {
     getNotifications: (parentOrderId: string) =>
       notifications.filter((item) => item.parent_order_id === parentOrderId),
     getSnapshot: (parentOrderId: string) => snapshots.get(parentOrderId),
+    /** Toàn bộ lệnh con, lần khớp, event (theo thứ tự xảy ra): cho Trung tâm lệnh. */
+    listChildren: () => children,
+    listExecutions: () => executions,
+    listEvents: () => events,
     getParameters: (parentOrderId: string) => parameters.get(parentOrderId) ?? [],
     getWorkingQty: (parentOrderId: string) => workingOf(requireParent(parentOrderId)),
     getAllowedQty: (parentOrderId: string) => allowedOf(requireParent(parentOrderId)),

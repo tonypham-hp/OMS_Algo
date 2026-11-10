@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { SessionLockNotice } from '@/components/SessionLockNotice'
+import { ErrorState, LoadingState } from '@/components/states'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useOrders, usePauseOrder, useResumeOrder } from '@/hooks/useOrders'
 import { usePermission } from '@/hooks/usePermission'
@@ -50,13 +51,14 @@ export default function OrderBook() {
           </p>
         )}
         {orders.error && (
-          <p role="alert" className="text-destructive text-sm">
-            Không tải được sổ lệnh: {orders.error.message}
-          </p>
+          <ErrorState
+            message={`Không tải được sổ lệnh: ${orders.error.message}`}
+            onRetry={() => void orders.refetch()}
+          />
         )}
 
         {orders.isPending ? (
-          <p className="text-muted-foreground text-sm">Đang tải...</p>
+          <LoadingState />
         ) : (
           <OrderTable
             orders={filterOrders(allOrders, filters)}

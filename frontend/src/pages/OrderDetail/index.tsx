@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router-dom'
 import { OrderStatusBadge } from '@/components/OrderStatusBadge'
 import { SessionLockNotice } from '@/components/SessionLockNotice'
+import { ErrorState, LoadingState } from '@/components/states'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { SIDE_LABELS, STRATEGIES } from '@/config/strategies'
 import { useOrder, useOrderDetail } from '@/hooks/useOrders'
@@ -28,14 +29,18 @@ export default function OrderDetail() {
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          {order.isPending && <p className="text-muted-foreground text-sm">Đang tải...</p>}
+          {order.isPending && <LoadingState />}
           {error && (
-            <p role="alert" className="text-destructive text-sm">
-              {error.message}.{' '}
-              <Link to="/so-lenh" className="underline">
-                Về sổ lệnh
-              </Link>
-            </p>
+            <ErrorState
+              message={
+                <>
+                  {error.message}.{' '}
+                  <Link to="/so-lenh" className="underline">
+                    Về sổ lệnh
+                  </Link>
+                </>
+              }
+            />
           )}
           {order.data && (
             <>

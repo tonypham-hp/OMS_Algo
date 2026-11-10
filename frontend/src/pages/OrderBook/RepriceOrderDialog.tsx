@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { FieldError } from '@/components/FieldError'
 import { NumberInput } from '@/components/NumberInput'
+import { ErrorState, LoadingState } from '@/components/states'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -114,12 +115,8 @@ export function RepriceOrderDialog({ order, onClose }: RepriceOrderDialogProps) 
             Khối lượng giữ nguyên.
           </DialogDescription>
         </DialogHeader>
-        {priceFields.error && (
-          <p role="alert" className="text-destructive text-sm">
-            {priceFields.error.message}
-          </p>
-        )}
-        {priceFields.isPending && <p className="text-muted-foreground text-sm">Đang tải...</p>}
+        {priceFields.error && <ErrorState message={priceFields.error.message} />}
+        {priceFields.isPending && <LoadingState />}
         {priceFields.data && <RepriceForm order={order} fields={priceFields.data} onClose={onClose} />}
       </DialogContent>
     </Dialog>

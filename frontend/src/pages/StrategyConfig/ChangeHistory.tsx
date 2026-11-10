@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { EmptyState, ErrorState, LoadingState } from '@/components/states'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -83,14 +84,9 @@ export function ChangeHistory() {
         />
       </div>
 
-      {requests.error && (
-        <p role="alert" className="text-destructive text-sm">
-          Không tải được lịch sử: {requests.error.message}
-        </p>
-      )}
-      {requests.data?.length === 0 && (
-        <p className="text-muted-foreground py-8 text-center text-sm">Chưa có thay đổi nào khớp bộ lọc.</p>
-      )}
+      {requests.isPending && <LoadingState />}
+      {requests.error && <ErrorState message={`Không tải được lịch sử: ${requests.error.message}`} />}
+      {requests.data?.length === 0 && <EmptyState title="Chưa có thay đổi nào khớp bộ lọc." />}
       {requests.data && requests.data.length > 0 && (
         <Table>
           <TableHeader>

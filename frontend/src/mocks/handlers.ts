@@ -1,11 +1,13 @@
 import type { JsonBodyType } from 'msw'
 import { http, HttpResponse } from 'msw/http'
+import { getPauseReason } from '@/pages/OrderDetail/pauseReason'
 import { fromCreateOrderRequest, validateOrderValues } from '@/pages/PlaceOrder/orderSchema'
 import type {
   ChangeRequestFilter,
   ChangeRequestStatus,
   CreateChangeRequest,
   CreateOrderRequest,
+  DashboardData,
   DecideChangeRequest,
   DemoUser,
   FaultTargetRequest,
@@ -32,6 +34,35 @@ function getUser(request: Request): DemoUser | undefined {
 /** Khách hàng và dealer chỉ thấy tài khoản của mình, vận hành thấy tất cả. */
 function canSeeOrder(user: DemoUser, order: ParentOrder) {
   return user.role === 'OPS' || user.accounts.includes(order.account_no)
+}
+
+/** Số event gần nhất trả về cho Trung tâm lệnh và chuông thông báo. */
+const DASHBOARD_EVENT_LIMIT = 200
+
+function buildDashboard(user: DemoUser): DashboardData {
+  const orders = orderEngine.listOrders().filter((order) => canSeeOrder(user, order))
+  const visible = new Set(orders.map((order) => order.parent_order_id))
+  const snapshots: DashboardData['snapshots'] = {}
+  const pauseReasons: DashboardData['pause_reasons'] = {}
+  for (const order of orders) {
+    const id = order.parent_order_id
+    const snapshot = orderEngine.getSnapshot(id)
+    if (snapshot) snapshots[id] = snapshot
+    const reason = order.status === 'PAUSED_SYSTEM' ? getPauseReason(orderEngine.getNotifications(id)) : null
+    if (reason) pauseReasons[id] = reason
+  }
+  return {
+    trading_date: marketSimulator.getState().trading_date,
+    orders,
+    children: orderEngine.listChildren().filter((child) => visible.has(child.parent_order_id)),
+    executions: orderEngine.listExecutions().filter((item) => visible.has(item.parent_order_id)),
+    snapshots,
+    pause_reasons: pauseReasons,
+    events: orderEngine
+      .listEvents()
+      .filter((event) => visible.has(event.parent_order_id))
+      .slice(-DASHBOARD_EVENT_LIMIT),
+  }
 }
 
 function errorResponse(message: string, status: number) {
@@ -172,6 +203,12 @@ export const handlers = [
     const user = DEMO_USERS.find((item) => item.username === username)
     if (!user) return errorResponse('Tài khoản không tồn tại', 401)
     return HttpResponse.json(user)
+  }),
+
+  http.get('*/api/dashboard', ({ request }) => {
+    const user = getUser(request)
+    if (!user) return errorResponse('Chưa đăng nhập', 401)
+    return HttpResponse.json(buildDashboard(user))
   }),
 
   http.get('*/api/orders', ({ request }) => {
