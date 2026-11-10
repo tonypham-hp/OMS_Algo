@@ -1,5 +1,6 @@
-import { Plus } from 'lucide-react'
+import { CircleCheck, Plus } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { EmptyState, ErrorState, LoadingState } from '@/components/states'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useDashboard } from '@/hooks/useDashboard'
@@ -40,7 +41,7 @@ function DashboardBody({ data }: { data: DashboardData }) {
             {attention.items.length > 0 ? (
               <AttentionTable items={attention.items} />
             ) : (
-              <p className="text-muted-foreground py-6 text-center text-sm">Không có lệnh nào cần chú ý.</p>
+              <EmptyState icon={CircleCheck} title="Không có lệnh nào cần chú ý." />
             )}
           </CardContent>
         </Card>
@@ -55,7 +56,7 @@ function DashboardBody({ data }: { data: DashboardData }) {
             {activity.length > 0 ? (
               <RecentActivity items={activity} />
             ) : (
-              <p className="text-muted-foreground py-6 text-center text-sm">Chưa có hoạt động nào.</p>
+              <EmptyState title="Chưa có hoạt động nào." />
             )}
           </CardContent>
         </Card>
@@ -88,11 +89,12 @@ export default function OrderCenter() {
         )}
       </div>
 
-      {dashboard.isPending && <p className="text-muted-foreground text-sm">Đang tải...</p>}
+      {dashboard.isPending && <LoadingState />}
       {dashboard.error && !data && (
-        <p role="alert" className="text-destructive text-sm">
-          Không tải được dữ liệu: {dashboard.error.message}
-        </p>
+        <ErrorState
+          message={`Không tải được dữ liệu: ${dashboard.error.message}`}
+          onRetry={() => void dashboard.refetch()}
+        />
       )}
       {data && <DashboardBody data={data} />}
     </div>

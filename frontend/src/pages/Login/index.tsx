@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { GitBranch, RefreshCcw, ShieldCheck, type LucideIcon } from 'lucide-react'
 import { useState } from 'react'
+import { ErrorState, LoadingState } from '@/components/states'
 import { Button } from '@/components/ui/button'
 import { getAccessibleLabels } from '@/config/navigation'
 import { ROLE_LABELS } from '@/config/permissions'
@@ -104,7 +105,7 @@ export default function Login() {
             <h2 className="text-2xl font-semibold">Đăng nhập</h2>
             <p className="text-muted-foreground text-sm">Chọn một tài khoản demo. Không cần mật khẩu.</p>
           </div>
-          {users.isPending && <p className="text-muted-foreground text-sm">Đang tải...</p>}
+          {users.isPending && <LoadingState label="Đang tải tài khoản demo..." />}
           <div role="radiogroup" aria-label="Tài khoản demo" className="flex flex-col gap-3">
             {primary.map((user) => (
               <AccountCard
@@ -115,11 +116,7 @@ export default function Login() {
               />
             ))}
           </div>
-          {errorMessage && (
-            <p role="alert" className="text-destructive text-sm">
-              {errorMessage}
-            </p>
-          )}
+          {errorMessage && <ErrorState message={errorMessage} />}
           <Button
             size="lg"
             className="h-11"

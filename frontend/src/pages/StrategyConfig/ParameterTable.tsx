@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ErrorState, LoadingState } from '@/components/states'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -26,12 +27,13 @@ export function ParameterTable() {
   const [editing, setEditing] = useState<SystemParameter | null>(null)
   const [deciding, setDeciding] = useState<Decision | null>(null)
 
-  if (parameters.isPending) return <p className="text-muted-foreground text-sm">Đang tải...</p>
+  if (parameters.isPending) return <LoadingState />
   if (parameters.error) {
     return (
-      <p role="alert" className="text-destructive text-sm">
-        Không tải được tham số: {parameters.error.message}
-      </p>
+      <ErrorState
+        message={`Không tải được tham số: ${parameters.error.message}`}
+        onRetry={() => void parameters.refetch()}
+      />
     )
   }
 

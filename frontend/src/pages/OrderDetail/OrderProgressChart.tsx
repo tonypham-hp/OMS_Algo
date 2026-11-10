@@ -1,4 +1,5 @@
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { EmptyState } from '@/components/states'
 import { CHART_COLORS } from '@/config/chartColors'
 import { formatNumber } from '@/lib/format'
 import { useMarketStore } from '@/store/market.store'
@@ -19,7 +20,7 @@ export function OrderProgressChart({ order, detail }: OrderProgressChartProps) {
   const { rows, hasPlan, plannedQty, startingQty, hasFills } = progress
 
   if (!hasPlan && !hasFills) {
-    return <p className="text-muted-foreground py-8 text-center text-sm">Chưa có khớp lệnh để vẽ biểu đồ.</p>
+    return <EmptyState title="Chưa có khớp lệnh để vẽ biểu đồ." />
   }
 
   const min = rows[0].time

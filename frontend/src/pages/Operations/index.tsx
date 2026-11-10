@@ -1,3 +1,4 @@
+import { ErrorState, LoadingState } from '@/components/states'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useOpsOverview } from '@/hooks/useOperations'
 import { useOrders } from '@/hooks/useOrders'
@@ -22,12 +23,8 @@ export default function Operations() {
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          {overview.isPending && <p className="text-muted-foreground text-sm">Đang tải...</p>}
-          {error && (
-            <p role="alert" className="text-destructive text-sm">
-              Không tải được dữ liệu vận hành: {error.message}
-            </p>
-          )}
+          {overview.isPending && <LoadingState />}
+          {error && <ErrorState message={`Không tải được dữ liệu vận hành: ${error.message}`} />}
           {overview.data && <OpsStatCards overview={overview.data} />}
         </CardContent>
       </Card>

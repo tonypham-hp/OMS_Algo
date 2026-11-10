@@ -1,5 +1,6 @@
-import { Bell, CheckCheck } from 'lucide-react'
+import { Bell, BellOff, CheckCheck } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { EmptyState } from '@/components/states'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -60,7 +61,7 @@ export function NotificationBell() {
         </div>
         <DropdownMenuSeparator />
         {items.length === 0 ? (
-          <p className="text-muted-foreground px-2 py-6 text-center text-sm">Chưa có thông báo nào.</p>
+          <EmptyState icon={BellOff} title="Chưa có thông báo nào." />
         ) : (
           <div className="max-h-96 overflow-y-auto">
             {items.map((item) => (
