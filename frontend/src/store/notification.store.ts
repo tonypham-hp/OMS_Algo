@@ -9,25 +9,28 @@ import {
   type NotificationFeed,
 } from '@/utils/notifications'
 
+/** Chỉ có trong trình duyệt; trong Node (test) trả undefined thay vì đụng tới localStorage thử nghiệm của Node. */
+const browserStorage = (): Storage | undefined => (typeof window === 'undefined' ? undefined : window.localStorage)
+
 /** localStorage có thể bị chặn hoặc không có (chế độ riêng tư, môi trường test): lỗi thì bỏ qua, không làm vỡ app. */
 const safeStorage: StateStorage = {
   getItem: (name) => {
     try {
-      return globalThis.localStorage?.getItem(name) ?? null
+      return browserStorage()?.getItem(name) ?? null
     } catch {
       return null
     }
   },
   setItem: (name, value) => {
     try {
-      globalThis.localStorage?.setItem(name, value)
+      browserStorage()?.setItem(name, value)
     } catch {
       // Không lưu được: thông báo vẫn dùng được trong phiên hiện tại.
     }
   },
   removeItem: (name) => {
     try {
-      globalThis.localStorage?.removeItem(name)
+      browserStorage()?.removeItem(name)
     } catch {
       // Bỏ qua.
     }

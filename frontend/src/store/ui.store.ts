@@ -1,11 +1,14 @@
 import { create } from 'zustand'
 
+/** Chỉ có trong trình duyệt; trong Node (test) trả undefined thay vì đụng tới localStorage thử nghiệm của Node. */
+const browserStorage = (): Storage | undefined => (typeof window === 'undefined' ? undefined : window.localStorage)
+
 const SIDEBAR_KEY = 'oms-sidebar-collapsed'
 
 /** localStorage có thể bị chặn (chế độ riêng tư, chính sách trình duyệt): lỗi thì coi như chưa lưu. */
 function readCollapsed(): boolean {
   try {
-    return globalThis.localStorage?.getItem(SIDEBAR_KEY) === '1'
+    return browserStorage()?.getItem(SIDEBAR_KEY) === '1'
   } catch {
     return false
   }
@@ -13,7 +16,7 @@ function readCollapsed(): boolean {
 
 function writeCollapsed(collapsed: boolean) {
   try {
-    globalThis.localStorage?.setItem(SIDEBAR_KEY, collapsed ? '1' : '0')
+    browserStorage()?.setItem(SIDEBAR_KEY, collapsed ? '1' : '0')
   } catch {
     // Không lưu được thì lần sau mở lại ở trạng thái mặc định.
   }
