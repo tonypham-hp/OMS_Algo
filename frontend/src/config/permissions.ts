@@ -20,10 +20,3 @@ export const ROLE_LABELS: Record<Role, string> = {
   DEALER: 'Dealer',
   OPS: 'Vận hành',
 }
-
-export const MENU_ITEMS: ReadonlyArray<{ path: string; label: string; permission: Permission }> = [
-  { path: '/dat-lenh', label: 'Đặt lệnh', permission: 'place_order' },
-  { path: '/so-lenh', label: 'Sổ lệnh', permission: 'order_book' },
-  { path: '/van-hanh', label: 'Vận hành', permission: 'operations' },
-  { path: '/cau-hinh', label: 'Cấu hình', permission: 'strategy_config' },
-]
