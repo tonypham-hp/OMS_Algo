@@ -1,5 +1,6 @@
 import type { JsonBodyType } from 'msw'
 import { http, HttpResponse } from 'msw/http'
+import { getPauseReason } from '@/pages/OrderDetail/pauseReason'
 import { fromCreateOrderRequest, validateOrderValues } from '@/pages/PlaceOrder/orderSchema'
 import type {
   ChangeRequestFilter,
@@ -42,9 +43,13 @@ function buildDashboard(user: DemoUser): DashboardData {
   const orders = orderEngine.listOrders().filter((order) => canSeeOrder(user, order))
   const visible = new Set(orders.map((order) => order.parent_order_id))
   const snapshots: DashboardData['snapshots'] = {}
-  for (const id of visible) {
+  const pauseReasons: DashboardData['pause_reasons'] = {}
+  for (const order of orders) {
+    const id = order.parent_order_id
     const snapshot = orderEngine.getSnapshot(id)
     if (snapshot) snapshots[id] = snapshot
+    const reason = order.status === 'PAUSED_SYSTEM' ? getPauseReason(orderEngine.getNotifications(id)) : null
+    if (reason) pauseReasons[id] = reason
   }
   return {
     trading_date: marketSimulator.getState().trading_date,
@@ -52,6 +57,7 @@ function buildDashboard(user: DemoUser): DashboardData {
     children: orderEngine.listChildren().filter((child) => visible.has(child.parent_order_id)),
     executions: orderEngine.listExecutions().filter((item) => visible.has(item.parent_order_id)),
     snapshots,
+    pause_reasons: pauseReasons,
     events: orderEngine
       .listEvents()
       .filter((event) => visible.has(event.parent_order_id))

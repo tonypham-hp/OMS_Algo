@@ -19,8 +19,8 @@ import { KpiCards } from './KpiCards'
 import { RecentActivity } from './RecentActivity'
 
 function DashboardBody({ data }: { data: DashboardData }) {
-  const attention = getAttention(data.orders, data.children)
-  const activity = getRecentActivity(data.events, 10)
+  const attention = getAttention(data.orders, data.children, data.pause_reasons)
+  const activity = getRecentActivity(data.events, 10, data.trading_date)
   return (
     <>
       <KpiCards

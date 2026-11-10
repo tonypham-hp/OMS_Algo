@@ -11,7 +11,7 @@ interface SidebarProps {
   onToggle: () => void
 }
 
-const ITEM_CLASS = 'flex h-9 items-center gap-3 rounded-md px-3 text-sm'
+const ITEM_CLASS = 'flex min-h-9 items-center gap-3 rounded-md px-3 py-1.5 text-sm'
 
 function ComingSoonItem({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
   const Icon = item.icon
@@ -26,7 +26,7 @@ function ComingSoonItem({ item, collapsed }: { item: NavItem; collapsed: boolean
         <span className="sr-only">{item.label} (sắp có)</span>
       ) : (
         <>
-          <span className="truncate">{item.label}</span>
+          <span className="leading-tight">{item.label}</span>
           <span className="border-border-strong ml-auto rounded border px-1.5 py-px text-[10px] leading-4 whitespace-nowrap">
             Sắp có
           </span>

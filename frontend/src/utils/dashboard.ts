@@ -1,5 +1,5 @@
 import { REASON_LABELS } from '@/config/opsAlerts'
-import { formatNumber } from '@/lib/format'
+import { formatDateTime, formatNumber } from '@/lib/format'
 import { EVENT_ACTION_LABELS, formatEventChange } from '@/pages/OrderDetail/eventFormat'
 import { getEntryExecutions, getFillSummary } from '@/pages/OrderDetail/orderMetrics'
 import type { ChildOrder, DashboardData, OrderEvent, ParentOrder } from '@/types'
@@ -68,18 +68,31 @@ export interface AttentionSummary {
   counts: Record<AttentionKind, number>
 }
 
+/**
+ * Lý do hệ thống tạm dừng: ưu tiên reason_code; lệnh không có reason_code thì dùng nội dung thông báo tạm dừng
+ * (bỏ phần "Lệnh … tạm dừng:" vì bảng đã có mã lệnh).
+ */
+function describePause(order: ParentOrder, notice: string | undefined): string {
+  if (order.reason_code) return `Hệ thống tạm dừng: ${REASON_LABELS[order.reason_code].toLowerCase()}`
+  const detail = notice?.replace(/^Lệnh \S+ tạm dừng:\s*/, '').replace(/\.$/, '')
+  return detail ? `Hệ thống tạm dừng: ${detail}` : 'Hệ thống tạm dừng lệnh'
+}
+
 const KIND_ORDER: Record<AttentionKind, number> = { UNKNOWN: 0, REJECTED: 1, PAUSED_SYSTEM: 2 }
 
 /**
  * Cùng quy tắc với cảnh báo ở Màn 4: lệnh con UNKNOWN / REJECTED của lệnh chưa kết thúc,
  * và lệnh cha đang bị hệ thống tạm dừng. Mỗi lệnh một dòng cho mỗi loại vấn đề.
  */
-export function getAttention(orders: ParentOrder[], children: ChildOrder[]): AttentionSummary {
+export function getAttention(
+  orders: ParentOrder[],
+  children: ChildOrder[],
+  pauseReasons: Record<string, string> = {},
+): AttentionSummary {
   const items: AttentionItem[] = []
   for (const order of orders) {
     if (order.status === 'PAUSED_SYSTEM') {
-      const reason = order.reason_code ? REASON_LABELS[order.reason_code] : 'không rõ lý do'
-      items.push({ order, kind: 'PAUSED_SYSTEM', count: 1, issue: `Hệ thống tạm dừng: ${reason.toLowerCase()}` })
+      items.push({ order, kind: 'PAUSED_SYSTEM', count: 1, issue: describePause(order, pauseReasons[order.parent_order_id]) })
     }
     if (!isLiveOrder(order)) continue
     const own = children.filter((child) => child.parent_order_id === order.parent_order_id)
@@ -125,7 +138,7 @@ export function getAverageSlippageBps(
 export interface ActivityItem {
   event_id: string
   parent_order_id: string
-  /** hh:mm:ss */
+  /** hh:mm:ss nếu trong ngày giao dịch hiện tại, "dd/MM hh:mm:ss" nếu là ngày khác. */
   time: string
   description: string
 }
@@ -139,7 +152,7 @@ export function describeEvent(event: OrderEvent): string {
 }
 
 /** `limit` event mới nhất. `events` theo thứ tự xảy ra (cũ → mới) như engine trả về. */
-export function getRecentActivity(events: OrderEvent[], limit = 10): ActivityItem[] {
+export function getRecentActivity(events: OrderEvent[], limit = 10, tradingDate = ''): ActivityItem[] {
   return events
     .map((event, index) => ({ event, index }))
     .sort((a, b) => b.event.event_time.localeCompare(a.event.event_time) || b.index - a.index)
@@ -147,7 +160,10 @@ export function getRecentActivity(events: OrderEvent[], limit = 10): ActivityIte
     .map(({ event }) => ({
       event_id: event.event_id,
       parent_order_id: event.parent_order_id,
-      time: event.event_time.split('T')[1] ?? event.event_time,
+      time:
+        tradingDate && event.event_time.startsWith(tradingDate)
+          ? (event.event_time.split('T')[1] ?? event.event_time)
+          : formatDateTime(event.event_time),
       description: describeEvent(event),
     }))
 }

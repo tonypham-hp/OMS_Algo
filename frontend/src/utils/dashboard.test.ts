@@ -17,7 +17,16 @@ const snapshot = (price: number): MarketSnapshot => ({
 })
 
 function makeData(overrides: Partial<DashboardData> = {}): DashboardData {
-  return { trading_date: TODAY, orders: [], children: [], executions: [], snapshots: {}, events: [], ...overrides }
+  return {
+    trading_date: TODAY,
+    orders: [],
+    children: [],
+    executions: [],
+    snapshots: {},
+    pause_reasons: {},
+    events: [],
+    ...overrides,
+  }
 }
 
 describe('getRunningStats', () => {
@@ -66,6 +75,16 @@ describe('getAttention', () => {
     ])
     expect(result.items[0].issue).toBe('2 lệnh con mất phản hồi từ Core, chờ đối soát')
     expect(result.items[2].issue).toBe('Hệ thống tạm dừng: core từ chối lặp lại')
+  })
+
+  it('lệnh không có reason_code: lấy lý do từ thông báo tạm dừng, không có thì câu chung', () => {
+    const orders = [makeOrder('A', { status: 'PAUSED_SYSTEM' }), makeOrder('B', { status: 'PAUSED_SYSTEM' })]
+    const reasons = { A: 'Lệnh A tạm dừng: một lệnh con mất phản hồi từ Core, đang chờ đối soát.' }
+    const issues = getAttention(orders, [], reasons).items.map((item) => item.issue)
+    expect(issues).toEqual([
+      'Hệ thống tạm dừng: một lệnh con mất phản hồi từ Core, đang chờ đối soát',
+      'Hệ thống tạm dừng lệnh',
+    ])
   })
 
   it('bỏ qua lệnh con lỗi của lệnh đã kết thúc', () => {
@@ -149,7 +168,7 @@ describe('getRecentActivity', () => {
     const events = Array.from({ length: 12 }, (_, index) =>
       makeEvent({ action: 'CHILD_CREATE', event_time: iso(TODAY, `09:${String(10 + index).padStart(2, '0')}:00`) }),
     )
-    const result = getRecentActivity(events, 10)
+    const result = getRecentActivity(events, 10, TODAY)
     expect(result).toHaveLength(10)
     expect(result[0].time).toBe('09:21:00')
     expect(result[9].time).toBe('09:12:00')
@@ -158,8 +177,14 @@ describe('getRecentActivity', () => {
   it('event cùng thời điểm: event xảy ra sau đứng trước', () => {
     const first = makeEvent({ action: 'CREATE', new_value: 'ACTIVE' })
     const second = makeEvent({ action: 'PAUSE', old_value: 'ACTIVE', new_value: 'PAUSED_USER' })
-    const result = getRecentActivity([first, second], 10)
+    const result = getRecentActivity([first, second], 10, TODAY)
     expect(result.map((item) => item.event_id)).toEqual([second.event_id, first.event_id])
     expect(result[0].description).toBe('Tạm dừng PO-1: Đang hoạt động → Tạm dừng')
+  })
+
+  it('event của ngày khác hiện kèm ngày', () => {
+    const old = makeEvent({ action: 'CREATE', new_value: 'ACTIVE', event_time: iso(YESTERDAY, '09:08:00') })
+    const now = makeEvent({ action: 'CREATE', new_value: 'ACTIVE', event_time: iso(TODAY, '09:01:00') })
+    expect(getRecentActivity([old, now], 10, TODAY).map((item) => item.time)).toEqual(['09:01:00', '09/11 09:08:00'])
   })
 })
