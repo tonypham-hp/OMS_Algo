@@ -4,6 +4,7 @@ import { getEntryExecutions } from '@/pages/OrderDetail/orderMetrics'
 import type {
   ChildOrder,
   Execution,
+  ExecutionReportData,
   MarketSnapshot,
   MarketTrade,
   MarketWindowStats,
@@ -360,4 +361,41 @@ export function formatQualityPrice(value: number | null): string {
 export function favorableClass(favorable: boolean | null): string {
   if (favorable === null) return ''
   return favorable ? 'text-price-up' : 'text-price-down'
+}
+
+export interface ReportColumn {
+  key: ReportSortKey
+  label: string
+  /** Cột số: căn phải, font mono. */
+  numeric: boolean
+}
+
+/** Cột của bảng báo cáo, theo đúng thứ tự hiển thị. File CSV dùng cùng danh sách này. */
+export const REPORT_COLUMNS: ReadonlyArray<ReportColumn> = [
+  { key: 'parent_order_id', label: 'Mã lệnh', numeric: false },
+  { key: 'symbol', label: 'Mã CK', numeric: false },
+  { key: 'side', label: 'Chiều', numeric: false },
+  { key: 'strategy_type', label: 'Chiến lược', numeric: false },
+  { key: 'avgPrice', label: 'Giá BQ', numeric: true },
+  { key: 'arrivalPrice', label: 'Arrival', numeric: true },
+  { key: 'vwap', label: 'VWAP', numeric: true },
+  { key: 'vsArrivalPct', label: 'So arrival', numeric: true },
+  { key: 'vsVwapPct', label: 'So VWAP', numeric: true },
+  { key: 'participation', label: 'Tham gia', numeric: true },
+]
+
+/** Một dòng báo cáo cho mỗi lệnh trong dữ liệu (đã lọc theo quyền xem ở API). */
+export function buildReportRows(
+  data: Pick<ExecutionReportData, 'orders' | 'children' | 'executions' | 'snapshots' | 'market'>,
+): ExecQualityRow[] {
+  return data.orders.map((order) => {
+    const id = order.parent_order_id
+    return getExecQuality(
+      order,
+      data.children.filter((child) => child.parent_order_id === id),
+      data.executions.filter((execution) => execution.parent_order_id === id),
+      data.snapshots[id] ?? null,
+      data.market[id] ?? null,
+    )
+  })
 }

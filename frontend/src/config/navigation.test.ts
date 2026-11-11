@@ -20,12 +20,12 @@ describe('getNavSections', () => {
 
   it('mục Sắp có không có đường dẫn', () => {
     const comingSoon = getNavSections('OPS').flatMap((section) => section.items.filter((item) => item.comingSoon))
-    expect(comingSoon.map((item) => item.label)).toEqual(['Mẫu chiến lược', 'Hiệu quả thực hiện', 'Lịch sử và đối soát'])
+    expect(comingSoon.map((item) => item.label)).toEqual(['Mẫu chiến lược', 'Lịch sử và đối soát'])
     expect(comingSoon.every((item) => item.path === undefined)).toBe(true)
   })
 
   it('thẻ đăng nhập ghi các màn mở được, không tính mục Sắp có', () => {
-    expect(getAccessibleLabels('CUSTOMER')).toEqual(['Trung tâm lệnh', 'Đặt lệnh', 'Sổ lệnh'])
+    expect(getAccessibleLabels('CUSTOMER')).toEqual(['Trung tâm lệnh', 'Đặt lệnh', 'Sổ lệnh', 'Hiệu quả thực hiện'])
     expect(getAccessibleLabels('OPS')).toContain('Cấu hình chiến lược')
   })
 })
