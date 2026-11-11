@@ -206,3 +206,24 @@ sẽ làm hỏng cấu hình lint và lệnh thêm component. Việc nên làm:
 1. Chờ `minimatch` / `deepmerge` có bản vá rồi `npm update` (không dùng `--force`), chạy lại lint, build, test.
 2. Cân nhắc chuyển `shadcn` sang `devDependencies` nếu chỉ cần file CSS lúc build, để `npm audit --omit=dev` sạch.
 3. Chạy lại `npm audit` trước mỗi lần phát hành và cập nhật mục này.
+
+## 9. Báo cáo hiệu quả thực hiện (Đợt 2)
+
+Công thức ở [frontend-spec.md](frontend-spec.md) mục 12. Bản demo tự sinh dữ liệu thị trường trong `src/mocks`; backend
+thật phải cung cấp các dữ liệu dưới đây.
+
+| Dữ liệu | Hình dạng | Lý do cần |
+|---|---|---|
+| Tick khớp toàn thị trường theo mã | `{symbol, time, price, qty}`, giữ tối thiểu 5 phiên | Tính VWAP thị trường và tỷ lệ tham gia trong khoảng [kích hoạt, hoàn tất]. Phải gồm cả lần khớp của chính OMS, nếu không tỷ lệ tham gia có thể vượt 100% |
+| Arrival snapshot | `MarketSnapshot` (đã có trong ERD), ghi đúng lúc lệnh cha kích hoạt | Mốc so sánh "So arrival". Lệnh đặt lúc chưa có giá thì không có snapshot, báo cáo hiện "—" |
+| Thời điểm hoàn tất | `completed_at` của ParentOrder, hoặc đảm bảo `updated_at` không đổi sau khi lệnh sang trạng thái kết thúc | Mốc cuối của khoảng tính VWAP và tỷ lệ tham gia |
+
+### API
+| API | Trả về | Ghi chú |
+|---|---|---|
+| `GET /api/reports/execution-quality` | `{trading_date, now, orders, children, executions, snapshots, market}`; `market` là `Record<parent_order_id, {volume, value}>` | Lọc theo quyền xem như `GET /api/orders`. `volume` là tổng KL, `value` là Σ(giá × KL) của tick trong khoảng của từng lệnh |
+| `GET /api/orders/:id/detail` | Thêm trường `market: {volume, value}` hoặc `null` | Cho thẻ "Hiệu quả" ở chi tiết lệnh |
+
+- Có thể trả tick thô theo mã và khoảng thời gian thay vì tổng hợp sẵn; khi đó frontend tự tính bằng `summarizeTicks`.
+  Tổng hợp sẵn nhẹ hơn nhiều khi có nhiều lệnh.
+- Khi có nhiều lệnh, báo cáo nên lọc và phân trang ở backend, không gửi toàn bộ lệnh như bản demo.

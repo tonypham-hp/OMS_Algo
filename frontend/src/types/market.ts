@@ -31,3 +31,20 @@ export interface MarketState {
   speed: SimSpeed
   quotes: SymbolQuote[]
 }
+
+/** Một lần khớp trên toàn thị trường của một mã (tick khớp). Giá là số nguyên đồng. */
+export interface MarketTrade {
+  symbol: string
+  /** Thời điểm khớp theo đồng hồ giả lập, dạng YYYY-MM-DDTHH:mm:ss. */
+  time: string
+  price: number
+  qty: number
+}
+
+/** Tổng hợp tick khớp của một mã trong một khoảng thời gian. */
+export interface MarketWindowStats {
+  /** Tổng KL khớp toàn thị trường. */
+  volume: number
+  /** Tổng giá trị khớp: Σ(giá × KL), đồng. */
+  value: number
+}

@@ -12,6 +12,7 @@ const OrderCenter = lazy(() => import('@/pages/OrderCenter'))
 const PlaceOrder = lazy(() => import('@/pages/PlaceOrder'))
 const OrderBook = lazy(() => import('@/pages/OrderBook'))
 const OrderDetail = lazy(() => import('@/pages/OrderDetail'))
+const ExecutionReport = lazy(() => import('@/pages/ExecutionReport'))
 const Operations = lazy(() => import('@/pages/Operations'))
 const StrategyConfig = lazy(() => import('@/pages/StrategyConfig'))
 const Forbidden = lazy(() => import('@/pages/Forbidden'))
@@ -39,6 +40,7 @@ export const routes: RouteObject[] = [
         element: <AppLayout />,
         children: [
           { path: '/trung-tam', element: page(OrderCenter) },
+          { path: '/bao-cao/hieu-qua', element: page(ExecutionReport) },
           {
             element: <PermissionRoute permission="place_order" />,
             children: [{ path: '/dat-lenh', element: page(PlaceOrder) }],

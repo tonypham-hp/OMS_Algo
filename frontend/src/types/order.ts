@@ -1,6 +1,7 @@
 // Kiểu dữ liệu theo ERD (mục 6 của docs/frontend-spec.md). Giữ đúng tên trường, kể cả snake_case,
 // để khi nối backend FastAPI không phải đổi tên.
 import type { OrderEvent } from './event'
+import type { MarketWindowStats } from './market'
 
 export type Side = 'BUY' | 'SELL'
 
@@ -135,6 +136,8 @@ export interface OrderDetailData {
   /** null khi lúc đặt lệnh chưa có giá của mã. */
   snapshot: MarketSnapshot | null
   events: OrderEvent[]
+  /** KL và giá trị khớp toàn thị trường trong khoảng [kích hoạt, hoàn tất / hiện tại]. null khi không có arrival. */
+  market: MarketWindowStats | null
 }
 
 /** Dữ liệu gửi lên khi đặt lệnh. Tham số riêng của từng loại lệnh nằm trong `parameters`. */

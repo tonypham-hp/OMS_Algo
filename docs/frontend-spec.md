@@ -61,6 +61,7 @@ frontend/
 | 3 | /so-lenh/:id | Chi tiết lệnh | Thông tin lệnh cha, timeline lệnh con, bảng khớp, biểu đồ thực hiện vs kế hoạch, giá BQ vs arrival, nhật ký |
 | 4 | /van-hanh | Giám sát hệ thống | Cảnh báo (Child UNKNOWN, REJECTED, dữ liệu giá trễ), kill switch, nút bơm lỗi cho demo |
 | 5 | /cau-hinh | Cấu hình chiến lược | Danh sách tham số theo strategy; tạo yêu cầu thay đổi → người khác duyệt (maker-checker) |
+| 6 | /bao-cao/hieu-qua | Hiệu quả thực hiện | So giá BQ với arrival và VWAP thị trường, tỷ lệ tham gia, biểu đồ theo chiến lược, xuất CSV (mục 12) |
 
 Làm theo thứ tự 1 → 2 → 3 → 4 → 5, mỗi màn xong mới sang màn sau.
 
@@ -68,7 +69,8 @@ Làm theo thứ tự 1 → 2 → 3 → 4 → 5, mỗi màn xong mới sang màn 
 - Thanh bên rộng 232px, thu gọn còn icon (nhớ trong localStorage).
   - Nhóm menu: Trung tâm lệnh · GIAO DỊCH: Đặt lệnh, Sổ lệnh, Mẫu chiến lược · BÁO CÁO: Hiệu quả thực hiện,
     Lịch sử và đối soát · VẬN HÀNH (chỉ OPS): Giám sát hệ thống (màn 4), Cấu hình chiến lược (màn 5).
-  - Mẫu chiến lược, Hiệu quả thực hiện, Lịch sử và đối soát chưa làm: bị khóa, ghi "Sắp có", không điều hướng.
+  - Mẫu chiến lược, Lịch sử và đối soát chưa làm: bị khóa, ghi "Sắp có", không điều hướng.
+  - Hiệu quả thực hiện mở cho mọi vai trò (Đợt 2).
 - Thanh trên cao 56px: chấm màu + tên phiên HOSE + giờ giả lập, nút tua x1/x10/x60, breadcrumb,
   nhãn "Dữ liệu demo · cập nhật hh:mm:ss", chuông thông báo, tài khoản, đăng xuất.
 - Thông báo sinh từ OrderEvent theo loại Notification (mục 6): PARENT_ACTIVATED, CONDITION_TRIGGERED,
@@ -155,7 +157,15 @@ Lệnh PAUSED_SYSTEM do giá ngoài biên độ (reason_code = PRICE_OUT_OF_BAND
   lệnh con khớp dần theo giá thị trường.
 - Nút bơm lỗi (màn 4): lệnh con bị từ chối, mất kết nối Core → UNKNOWN rồi tự đối soát,
   báo khớp trùng, dữ liệu giá trễ → lệnh cha PAUSED_SYSTEM.
-- Có sẵn 6–8 lệnh mẫu ở nhiều trạng thái khác nhau để demo ngay khi mở.
+- Có sẵn 13 lệnh mẫu để demo ngay khi mở:
+  - 8 lệnh ở nhiều trạng thái khác nhau.
+  - 5 lệnh đã hoàn tất ở 1–4 phiên trước (TWAP, POV, VWAP, HUNT, Iceberg). Cùng lệnh Iceberg đã hoàn tất sẵn có, bộ
+    lệnh mẫu có đủ 5 chiến lược, cả mua và bán, cả có lợi và bất lợi so với arrival. Lần khớp trải theo thời gian, kèm
+    tick thị trường sinh tất định trong khoảng chạy của từng lệnh.
+- Băng tick khớp toàn thị trường (`src/mocks/marketTape.ts`):
+  - Mỗi nhịp ghi lần khớp của bộ giả lập và của chính OMS (thời điểm, giá, KL).
+  - Giữ 5 ngày giao dịch gần nhất, tối đa 40.000 tick.
+  - Lưu ở khóa localStorage riêng.
 
 ## 10. Giao diện
 - Nền tối kiểu bảng giá; màu giá theo quy ước VN: trần tím, tăng xanh lá, tham chiếu vàng,
@@ -167,3 +177,64 @@ Lệnh PAUSED_SYSTEM do giá ngoài biên độ (reason_code = PRICE_OUT_OF_BAND
 - `npm run lint` và `npm run build` không lỗi; có ít nhất vài test Vitest cho hàm kiểm tra luật HOSE.
 - Chạy `npm run dev`, mở localhost, thao tác được đúng luồng của màn đó.
 - Commit theo Conventional Commits, ví dụ `feat(frontend): add order ticket with HOSE validation`.
+
+## 12. Chỉ số hiệu quả thực hiện
+
+Màn `/bao-cao/hieu-qua` và thẻ "Hiệu quả" ở `/so-lenh/:id` dùng chung các hàm thuần trong `src/utils/execQuality.ts`.
+Giá là số nguyên đồng. Kết quả phép chia giữ nguyên phần lẻ, chỉ làm tròn khi hiển thị.
+
+### Công thức
+| Chỉ số | Công thức | Thiếu dữ liệu |
+|---|---|---|
+| Giá BQ | Σ(giá × KL khớp) / ΣKL khớp của lệnh cha; chỉ tính lệnh vào (lệnh thoát của Bracket không tính) | Chưa khớp → "—" |
+| Arrival | `MarketSnapshot.arrival_price`, chụp lúc lệnh cha kích hoạt | Không có snapshot → "—" |
+| Khoảng tính | [`arrival_timestamp`, lúc hoàn tất]; lệnh chưa kết thúc tính tới hiện tại. Lúc hoàn tất = `updated_at` khi lệnh ở trạng thái kết thúc | Không có arrival → không xác định |
+| VWAP thị trường | Σ(giá × KL) / ΣKL của tick khớp toàn thị trường của mã trong khoảng tính (tính cả hai đầu) | Không có tick → "—" |
+| Chênh lệch (%) | (Giá BQ − mốc) / mốc × 100, mốc là Arrival hoặc VWAP | "—" |
+| Có lợi | MUA: chênh lệch < 0. BÁN: chênh lệch > 0. Bằng 0 thì không tô màu | — |
+| bps có lợi | Chênh lệch × 100, đổi dấu theo chiều để dương luôn là có lợi | "—" |
+| Tỷ lệ tham gia | KL khớp của lệnh / KL khớp toàn thị trường của mã trong khoảng tính, chặn trần 100% | KL thị trường = 0 → "—" |
+
+Ví dụ kiểm tra:
+- MUA giá BQ 92.380, arrival 92.500: chênh lệch −0,13%, có lợi, +13 bps.
+- BÁN giá BQ 61.400, arrival 61.500: chênh lệch −0,16%, bất lợi, −16 bps.
+
+KL toàn thị trường đã gồm lần khớp của chính lệnh, nên tỷ lệ tham gia không vượt 100%. Hàm vẫn chặn trần để phòng
+dữ liệu lệch.
+
+Quy ước dấu khác nhau giữa các màn:
+- KPI "Slippage TB" ở Trung tâm lệnh là chi phí: dương là bất lợi.
+- Báo cáo hiệu quả dùng bps có lợi: dương là có lợi.
+- Thẻ "Hiệu quả" ở chi tiết lệnh ghi % kèm chữ "có lợi" / "bất lợi", để không ngược dấu với dòng bps sẵn có của
+  phần tóm tắt.
+
+### Màn báo cáo
+- **Bộ lọc:**
+  - Khoảng thời gian: Hôm nay, hoặc 5 phiên (mặc định; 5 ngày giao dịch gần nhất, bỏ thứ Bảy và Chủ nhật). Lệnh đã
+    hoàn tất xét theo ngày hoàn tất.
+  - Trạng thái: Đã hoàn tất (mặc định), hoặc Gồm cả đang chạy (lệnh đang chạy luôn thuộc khoảng thời gian).
+  - Chiến lược, chiều, mã CK.
+  - Tài khoản: chỉ DEALER và OPS.
+- **Phạm vi dữ liệu:** giống Sổ lệnh. CUSTOMER thấy tài khoản mình, DEALER thấy các tài khoản quản lý, OPS thấy tất cả.
+- **4 KPI:**
+  - Số lệnh đã hoàn tất.
+  - Tổng KL khớp.
+  - Lệnh tốt hơn arrival, dạng x / y; y là số lệnh tính được chênh lệch so với arrival.
+  - Tỷ lệ tham gia TB: trung bình cộng của các lệnh có số liệu.
+- **Bảng:**
+  - Cột: Mã lệnh, Mã CK, Chiều, Chiến lược, Giá BQ, Arrival, VWAP, So arrival, So VWAP, Tham gia.
+  - Số căn phải, font mono; xanh là có lợi, đỏ là bất lợi.
+  - Bấm tiêu đề cột để sắp xếp; ô "—" luôn nằm cuối. Bấm dòng để mở /so-lenh/:id.
+- **Biểu đồ:**
+  - Cột ngang, mỗi cột là bps có lợi của một chiến lược, bình quân gia quyền theo KL khớp.
+  - Trục 0 ở giữa: phải là có lợi, trái là bất lợi.
+  - Bên dưới có một câu nhận xét sinh theo quy tắc: nêu chiến lược kém nhất và tốt nhất, kèm số bps và số lệnh. Chỉ dùng
+    số đã tính.
+
+### Xuất Excel (CSV)
+- UTF-8 có BOM ở đầu file để Excel đọc đúng tiếng Việt; xuống dòng kiểu CRLF.
+- Ngăn cột bằng `;`. Số dùng dấu phẩy thập phân, không có dấu phân cách hàng nghìn. Đây là thiết lập vùng Việt Nam của
+  Excel, nên số mở ra vẫn là số, không thành chữ.
+- Không ghi dòng `sep=;`, vì có dòng đó thì Excel bỏ qua BOM và làm hỏng dấu tiếng Việt.
+- Đúng 10 cột của bảng, đúng các dòng đang lọc và theo thứ tự đang sắp xếp. Ô không tính được để trống.
+- Tên file: `hieu-qua-thuc-hien-YYYY-MM-DD.csv`. Không dùng thư viện xlsx.

@@ -11,6 +11,7 @@ import { ExecutionTable } from './ExecutionTable'
 import { OrderDetailActions } from './OrderDetailActions'
 import { OrderEventLog } from './OrderEventLog'
 import { OrderProgressChart } from './OrderProgressChart'
+import { ExecQualityCard } from './ExecQualityCard'
 import { OrderSummary } from './OrderSummary'
 import { PausedOrderBanner } from './PausedOrderBanner'
 
@@ -66,6 +67,7 @@ export default function OrderDetail() {
 
       {order.data && detail.data && (
         <>
+          <ExecQualityCard order={order.data} detail={detail.data} />
           <div className="grid items-start gap-4 lg:grid-cols-[3fr_2fr]">
             <Card className="min-w-0">
               <CardHeader>

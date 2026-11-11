@@ -20,12 +20,12 @@ describe('getNavSections', () => {
 
   it('mục Sắp có không có đường dẫn', () => {
     const comingSoon = getNavSections('OPS').flatMap((section) => section.items.filter((item) => item.comingSoon))
-    expect(comingSoon.map((item) => item.label)).toEqual(['Mẫu chiến lược', 'Hiệu quả thực hiện', 'Lịch sử và đối soát'])
+    expect(comingSoon.map((item) => item.label)).toEqual(['Mẫu chiến lược', 'Lịch sử và đối soát'])
     expect(comingSoon.every((item) => item.path === undefined)).toBe(true)
   })
 
   it('thẻ đăng nhập ghi các màn mở được, không tính mục Sắp có', () => {
-    expect(getAccessibleLabels('CUSTOMER')).toEqual(['Trung tâm lệnh', 'Đặt lệnh', 'Sổ lệnh'])
+    expect(getAccessibleLabels('CUSTOMER')).toEqual(['Trung tâm lệnh', 'Đặt lệnh', 'Sổ lệnh', 'Hiệu quả thực hiện'])
     expect(getAccessibleLabels('OPS')).toContain('Cấu hình chiến lược')
   })
 })
@@ -39,5 +39,25 @@ describe('getBreadcrumb', () => {
     ])
     expect(getBreadcrumb('/trung-tam')).toEqual([{ label: 'Trung tâm lệnh', path: null }])
     expect(getBreadcrumb('/khong-co')).toEqual([{ label: 'Không tìm thấy trang', path: null }])
+  })
+
+  it('đường dẫn hai cấp của báo cáo', () => {
+    expect(getBreadcrumb('/bao-cao/hieu-qua')).toEqual([
+      { label: 'Báo cáo', path: null },
+      { label: 'Hiệu quả thực hiện', path: null },
+    ])
+    expect(getBreadcrumb('/403')).toEqual([{ label: 'Không có quyền', path: null }])
+  })
+})
+
+describe('mục Hiệu quả thực hiện', () => {
+  it('đã mở cho mọi vai trò, trỏ tới /bao-cao/hieu-qua', () => {
+    for (const role of ['CUSTOMER', 'DEALER', 'OPS'] as const) {
+      const item = getNavSections(role)
+        .flatMap((section) => section.items)
+        .find((entry) => entry.label === 'Hiệu quả thực hiện')
+      expect(item).toMatchObject({ path: '/bao-cao/hieu-qua' })
+      expect(item?.comingSoon).toBeFalsy()
+    }
   })
 })

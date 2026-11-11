@@ -39,12 +39,12 @@ describe('Sidebar', () => {
 
   it('mục Sắp có không có href, bị khóa và có nhãn nhỏ', () => {
     const markup = render('OPS')
-    for (const label of ['Mẫu chiến lược', 'Hiệu quả thực hiện', 'Lịch sử và đối soát']) {
+    for (const label of ['Mẫu chiến lược', 'Lịch sử và đối soát']) {
       const tag = itemTag(markup, label)
       expect(tag).toContain('aria-disabled="true"')
       expect(tag).not.toContain('href')
     }
-    expect(markup.match(/>Sắp có</g)).toHaveLength(3)
+    expect(markup.match(/>Sắp có</g)).toHaveLength(2)
   })
 
   it('mục đang mở được đánh dấu aria-current', () => {

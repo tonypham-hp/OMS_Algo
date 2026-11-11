@@ -1,5 +1,6 @@
 import type { JsonBodyType } from 'msw'
 import { http, HttpResponse } from 'msw/http'
+import { formatClock } from '@/lib/format'
 import { getPauseReason } from '@/pages/OrderDetail/pauseReason'
 import { fromCreateOrderRequest, validateOrderValues } from '@/pages/PlaceOrder/orderSchema'
 import type {
@@ -21,9 +22,11 @@ import type {
   SystemParameterCode,
   UpdateOrderRequest,
 } from '@/types'
+import { canSeeOrder } from './access'
 import { DEMO_USERS } from './data'
 import { EngineError } from './engine'
-import { configStore, orderEngine, persistConfig } from './runtime'
+import { buildExecutionReport, getOrderMarketStats, type ReportSource } from './report'
+import { configStore, marketTape, orderEngine, persistConfig } from './runtime'
 import { marketSimulator } from './simulator'
 
 function getUser(request: Request): DemoUser | undefined {
@@ -31,10 +34,6 @@ function getUser(request: Request): DemoUser | undefined {
   return DEMO_USERS.find((user) => user.username === username)
 }
 
-/** Khách hàng và dealer chỉ thấy tài khoản của mình, vận hành thấy tất cả. */
-function canSeeOrder(user: DemoUser, order: ParentOrder) {
-  return user.role === 'OPS' || user.accounts.includes(order.account_no)
-}
 
 /** Số event gần nhất trả về cho Trung tâm lệnh và chuông thông báo. */
 const DASHBOARD_EVENT_LIMIT = 200
@@ -62,6 +61,24 @@ function buildDashboard(user: DemoUser): DashboardData {
       .listEvents()
       .filter((event) => visible.has(event.parent_order_id))
       .slice(-DASHBOARD_EVENT_LIMIT),
+  }
+}
+
+/** Thời điểm hiện tại theo đồng hồ giả lập, cùng dạng với OrderEvent.event_time. */
+function simNow() {
+  const state = marketSimulator.getState()
+  return `${state.trading_date}T${formatClock(state.sim_seconds)}`
+}
+
+function reportSource(): ReportSource {
+  return {
+    tradingDate: marketSimulator.getState().trading_date,
+    now: simNow(),
+    orders: orderEngine.listOrders(),
+    children: orderEngine.listChildren(),
+    executions: orderEngine.listExecutions(),
+    getSnapshot: orderEngine.getSnapshot,
+    listTicks: marketTape.list,
   }
 }
 
@@ -211,6 +228,12 @@ export const handlers = [
     return HttpResponse.json(buildDashboard(user))
   }),
 
+  http.get('*/api/reports/execution-quality', ({ request }) => {
+    const user = getUser(request)
+    if (!user) return errorResponse('Chưa đăng nhập', 401)
+    return HttpResponse.json(buildExecutionReport(user, reportSource()))
+  }),
+
   http.get('*/api/orders', ({ request }) => {
     const user = getUser(request)
     if (!user) return errorResponse('Chưa đăng nhập', 401)
@@ -258,12 +281,14 @@ export const handlers = [
   http.get('*/api/orders/:id/detail', ({ request, params }) =>
     handleOrderAction(request, String(params.id), () => {
       const id = String(params.id)
+      const snapshot = orderEngine.getSnapshot(id) ?? null
       return {
         parameters: orderEngine.getParameters(id),
         children: orderEngine.getChildren(id),
         executions: orderEngine.getExecutions(id),
-        snapshot: orderEngine.getSnapshot(id) ?? null,
+        snapshot,
         events: orderEngine.getEvents(id),
+        market: getOrderMarketStats(orderEngine.getOrder(id), snapshot, simNow(), marketTape.list),
       }
     }),
   ),
