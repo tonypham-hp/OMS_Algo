@@ -1,8 +1,9 @@
 import { REASON_LABELS } from '@/config/opsAlerts'
 import { formatDateTime, formatNumber } from '@/lib/format'
 import { EVENT_ACTION_LABELS, formatEventChange } from '@/pages/OrderDetail/eventFormat'
-import { getEntryExecutions, getFillSummary } from '@/pages/OrderDetail/orderMetrics'
+import { getEntryExecutions } from '@/pages/OrderDetail/orderMetrics'
 import type { ChildOrder, DashboardData, OrderEvent, ParentOrder } from '@/types'
+import { getAvgFillPrice, getDiffPct, toFavorableBps } from './execQuality'
 import { isTerminalStatus } from './orderActions'
 
 // Hàm thuần cho Trung tâm lệnh: nhận dữ liệu đã lọc theo quyền xem, không gọi API, không đọc store.
@@ -125,10 +126,12 @@ export function getAverageSlippageBps(
     const id = order.parent_order_id
     const children = data.children.filter((child) => child.parent_order_id === id)
     const executions = data.executions.filter((execution) => execution.parent_order_id === id)
-    const summary = getFillSummary(order, children, executions, data.snapshots[id] ?? null)
-    if (summary.differenceBps === null) continue
-    const qty = getEntryExecutions(order, children, executions).reduce((sum, fill) => sum + fill.qty, 0)
-    const cost = order.side === 'BUY' ? summary.differenceBps : -summary.differenceBps
+    const fills = getEntryExecutions(order, children, executions)
+    const diffPct = getDiffPct(getAvgFillPrice(fills), data.snapshots[id]?.arrival_price ?? null)
+    if (diffPct === null) continue
+    const qty = fills.reduce((sum, fill) => sum + fill.qty, 0)
+    // Slippage là chi phí: ngược dấu với bps có lợi của báo cáo hiệu quả.
+    const cost = -(toFavorableBps(order.side, diffPct) ?? 0)
     weighted += cost * qty
     totalQty += qty
   }
