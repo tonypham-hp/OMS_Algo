@@ -12,7 +12,7 @@ VWAP, POV, HUNT). OMS tự chia thành lệnh con, gửi xuống Core, theo dõi
 - **Giới thiệu và đăng nhập** (`/`, `/login`): một màn hai cột. Bên trái giới thiệu sản phẩm, bên phải chọn tài khoản
   demo. Đã đăng nhập thì vào thẳng Trung tâm lệnh.
 - **Khung ứng dụng** cho mọi trang sau đăng nhập. Thanh bên có menu theo vai trò, thu gọn được còn icon và nhớ lựa chọn
-  sau khi tải lại trang. Các mục Mẫu chiến lược, Hiệu quả thực hiện, Lịch sử và đối soát đang khóa, ghi "Sắp có".
+  sau khi tải lại trang. Các mục Mẫu chiến lược, Lịch sử và đối soát đang khóa, ghi "Sắp có".
   Thanh trên có phiên HOSE và giờ giả lập, nút tua x1/x10/x60, breadcrumb, nhãn "Dữ liệu demo · cập nhật", chuông
   thông báo và tài khoản.
 - **Trung tâm lệnh** (`/trung-tam`, trang mặc định):
@@ -25,9 +25,18 @@ VWAP, POV, HUNT). OMS tự chia thành lệnh con, gửi xuống Core, theo dõi
   hệ thống tạm dừng, hoàn tất, hủy, hết hạn).
   - Chuông có badge số chưa đọc.
   - Bấm một thông báo thì nó được đánh dấu đã đọc và mở lệnh tương ứng; có nút "Đánh dấu tất cả đã đọc".
+- **Báo cáo hiệu quả thực hiện** (`/bao-cao/hieu-qua`):
+  - So giá khớp bình quân của từng lệnh với giá arrival và VWAP toàn thị trường cùng khoảng thời gian; có tỷ lệ tham gia.
+  - Lọc theo khoảng thời gian (Hôm nay / 5 phiên), trạng thái, chiến lược, chiều, mã; dealer và vận hành lọc thêm theo
+    tài khoản.
+  - 4 chỉ số, bảng sắp xếp được theo từng cột, biểu đồ bps theo chiến lược kèm một câu nhận xét.
+  - Nút "Xuất Excel" tải file CSV mở được bằng Excel tiếng Việt.
+  - Chi tiết lệnh có thẻ "Hiệu quả" dùng cùng công thức.
+  - Công thức: [docs/frontend-spec.md](docs/frontend-spec.md), mục 12.
 - **5 màn nghiệp vụ**: xem bảng [Màn hình](#màn-hình). Mọi màn dùng chung các trạng thái đang tải, trống và lỗi.
 
-Ảnh chụp ở 1440px và 1366px: [docs/screenshots/dot1/](docs/screenshots/dot1/).
+Ảnh chụp ở 1440px và 1366px: [docs/screenshots/dot1/](docs/screenshots/dot1/) (khung ứng dụng, Trung tâm lệnh),
+[docs/screenshots/dot2/](docs/screenshots/dot2/) (báo cáo hiệu quả, thẻ Hiệu quả ở chi tiết lệnh).
 
 ## Cấu trúc thư mục
 
@@ -98,6 +107,7 @@ khi cần người duyệt thứ hai.
 | 3 | `/so-lenh/:id` | Chi tiết lệnh | Lệnh con, khớp, biểu đồ thực hiện so với kế hoạch, giá bình quân so với arrival, nhật ký |
 | 4 | `/van-hanh` | Giám sát hệ thống | Cảnh báo, lệnh hệ thống tạm dừng, kill switch, nút bơm lỗi demo |
 | 5 | `/cau-hinh` | Cấu hình chiến lược | Tham số hệ thống, đổi theo maker-checker, lịch sử thay đổi |
+| 6 | `/bao-cao/hieu-qua` | Hiệu quả thực hiện | So giá BQ với arrival và VWAP, tỷ lệ tham gia, biểu đồ theo chiến lược, xuất CSV |
 
 ## Tài liệu
 
