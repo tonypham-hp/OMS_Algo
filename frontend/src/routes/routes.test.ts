@@ -37,7 +37,7 @@ describe('guard', () => {
 
 describe('cấu hình route', () => {
   it('/trung-tam và các màn cũ nằm sau ProtectedRoute', () => {
-    for (const path of ['/trung-tam', '/dat-lenh', '/so-lenh', '/so-lenh/PO-1', '/van-hanh', '/cau-hinh']) {
+    for (const path of ['/trung-tam', '/bao-cao/hieu-qua', '/dat-lenh', '/so-lenh', '/so-lenh/PO-1', '/van-hanh', '/cau-hinh']) {
       const guards = guardsOf(path)
       expect(guards).toContain(ProtectedRoute)
       expect(guards).not.toContain(LoginRoute)
