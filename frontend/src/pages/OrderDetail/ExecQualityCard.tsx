@@ -4,7 +4,6 @@ import type { OrderDetailData, ParentOrder } from '@/types'
 import {
   favorableClass,
   formatDiffPct,
-  formatFavorableBps,
   formatParticipation,
   formatQualityPrice,
   getExecQuality,
@@ -47,7 +46,10 @@ export function ExecQualityCard({ order, detail }: { order: ParentOrder; detail:
           <Stat label="So arrival">
             <span className={favorableClass(quality.arrivalFavorable)}>
               {formatDiffPct(quality.vsArrivalPct)}
-              {quality.arrivalBps !== null && <span className="ml-1 text-xs">({formatFavorableBps(quality.arrivalBps)})</span>}
+              {/* Ghi chữ thay vì bps: phần tóm tắt phía trên đã ghi bps theo quy ước cũ (dương là giá cao hơn arrival). */}
+              {quality.arrivalFavorable !== null && (
+                <span className="ml-1 text-xs">{quality.arrivalFavorable ? 'có lợi' : 'bất lợi'}</span>
+              )}
             </span>
           </Stat>
           <Stat label="Tham gia">{formatParticipation(quality.participation)}</Stat>

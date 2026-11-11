@@ -74,6 +74,6 @@ describe('lệnh mẫu cho báo cáo hiệu quả', () => {
   })
 
   it('lệnh đã hoàn tất nằm trong 5 phiên gần nhất', () => {
-    for (const row of completed) expect(row.completedAt?.slice(0, 10) >= '2026-11-05').toBe(true)
+    for (const row of completed) expect((row.completedAt ?? '').slice(0, 10) >= '2026-11-05').toBe(true)
   })
 })
