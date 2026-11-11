@@ -1,10 +1,12 @@
 import type { EngineState } from './engine'
+import type { TapeState } from './marketTape'
 import type { SimulatorState } from './simulator'
 import type { ConfigState } from './systemConfig'
 
 // Đổi số phiên bản khi cấu trúc dữ liệu đổi, để dữ liệu cũ bị bỏ qua thay vì làm hỏng app.
 export const SIM_STATE_KEY = 'oms-sim-state-v1'
-const SIM_STATE_VERSION = 6
+// 7: lệnh mẫu có thêm lệnh đã hoàn tất ở các phiên trước, cho báo cáo hiệu quả thực hiện.
+const SIM_STATE_VERSION = 7
 
 export interface SavedSimState {
   version: number
@@ -115,6 +117,38 @@ export function saveConfigState(config: ConfigState, getStorage: GetStorage = ge
 export function clearConfigState(getStorage: GetStorage = getBrowserStorage): void {
   try {
     getStorage().removeItem(CONFIG_STATE_KEY)
+  } catch {
+    // Không xóa được thì thôi: lần lưu kế tiếp sẽ ghi đè.
+  }
+}
+
+// Băng tick khớp thị trường lưu riêng: dữ liệu lớn, chỉ phục vụ báo cáo. Đọc lỗi thì chỉ mất VWAP và tỷ lệ tham gia.
+export const TAPE_STATE_KEY = 'oms-market-tape-v1'
+const TAPE_STATE_VERSION = 1
+
+export function loadTapeState(getStorage: GetStorage = getBrowserStorage): TapeState | null {
+  try {
+    const raw = getStorage().getItem(TAPE_STATE_KEY)
+    if (raw === null) return null
+    const parsed = JSON.parse(raw) as { version?: number; tape?: TapeState } | null
+    return parsed?.version === TAPE_STATE_VERSION && Array.isArray(parsed.tape?.trades) ? parsed.tape : null
+  } catch {
+    return null
+  }
+}
+
+export function saveTapeState(tape: TapeState, getStorage: GetStorage = getBrowserStorage): boolean {
+  try {
+    getStorage().setItem(TAPE_STATE_KEY, JSON.stringify({ version: TAPE_STATE_VERSION, tape }))
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function clearTapeState(getStorage: GetStorage = getBrowserStorage): void {
+  try {
+    getStorage().removeItem(TAPE_STATE_KEY)
   } catch {
     // Không xóa được thì thôi: lần lưu kế tiếp sẽ ghi đè.
   }

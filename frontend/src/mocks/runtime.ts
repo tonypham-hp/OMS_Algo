@@ -1,12 +1,17 @@
 import { formatClock } from '@/lib/format'
+import type { Execution, MarketTrade } from '@/types'
 import { createOrderEngine } from './engine'
+import { createMarketTape } from './marketTape'
 import {
   clearConfigState,
   clearSimState,
+  clearTapeState,
   loadConfigState,
   loadSimState,
+  loadTapeState,
   saveConfigState,
   saveSimState,
+  saveTapeState,
 } from './persistence'
 import { createSeedData } from './seedOrders'
 import { marketSimulator } from './simulator'
@@ -26,9 +31,37 @@ export const configStore = createConfigStore({
 /** Engine dùng chung của app: nhận từng nhịp giá từ bộ giả lập, đọc tham số từ cấu hình hệ thống. */
 export const orderEngine = createOrderEngine({ config: configStore })
 
+/** Băng tick khớp toàn thị trường cho báo cáo hiệu quả thực hiện (VWAP, tỷ lệ tham gia). */
+export const marketTape = createMarketTape()
+
+/** Số lần khớp của engine đã ghi vào băng tick. */
+let recordedExecutions = 0
+
+function toTrade(execution: Execution): MarketTrade {
+  const symbol = orderEngine.getOrder(execution.parent_order_id).symbol
+  return { symbol, time: execution.match_time, price: execution.price, qty: execution.qty }
+}
+
+/** Lần khớp mới của OMS cũng là KL khớp của thị trường, nên ghi vào băng để tỷ lệ tham gia không vượt 100%. */
+function recordNewExecutions() {
+  const executions = orderEngine.listExecutions()
+  if (executions.length > recordedExecutions) {
+    marketTape.record(executions.slice(recordedExecutions).map(toTrade))
+  }
+  recordedExecutions = executions.length
+}
+
+function loadSeed() {
+  const seed = createSeedData(new Date())
+  orderEngine.load(seed)
+  marketTape.load(seed.tape ?? [])
+  recordedExecutions = orderEngine.listExecutions().length
+}
+
 function persist() {
   const saved = saveSimState(marketSimulator.exportState(), orderEngine.exportState())
-  if (!saved) console.warn('Không lưu được trạng thái giả lập vào localStorage')
+  const tapeSaved = saveTapeState(marketTape.exportState())
+  if (!saved || !tapeSaved) console.warn('Không lưu được trạng thái giả lập vào localStorage')
 }
 
 /** Cấu hình ít đổi nhưng phải giữ chắc: lưu ngay sau mỗi thao tác. */
@@ -43,13 +76,20 @@ const savedState = loadSimState()
 if (savedState) {
   marketSimulator.importState(savedState.market)
   orderEngine.importState(savedState.engine)
+  const savedTape = loadTapeState()
+  if (savedTape) marketTape.importState(savedTape)
+  else marketTape.load(createSeedData(new Date()).tape ?? [])
+  recordedExecutions = orderEngine.listExecutions().length
 } else {
-  orderEngine.load(createSeedData(new Date()))
+  loadSeed()
 }
+
+marketSimulator.onTrades((trades) => marketTape.record(trades))
 
 let ticksSinceSave = 0
 marketSimulator.subscribe((state) => {
   orderEngine.onMarketTick(state)
+  recordNewExecutions()
   ticksSinceSave += 1
   if (ticksSinceSave >= SAVE_EVERY_TICKS) {
     ticksSinceSave = 0
@@ -62,8 +102,9 @@ window.addEventListener('pagehide', persist)
 /** Về đầu ngày: xóa dữ liệu đã lưu, nạp lại lệnh mẫu, cấu hình về mặc định, đồng hồ và giá về lúc mở app. */
 export function resetDemoDay() {
   clearSimState()
+  clearTapeState()
   clearConfigState()
   configStore.reset()
-  orderEngine.load(createSeedData(new Date()))
+  loadSeed()
   marketSimulator.reset()
 }

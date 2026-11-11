@@ -1,6 +1,6 @@
 import { QTY_LOT_SIZE, TRADING_SESSIONS } from '@/config/hose'
-import { toDateString } from '@/lib/format'
-import type { MarketState, SimSpeed, SymbolQuote } from '@/types'
+import { formatClock, toDateString } from '@/lib/format'
+import type { MarketState, MarketTrade, SimSpeed, SymbolQuote } from '@/types'
 import {
   getCeilingPrice,
   getDisplayPrice,
@@ -23,6 +23,7 @@ const TRADE_PROBABILITY = 0.4
 
 type RandomFn = () => number
 type Listener = (state: MarketState) => void
+type TradeListener = (trades: MarketTrade[]) => void
 
 interface SimulatorOptions {
   /** Truyền hàm random cố định khi test để kết quả lặp lại được. */
@@ -134,6 +135,7 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
   const random = options.random ?? Math.random
   const symbols = options.symbols ?? DEMO_SYMBOLS
   const listeners = new Set<Listener>()
+  const tradeListeners = new Set<TradeListener>()
 
   const getStartDate = () => toDateString(options.startDate ?? new Date())
   let tradingDate = getStartDate()
@@ -162,6 +164,18 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
     listeners.forEach((listener) => listener(state))
   }
 
+  /** Mã nào có KL khớp tăng trong nhịp này thì phát một tick khớp: giá khớp mới, KL phần tăng thêm. */
+  function emitTrades(before: SymbolQuote[]) {
+    if (tradeListeners.size === 0) return
+    const time = `${tradingDate}T${formatClock(simSeconds)}`
+    const trades: MarketTrade[] = []
+    quotes.forEach((quote, index) => {
+      const qty = quote.total_volume - (before[index]?.total_volume ?? 0)
+      if (qty > 0) trades.push({ symbol: quote.symbol, time, price: quote.last_price, qty })
+    })
+    if (trades.length > 0) tradeListeners.forEach((listener) => listener(trades))
+  }
+
   /** Một nhịp giả lập: tua đồng hồ theo tốc độ, rồi cho giá nhảy nếu thị trường đang mở. */
   function tick(elapsedMs = TICK_INTERVAL_MS) {
     const previous = getSessionAt(simSeconds)
@@ -182,12 +196,14 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
 
     quoteAgeMs = 0
     const session = getSessionAt(simSeconds)
+    const before = quotes
     quotes = quotes.map((quote) => {
       if (isAuctionSession(previous) && session !== previous) return matchAuction(quote, random)
       if (isAuctionSession(session)) return nextIndicative(quote, random)
       if (session === 'CONTINUOUS') return nextQuote(quote, random)
       return { ...quote, tick_direction: 0 }
     })
+    emitTrades(before)
     notify()
   }
 
@@ -200,6 +216,13 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
       listener(getState())
       return () => {
         listeners.delete(listener)
+      }
+    },
+    /** Nhận các tick khớp toàn thị trường sau mỗi nhịp. Trả về hàm hủy đăng ký. */
+    onTrades(listener: TradeListener) {
+      tradeListeners.add(listener)
+      return () => {
+        tradeListeners.delete(listener)
       }
     },
     start() {

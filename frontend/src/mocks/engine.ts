@@ -15,6 +15,7 @@ import type {
   KillSwitchRequest,
   KillSwitchState,
   MarketState,
+  MarketTrade,
   Notification,
   NotificationType,
   OpsAlert,
@@ -94,6 +95,8 @@ export interface SeedData {
   snapshots: Map<string, MarketSnapshot>
   events: OrderEvent[]
   notifications: Notification[]
+  /** Tick khớp thị trường mẫu cho báo cáo hiệu quả. Engine không dùng, runtime nạp vào băng tick. */
+  tape?: MarketTrade[]
 }
 
 /** Nơi engine đọc tham số hệ thống. Đọc lại ở mỗi quyết định, nên giá trị vừa duyệt có hiệu lực ngay nhịp sau. */

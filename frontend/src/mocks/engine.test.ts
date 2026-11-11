@@ -1638,9 +1638,9 @@ describe('nhật ký OrderEvent', () => {
 describe('lệnh mẫu', () => {
   const seed = createSeedData(new Date(2026, 10, 6))
 
-  it('có 6–8 lệnh, nhiều trạng thái khác nhau, nhiều tài khoản', () => {
+  it('có 6–13 lệnh, nhiều trạng thái khác nhau, nhiều tài khoản', () => {
     expect(seed.orders.length).toBeGreaterThanOrEqual(6)
-    expect(seed.orders.length).toBeLessThanOrEqual(8)
+    expect(seed.orders.length).toBeLessThanOrEqual(13)
     expect(new Set(seed.orders.map((order) => order.status)).size).toBeGreaterThanOrEqual(6)
     expect(new Set(seed.orders.map((order) => order.account_no)).size).toBe(3)
   })
