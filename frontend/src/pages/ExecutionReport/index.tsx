@@ -11,12 +11,14 @@ import {
   DEFAULT_REPORT_FILTERS,
   filterReportRows,
   getReportKpis,
+  getStrategyBps,
   sortReportRows,
   type ReportSortKey,
 } from '@/utils/execQuality'
 import { ReportFilters } from './ReportFilters'
 import { ReportKpis } from './ReportKpis'
 import { ReportTable, type ReportSort } from './ReportTable'
+import { StrategyChart } from './StrategyChart'
 
 const DEFAULT_SORT: ReportSort = { key: 'parent_order_id', direction: 'desc' }
 
@@ -68,6 +70,17 @@ function ReportBody({ data }: { data: ExecutionReportData }) {
               }
             />
           )}
+        </CardContent>
+      </Card>
+      <Card className="min-w-0">
+        <CardHeader>
+          <CardTitle>
+            <h2>So với arrival theo chiến lược</h2>
+          </CardTitle>
+          <CardDescription>Phải là có lợi, trái là bất lợi. Đơn vị: điểm cơ bản (bps).</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <StrategyChart stats={getStrategyBps(rows)} />
         </CardContent>
       </Card>
     </>
