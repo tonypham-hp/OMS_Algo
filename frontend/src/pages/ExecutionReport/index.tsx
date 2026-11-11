@@ -1,4 +1,4 @@
-import { SearchX } from 'lucide-react'
+import { Download, SearchX } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { EmptyState, ErrorState, LoadingState } from '@/components/states'
 import { Button } from '@/components/ui/button'
@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useExecutionReport } from '@/hooks/useExecutionReport'
 import { usePermission } from '@/hooks/usePermission'
 import type { ExecutionReportData, StrategyType } from '@/types'
+import { downloadCsv } from '@/utils/csv'
 import {
   buildReportRows,
   DEFAULT_REPORT_FILTERS,
@@ -15,6 +16,7 @@ import {
   sortReportRows,
   type ReportSortKey,
 } from '@/utils/execQuality'
+import { buildReportCsv, getReportFilename } from '@/utils/reportCsv'
 import { ReportFilters } from './ReportFilters'
 import { ReportKpis } from './ReportKpis'
 import { ReportTable, type ReportSort } from './ReportTable'
@@ -46,7 +48,16 @@ function ReportBody({ data }: { data: ExecutionReportData }) {
 
   return (
     <>
-      <ReportFilters filters={filters} onChange={setFilters} symbols={symbols} strategies={strategies} accounts={accounts} />
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <ReportFilters filters={filters} onChange={setFilters} symbols={symbols} strategies={strategies} accounts={accounts} />
+        <Button
+          variant="outline"
+          disabled={rows.length === 0}
+          onClick={() => downloadCsv(getReportFilename(data.trading_date), buildReportCsv(rows))}
+        >
+          <Download aria-hidden /> Xuất Excel
+        </Button>
+      </div>
       <ReportKpis kpis={getReportKpis(rows)} />
       <Card className="min-w-0">
         <CardHeader>
