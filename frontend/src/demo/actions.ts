@@ -129,6 +129,13 @@ export function runAction(env: DemoEnv, ctx: DemoContext, action: DemoAction) {
       return
     case 'fillUntilDone':
       return fillUntilDone(env, ctx, action.params.order)
+    case 'fillOpen': {
+      const open = childrenOfRef(readState(env, ctx), action.params.order).filter(
+        (child) => child.status === 'ACKNOWLEDGED' || child.status === 'PARTIAL_FILLED',
+      )
+      open.forEach((child) => coreFill(env, ctx, { order: action.params.order, child: child.cycle_no }))
+      return
+    }
     case 'pause':
       engine.pauseOrder(requireOrderId(ctx, action.params.order), env.userId)
       return

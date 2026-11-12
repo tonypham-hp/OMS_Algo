@@ -61,6 +61,8 @@ export type DemoAction =
   | { type: 'coreCancelChild'; params: ChildRef }
   /** Core khớp lần lượt từng lệnh con đang chờ cho tới khi lệnh cha đủ KL. */
   | { type: 'fillUntilDone'; params: { order: string } }
+  /** Core khớp hết mọi lệnh con đang chờ của lệnh (một lượt, không chờ sinh lệnh con mới). */
+  | { type: 'fillOpen'; params: { order: string } }
   | { type: 'pause' | 'resume' | 'cancel'; params: { order: string } }
   /** Ghi lại số lệnh con hiện có của lệnh, để check so sánh về sau. */
   | { type: 'mark'; params: { key: string; order: string } }
