@@ -37,6 +37,7 @@ export function ChildOrderTimeline({ items }: { items: ChildOrder[] }) {
               <TableRow
                 key={child.child_order_id}
                 data-child-id={child.child_order_id}
+                data-demo-id={`child-${child.child_order_id}`}
                 className={cn(
                   ALERT_STATUSES.has(child.status) &&
                     'border-l-2 border-l-red-500 bg-red-500/15 font-medium hover:bg-red-500/20',
@@ -49,7 +50,9 @@ export function ChildOrderTimeline({ items }: { items: ChildOrder[] }) {
                 <TableCell className={NUMBER_CELL}>{formatNumber(child.quantity)}</TableCell>
                 <TableCell className={NUMBER_CELL}>{formatNumber(child.filled_qty)}</TableCell>
                 <TableCell>
-                  <Badge className={style.className}>{style.label}</Badge>
+                  <Badge className={style.className} data-demo-id={`child-status-${child.child_order_id}`}>
+                    {style.label}
+                  </Badge>
                 </TableCell>
                 <TableCell className={NUMBER_CELL}>{child.sent_at ? formatDateTime(child.sent_at) : '—'}</TableCell>
               </TableRow>

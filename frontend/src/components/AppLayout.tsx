@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import { ChecksPanel } from '@/components/demo/ChecksPanel'
 import { DemoController } from '@/components/demo/DemoController'
+import { DemoHighlight } from '@/components/demo/DemoHighlight'
 import { DemoTopBar } from '@/components/demo/DemoTopBar'
 import { NotificationBell } from '@/components/layout/NotificationBell'
 import { Sidebar } from '@/components/layout/Sidebar'
@@ -51,6 +52,7 @@ export function AppLayout() {
         </main>
       </div>
       <DemoController />
+      <DemoHighlight />
       <ChecksPanel />
     </div>
   )

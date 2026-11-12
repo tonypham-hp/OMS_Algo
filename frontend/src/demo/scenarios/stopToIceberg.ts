@@ -31,7 +31,7 @@ export const stopToIceberg: Scenario = {
         },
       },
       route: DETAIL_ROUTE,
-      highlight: 'conditions',
+      highlight: 'order-params',
       checks: [
         { label: 'Điều kiện Stop đang ACTIVE', fn: (s) => conditionOf(s)?.status === 'ACTIVE' },
         { label: 'Chưa có lệnh con nào', fn: (s) => childrenOf(s).length === 0 },
@@ -42,7 +42,7 @@ export const stopToIceberg: Scenario = {
       caption: 'Giá giảm về 117.000 nhưng chưa chạm 116.000. Hệ thống không làm gì: không có lệnh con nào xuống sàn.',
       action: { type: 'trade', params: { symbol: SYMBOL, price: 117_000, qty: 2_000, repeat: 3 } },
       route: DETAIL_ROUTE,
-      highlight: 'conditions',
+      highlight: 'order-params',
       checks: [
         { label: 'Điều kiện vẫn ACTIVE', fn: (s) => conditionOf(s)?.status === 'ACTIVE' },
         { label: 'Vẫn chưa có lệnh con', fn: (s) => childrenOf(s).length === 0 },
@@ -55,7 +55,7 @@ export const stopToIceberg: Scenario = {
       action: { type: 'trade', params: { symbol: SYMBOL, price: 116_000, qty: 3_000 } },
       settle: 0,
       route: DETAIL_ROUTE,
-      highlight: 'conditions',
+      highlight: 'order-params',
       checks: [
         { label: 'Điều kiện TRIGGERED', fn: (s) => conditionOf(s)?.status === 'TRIGGERED' },
         {

@@ -34,7 +34,7 @@ export function OpsAlertList({ alerts }: { alerts: OpsAlert[] }) {
           {reconcile.error.message}
         </p>
       )}
-      <ul className="flex max-h-96 flex-col gap-2 overflow-y-auto">
+      <ul className="flex max-h-96 flex-col gap-2 overflow-y-auto" data-demo-id="ops-alerts">
         {alerts.map((alert) => (
           <li key={alert.alert_id} data-alert-type={alert.type} className="flex items-stretch gap-2">
             {alert.parent_order_id ? (

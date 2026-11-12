@@ -54,7 +54,7 @@ export const huntSweep: Scenario = {
         },
       },
       route: DETAIL_ROUTE,
-      highlight: 'conditions',
+      highlight: 'order-params',
       checks: [{ label: 'Chưa có lệnh con khi giá chưa về mức săn', fn: (s) => childrenOf(s).length === 0 }],
     },
     {

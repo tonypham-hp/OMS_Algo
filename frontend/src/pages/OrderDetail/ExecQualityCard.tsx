@@ -27,7 +27,7 @@ export function ExecQualityCard({ order, detail }: { order: ParentOrder; detail:
   const hasFills = quality.filledQty > 0
 
   return (
-    <Card className="min-w-0">
+    <Card className="min-w-0" data-demo-id="exec-quality">
       <CardHeader>
         <CardTitle>
           <h2>Hiệu quả</h2>

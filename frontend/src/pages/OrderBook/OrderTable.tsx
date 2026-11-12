@@ -56,7 +56,7 @@ export function OrderTable({ orders, showAccount, isBusy, onEdit, onCancel, onPa
           </TableRow>
         )}
         {orders.map((order) => (
-          <TableRow key={order.parent_order_id} data-order-id={order.parent_order_id}>
+          <TableRow key={order.parent_order_id} data-order-id={order.parent_order_id} data-demo-id={`order-row-${order.parent_order_id}`}>
             <TableCell>
               <Link to={`/so-lenh/${order.parent_order_id}`} className="font-mono text-xs hover:underline">
                 {order.parent_order_id}
