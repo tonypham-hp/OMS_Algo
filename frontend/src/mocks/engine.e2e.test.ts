@@ -23,6 +23,7 @@ import type {
   SymbolQuote,
 } from '@/types'
 import { getSessionAt } from '@/utils/hose'
+import { getParticipation } from '@/utils/execQuality'
 import { getVwapTarget } from '@/utils/schedule'
 import { SYSTEM_PARAM_DEFAULTS } from '@/config/systemParams'
 import { createOrderEngine, isChildLive, type OrderEngine } from './engine'
@@ -1053,7 +1054,11 @@ describe('X. Báo cáo', () => {
     expect(childFilled).toBe(order.executed_qty)
   })
 
-  it.todo('TC-E2E-232 tỷ lệ tham gia thực tế 80.000 / 1.000.000 = 8% (chưa có hàm tính, engine không lưu KL thị trường theo lệnh)')
+  it('TC-E2E-232 tỷ lệ tham gia thực tế: OMS khớp 80.000 trên KL thị trường 1.000.000 = 8%', () => {
+    // Hàm tính dùng chung với báo cáo hiệu quả thực hiện; KL thị trường lấy từ băng tick của cùng khoảng thời gian.
+    expect(getParticipation(80_000, 1_000_000)).toBeCloseTo(0.08)
+    expect(getParticipation(80_000, 0)).toBeNull()
+  })
 })
 
 // ===== Y. Nhật ký kiểm toán =====
@@ -1139,9 +1144,30 @@ describe('Kịch bản E2E', () => {
     expect(quantities(engine, id)).toEqual([10_000, 10_000, 10_000, 10_000, 10_000, 5_000])
   })
 
-  it.todo('Scenario 2 Stop → Iceberg: kích hoạt một lần rồi chạy Iceberg slice 10.000 (engine chưa ghép được điều kiện với thuật toán)')
+  it('Scenario 2 Stop → Iceberg (Stop Limit bán có slice_qty): giá 100.000 không làm gì, về 95.000 kích hoạt một lần rồi chia 10.000', () => {
+    // Tài liệu ghi lệnh mua, điều kiện giá ≤ 95. Stop của engine kích hoạt lệnh mua khi giá TĂNG chạm ngưỡng,
+    // nên dùng Stop Limit BÁN (kích hoạt khi giá giảm chạm ngưỡng) để giữ đúng diễn biến của kịch bản.
+    const { engine, place, tick, ticks, fillLive } = setup()
+    const id = place(
+      request('STOP_LIMIT', [int('trigger_price', 95_000), int('slice_qty', 10_000)], {
+        side: 'SELL',
+        total_qty: 100_000,
+        limit_price: 96_000,
+      }),
+    )
+    ticks(3)
+    expect(engine.getChildren(id)).toHaveLength(0)
+    tick({ last: 95_000 })
+    expect(conditionOf(engine, id, 'STOP')?.status).toBe('TRIGGERED')
+    ticks(3, { last: 94_000 })
+    expect(quantities(engine, id)).toEqual([10_000])
+    fillLive(id)
+    tick({ last: 94_000 })
+    expect(quantities(engine, id)).toEqual([10_000, 10_000])
+    expect(engine.getEvents(id).filter((event) => event.action === 'TRIGGER')).toHaveLength(1)
+  })
   it.todo('Scenario 3 POV + Adaptive: giá lệnh con theo Bid/Ask (engine chưa có Adaptive)')
-  it.todo('Scenario 4 HUNT quét 60.000 rồi đặt bị động 40.000 (engine không có độ sâu sổ lệnh)')
+  // Scenario 4 (HUNT quét mức rồi đặt bị động phần còn lại): xem nhóm J. HUNT ở trên và src/demo/scenarios.test.ts.
 
   it('Scenario 5 Core mất ACK: UNKNOWN → đối soát → khớp → Iceberg chạy tiếp, không có lệnh trùng', () => {
     const { engine, place, tick, ticks, fillLive, live } = setup()
