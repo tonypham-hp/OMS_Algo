@@ -316,3 +316,5 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
 }
 
 export const marketSimulator = createMarketSimulator()
+
+export type MarketSimulator = ReturnType<typeof createMarketSimulator>
