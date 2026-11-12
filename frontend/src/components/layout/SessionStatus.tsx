@@ -3,6 +3,7 @@ import { SESSION_LABELS } from '@/config/hose'
 import { formatClock } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { marketService } from '@/services/market.service'
+import { useDemoStore } from '@/store/demo.store'
 import { useMarketStore } from '@/store/market.store'
 import type { SessionCode, SimSpeed } from '@/types'
 
@@ -23,14 +24,21 @@ export function SessionStatus() {
   const seconds = useMarketStore((state) => state.sim_seconds)
   const session = useMarketStore((state) => state.session)
   const speed = useMarketStore((state) => state.speed)
+  // Đang Demo: đồng hồ và giá do kịch bản điều khiển, nên ẩn nút tua và "Về đầu ngày" để không phá kịch bản.
+  const demoActive = useDemoStore((state) => state.snapshot !== null)
+
+  const clock = (
+    <span className="flex items-center gap-2 whitespace-nowrap">
+      <span className={cn('size-2 rounded-full', SESSION_DOT[session])} aria-hidden />
+      <span className="font-medium">{SESSION_LABELS[session]}</span>
+      <span className="tabular-nums">{formatClock(seconds)}</span>
+    </span>
+  )
+  if (demoActive) return <div className="flex items-center text-sm">{clock}</div>
 
   return (
     <div className="flex items-center gap-3 text-sm">
-      <span className="flex items-center gap-2 whitespace-nowrap">
-        <span className={cn('size-2 rounded-full', SESSION_DOT[session])} aria-hidden />
-        <span className="font-medium">{SESSION_LABELS[session]}</span>
-        <span className="tabular-nums">{formatClock(seconds)}</span>
-      </span>
+      {clock}
       <div className="flex gap-1" role="group" aria-label="Tốc độ giả lập">
         {SPEEDS.map((item) => (
           <Button
