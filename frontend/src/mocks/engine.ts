@@ -49,6 +49,7 @@ import {
   type OrderAction,
 } from '@/utils/orderActions'
 import { getTwapTarget, getVwapTarget } from '@/utils/schedule'
+import { getBookLevels, isWithinLimit } from './depth'
 
 const LOT = QTY_LOT_SIZE
 const SECONDS_PER_DAY = 86_400
@@ -133,6 +134,8 @@ interface ParentRuntime {
   povAccumulated: number
   /** Số lệnh con liên tiếp bị Core từ chối. */
   rejectStreak: number
+  /** HUNT có `max_levels`: đã quét sổ lệnh xong. Trường tùy chọn để bản lưu cũ vẫn đọc được. */
+  huntSwept?: boolean
 }
 
 /** Lệnh con đã gửi, đang chờ ACK (SENDING). Hết thời gian chờ thì chuyển UNKNOWN. */
@@ -190,7 +193,8 @@ export function isConditionHit(conditionType: string, side: Side, lastPrice: num
 }
 
 export function createOrderEngine(options: EngineOptions = {}) {
-  const random = options.random ?? Math.random
+  /** Đổi được bằng setRandom: Chế độ Demo chạy với seed cố định để kết quả lặp lại được. */
+  let random = options.random ?? Math.random
   const config = options.config ?? DEFAULT_CONFIG
   const getToday = () => market?.trading_date ?? toDateString(new Date())
 
@@ -784,7 +788,50 @@ export function createOrderEngine(options: EngineOptions = {}) {
     const triggered = getTriggeredCondition(parent)
     if (!triggered) return
     const spec = getTriggeredChildSpec(parent, triggered)
+    // Stop Limit có KL mỗi phần (tham số tùy chọn): kích hoạt xong thì chia như Iceberg, mỗi lần một phần.
+    const slice = parent.strategy_type === 'STOP_LIMIT' ? getNumberParam(parent, 'slice_qty') : 0
+    if (slice > 0) {
+      if (workingOf(parent) === 0) createChild(parent, parent.side, spec.type, spec.price, Math.min(slice, allowedOf(parent)))
+      return
+    }
     createChild(parent, parent.side, spec.type, spec.price, allowedOf(parent))
+  }
+
+  /** HUNT có `max_levels`: quét sổ lệnh khi giá về mức săn, rồi xử lý phần còn lại theo `remainder_passive`. */
+  function isSweepHunt(parent: ParentOrder) {
+    return parent.strategy_type === 'HUNT' && getNumberParam(parent, 'max_levels') > 0
+  }
+
+  /**
+   * Quét tối đa `max_levels` mức phía đối ứng, chỉ các mức không vượt giá giới hạn (giá tối đa khi mua).
+   * Mỗi mức một lệnh con LO đúng giá mức đó. Chưa có mức nào hợp lệ thì chờ nhịp sau, tới hạn `max_wait_min`.
+   * Quét xong, phần còn lại: `remainder_passive` = 1 đặt bị động tại giá tốt nhất cùng phía, 0 thì kết thúc lệnh.
+   */
+  function stepHuntSweep(parent: ParentOrder, quote: SymbolQuote) {
+    checkConditions(parent, parent.side, quote.last_price)
+    if (!getTriggeredCondition(parent)) return
+    const runtime = runtimeOf(parent)
+
+    if (!runtime.huntSwept) {
+      const levels = getBookLevels(quote, parent.side)
+        .slice(0, getNumberParam(parent, 'max_levels'))
+        .filter((level) => isWithinLimit(parent.side, level.price, parent.limit_price))
+      if (levels.length === 0) return
+      for (const level of levels) createChild(parent, parent.side, 'LO', level.price, Math.min(level.qty, allowedOf(parent)))
+      runtime.huntSwept = true
+      logEvent(parent.parent_order_id, null, 'DECISION', `HUNT_SWEEP:${levels.length}`, `LEVELS:${levels.map((level) => level.price).join(',')}`)
+      return
+    }
+
+    // Chờ các lệnh con quét khớp xong rồi mới xử lý phần còn lại.
+    if (workingOf(parent) > 0 || allowedOf(parent) <= 0) return
+    if (getNumberParam(parent, 'remainder_passive') !== 1) {
+      expireParent(parent)
+      return
+    }
+    const best = parent.side === 'BUY' ? quote.bid_price : quote.ask_price
+    const price = parent.limit_price === null ? best : parent.side === 'BUY' ? Math.min(best, parent.limit_price) : Math.max(best, parent.limit_price)
+    createChild(parent, parent.side, 'LO', price, allowedOf(parent))
   }
 
   function stepBracket(parent: ParentOrder, last: number) {
@@ -856,8 +903,11 @@ export function createOrderEngine(options: EngineOptions = {}) {
       case 'TAKE_PROFIT':
       case 'TRAILING_STOP':
       case 'OCO':
-      case 'HUNT':
         stepConditional(parent, last)
+        break
+      case 'HUNT':
+        if (isSweepHunt(parent)) stepHuntSweep(parent, quote)
+        else stepConditional(parent, last)
         break
       case 'BRACKET':
         stepBracket(parent, last)
@@ -890,7 +940,11 @@ export function createOrderEngine(options: EngineOptions = {}) {
       // Hết khung giờ: lệnh trong ngày kết thúc, còn lệnh nhiều phiên chờ khung giờ của phiên sau.
       if (parent.persistence_mode === 'DAY') expireParent(parent)
       else cancelOpenChildren(parent)
-    } else if (parent.strategy_type === 'HUNT' && runtimeOf(parent).triggeredConditionId === null) {
+    } else if (
+      parent.strategy_type === 'HUNT' &&
+      // HUNT quét sổ lệnh: đã chạm giá săn nhưng chưa có mức hợp lệ để quét thì vẫn trong thời gian săn.
+      (runtimeOf(parent).triggeredConditionId === null || (isSweepHunt(parent) && !runtimeOf(parent).huntSwept))
+    ) {
       const deadline = runtimeOf(parent).createdAtSeconds + getNumberParam(parent, 'max_wait_min') * 60
       if (seconds >= deadline) expireParent(parent)
     }
@@ -1256,6 +1310,20 @@ export function createOrderEngine(options: EngineOptions = {}) {
     if (!child || !isChildLive(child.status)) throw new EngineError('Không tìm thấy lệnh con đang chờ', 404)
     setChildStatus(child, 'UNKNOWN', 'CHILD_UNKNOWN')
   }
+  /**
+   * Core hủy phần chưa khớp của lệnh con (ví dụ hết hiệu lực trên sàn). Phần đã khớp giữ nguyên,
+   * lệnh cha sinh lệnh con kế tiếp theo KL đã khớp thật ở nhịp sau (TC-E2E-051).
+   */
+  function cancelChildByCore(childOrderId: string) {
+    const child = children.find((item) => item.child_order_id === childOrderId)
+    if (!child || !isChildLive(child.status) || isAwaitingCore(child)) {
+      throw new EngineError('Không tìm thấy lệnh con đang chờ khớp trên Core', 404)
+    }
+    setChildStatus(child, 'CANCELLED', 'CANCEL')
+    settleParent(requireParent(child.parent_order_id))
+    return child
+  }
+
   /** Đối soát xong: phần chưa khớp của Child UNKNOWN được giải phóng để sinh lại. */
   function reconcileUnknownChild(childOrderId: string, userId?: string) {
     const child = children.find((item) => item.child_order_id === childOrderId)
@@ -1527,6 +1595,11 @@ export function createOrderEngine(options: EngineOptions = {}) {
     injectRejectNext,
     injectTimeout,
     injectDuplicateFill,
+    cancelChildByCore,
+    /** Đổi hàm random (Chế độ Demo dùng seed cố định, thoát Demo thì trả lại Math.random). */
+    setRandom: (next: () => number) => {
+      random = next
+    },
     activateKillSwitch,
     releaseKillSwitch,
     getOpsOverview,

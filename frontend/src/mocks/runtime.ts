@@ -1,5 +1,6 @@
 import { formatClock } from '@/lib/format'
 import type { Execution, MarketTrade } from '@/types'
+import { isDemoActive } from './demoGuard'
 import { createOrderEngine } from './engine'
 import { createMarketTape } from './marketTape'
 import {
@@ -51,14 +52,24 @@ function recordNewExecutions() {
   recordedExecutions = executions.length
 }
 
+/**
+ * Đặt lại mốc đếm lần khớp đã ghi vào băng tick. Gọi sau khi nạp lại toàn bộ trạng thái engine (vào, thoát Demo),
+ * để không ghi lại các lần khớp cũ thành tick mới.
+ */
+export function resyncTapeCursor() {
+  recordedExecutions = orderEngine.listExecutions().length
+}
+
 function loadSeed() {
   const seed = createSeedData(new Date())
   orderEngine.load(seed)
   marketTape.load(seed.tape ?? [])
-  recordedExecutions = orderEngine.listExecutions().length
+  resyncTapeCursor()
 }
 
 function persist() {
+  // Đang Demo: dữ liệu là của kịch bản, không được ghi đè dữ liệu đã lưu của người dùng.
+  if (isDemoActive()) return
   const saved = saveSimState(marketSimulator.exportState(), orderEngine.exportState())
   const tapeSaved = saveTapeState(marketTape.exportState())
   if (!saved || !tapeSaved) console.warn('Không lưu được trạng thái giả lập vào localStorage')
@@ -66,6 +77,7 @@ function persist() {
 
 /** Cấu hình ít đổi nhưng phải giữ chắc: lưu ngay sau mỗi thao tác. */
 export function persistConfig() {
+  if (isDemoActive()) return
   if (!saveConfigState(configStore.exportState())) console.warn('Không lưu được cấu hình hệ thống vào localStorage')
 }
 
