@@ -2,6 +2,7 @@ import { useDemoRunner } from '@/demo/useDemoRunner'
 import { ChecksPanel } from './ChecksPanel'
 import { DemoController } from './DemoController'
 import { DemoHighlight } from './DemoHighlight'
+import { ResultDialog } from './ResultDialog'
 import { ScenarioPicker } from './ScenarioPicker'
 
 /**
@@ -16,6 +17,7 @@ export default function DemoLayer() {
       <DemoController />
       <DemoHighlight />
       <ChecksPanel />
+      <ResultDialog />
     </>
   )
 }
