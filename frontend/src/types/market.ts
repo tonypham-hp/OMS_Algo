@@ -18,6 +18,20 @@ export interface SymbolQuote {
   ask_price: number
   /** Hướng của lần đổi giá gần nhất, dùng để nháy màu: 1 tăng, -1 giảm, 0 chưa đổi. */
   tick_direction: -1 | 0 | 1
+  /** Sổ lệnh nhiều mức, chỉ có khi được cung cấp (Demo). Không có thì engine dựng sổ lệnh tất định từ bid, ask. */
+  depth?: OrderBookDepth
+}
+
+/** Một mức giá trong sổ lệnh. */
+export interface BookLevel {
+  price: number
+  qty: number
+}
+
+/** Sổ lệnh: bids giảm dần từ giá mua tốt nhất, asks tăng dần từ giá bán tốt nhất. */
+export interface OrderBookDepth {
+  bids: BookLevel[]
+  asks: BookLevel[]
 }
 
 export interface MarketState {

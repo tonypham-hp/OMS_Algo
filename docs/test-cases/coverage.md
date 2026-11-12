@@ -1,17 +1,17 @@
 # Bảng phủ test TC-E2E
 
-Đối chiếu [TC-E2E.md](TC-E2E.md) với test tự động của frontend (Vitest), cập nhật 09/11/2026.
+Đối chiếu [TC-E2E.md](TC-E2E.md) với test tự động của frontend (Vitest), cập nhật 12/11/2026 (Đợt 3: HUNT quét mức, Stop Limit chia phần, Chế độ Demo).
 
 ## Tóm tắt
 
 | | Số TC | Tỷ lệ |
 |---|---|---|
 | TC phạm vi FE (gồm cả FE + BE) | 69 | |
-| Đã có test | **56** | **81,2%** |
-| — trong đó xanh và khớp đủ tài liệu (✅) | 43 | 62,3% |
+| Đã có test | **60** | **87,0%** |
+| — trong đó xanh và khớp đủ tài liệu (✅) | 47 | 68,1% |
 | — có test một phần (⚠️) | 9 | |
 | — lệch tài liệu, test đỏ (🔴) | 4 | |
-| Chưa có test vì engine chưa có tính năng (⛔) | 13 | |
+| Chưa có test vì engine chưa có tính năng (⛔) | 9 | |
 | TC chỉ phạm vi BE (⏳ chờ backend) | 3 | không tính vào tỷ lệ |
 
 Trước đợt này chỉ 5/69 TC (130, 140, 141, 150, 180) có test đặt tên theo mã.
@@ -38,6 +38,8 @@ Trước đợt này chỉ 5/69 TC (130, 140, 141, 150, 180) có test đặt tê
 | FLT | `frontend/src/mocks/engine.faults.test.ts` |
 | SCH | `frontend/src/pages/PlaceOrder/orderSchema.test.ts` |
 | DET | `frontend/src/pages/OrderDetail/orderDetail.test.ts` |
+| DEMO | `frontend/src/demo/scenarios.test.ts` (6 kịch bản của Chế độ Demo, chạy headless) |
+| EDM | `frontend/src/mocks/engine.demo.test.ts` (bổ sung engine cho Chế độ Demo) |
 
 Số liệu giá trừu tượng của tài liệu được quy đổi sang FPT tham chiếu 100.000, trần 107.000, sàn 93.000, bước 100
 (ví dụ trailing "120 / 110" thành 103.000 / 102.000; OCO "TP 110, SL 90" thành 104.000 / 96.000).
@@ -75,12 +77,9 @@ hay phần lỡ luôn được gửi bù ngay, không chia lại.
 | Risk (kiểm tra lúc tạo, lúc kích hoạt, trong lúc chạy) | 004, 013, 120; một phần 082, 121 |
 | Iceberg ngẫu nhiên ±% | 054 |
 | VWAP: nhập profile, xử lý thiếu profile, trần tham gia theo KL thị trường | 081; một phần 080, 082 |
-| HUNT quét thanh khoản theo độ sâu sổ lệnh. Engine hiện coi HUNT là lệnh chờ một giá săn, dữ liệu giá chỉ có Bid/Ask tốt nhất | 090, 091, 092; Scenario 4 |
 | Adaptive: chọn giá bị động / chủ động theo Bid/Ask. Engine luôn đặt đúng giá giới hạn của lệnh cha | 100, 101; một phần 102; Scenario 3 |
 | Sequence của sự kiện từ Core | 151 |
 | Trạng thái tạm ngừng giao dịch của mã | 192 |
-| Tỷ lệ tham gia thực tế (lưu KL thị trường theo lệnh) | 232 |
-| Ghép điều kiện với thuật toán (Stop → Iceberg) | Scenario 2 |
 
 ## Bảng phủ chi tiết
 
@@ -155,9 +154,9 @@ hay phần lỡ luôn được gửi bù ngay, không chia lại.
 ### J. HUNT
 | Mã | Phạm vi | Trạng thái | Test | Ghi chú |
 |---|---|---|---|---|
-| TC-E2E-090 | FE | ⛔ | E2E (todo) | Không có độ sâu sổ lệnh |
-| TC-E2E-091 | FE | ⛔ | E2E (todo) | Không có độ sâu sổ lệnh |
-| TC-E2E-092 | FE | ⛔ | E2E (todo) | Không có độ sâu sổ lệnh |
+| TC-E2E-090 | FE | ✅ | E2E: `TC-E2E-090 quét thanh khoản: tối đa 3 mức, mỗi mức 20.000 → chỉ 3 mức đầu, tổng 60.000` | HUNT với tham số tùy chọn `max_levels`; sổ lệnh lấy từ `quote.depth`. Giá 100.5 quy đổi thành 100.500 |
+| TC-E2E-091 | FE | ✅ | E2E: `TC-E2E-091 giới hạn giá: mức thứ 3 ở 100.600 vượt giá tối đa → chỉ quét 30.000`. Liên quan DEMO: Scenario 4 | |
+| TC-E2E-092 | FE | ✅ | E2E: `TC-E2E-092 không có thanh khoản trong khoảng chấp nhận: không sinh lệnh con, nhịp sau có thanh khoản thì quét`; `HUNT quét mức mà mãi không có thanh khoản: hết thời gian săn thì EXPIRED, không sinh lệnh con` | Chu kỳ thử là mỗi nhịp giả lập (1 giây) |
 | TC-E2E-093 | FE | ⚠️ | E2E: `TC-E2E-093 hết thời gian săn, chính sách hủy: dừng săn, không sinh lệnh con`. Liên quan ENG: `HUNT chờ quá hạn thì hết hạn, không sinh lệnh con` | Tài liệu: cửa sổ 5 giây. Engine tính bằng phút (tối thiểu 1), test dùng 1 phút |
 
 ### K. Chọn giá lệnh con (Adaptive)
@@ -248,7 +247,7 @@ hay phần lỡ luôn được gửi bù ngay, không chia lại.
 |---|---|---|---|---|
 | TC-E2E-230 | FE | ✅ | E2E: `TC-E2E-230 giá bình quân: 5.000 @100.000 và 10.000 @101.000` | |
 | TC-E2E-231 | FE | ✅ | E2E: `TC-E2E-231 đối soát cha / con: executed của lệnh cha = tổng KL các lần khớp hợp lệ`. Liên quan ENG: `cả 11 loại lệnh chạy hết nhiều ngày giả lập vẫn giữ đúng luật (seed %i)` | |
-| TC-E2E-232 | FE | ⛔ | E2E (todo) | Chưa có hàm tính tỷ lệ tham gia thực tế |
+| TC-E2E-232 | FE | ✅ | E2E: `TC-E2E-232 tỷ lệ tham gia thực tế: OMS khớp 80.000 trên KL thị trường 1.000.000 = 8%`. Liên quan: `utils/execQuality.test.ts`, DEMO: Scenario 3 | Dùng chung `getParticipation` với báo cáo hiệu quả thực hiện |
 
 ### Y. Nhật ký kiểm toán
 | Mã | Phạm vi | Trạng thái | Test | Ghi chú |
@@ -260,8 +259,8 @@ hay phần lỡ luôn được gửi bù ngay, không chia lại.
 | Mã | Trạng thái | Test | Ghi chú |
 |---|---|---|---|
 | Scenario 1 | ✅ | E2E: `Scenario 1 Iceberg thành công: 50.000, có một lệnh con khớp 5.000 rồi hủy phần còn lại` | |
-| Scenario 2 | ⛔ | E2E (todo) | Chưa ghép được điều kiện với thuật toán |
-| Scenario 3 | ⛔ | E2E (todo) | Chưa có Adaptive. Phần POV đã có ở TC-070 |
-| Scenario 4 | ⛔ | E2E (todo) | Không có độ sâu sổ lệnh |
+| Scenario 2 | ⚠️ | E2E: `Scenario 2 Stop → Iceberg (Stop Limit bán có slice_qty): …`; DEMO: Scenario 2 | Stop Limit có tham số tùy chọn `slice_qty`. Tài liệu ghi lệnh mua "giá ≤ 95"; Stop của engine kích hoạt lệnh mua khi giá tăng, nên dùng lệnh bán |
+| Scenario 3 | ⚠️ | E2E (todo, phần Adaptive); DEMO: Scenario 3 (phần POV) | Chưa có Adaptive. Phần POV chạy trong Chế độ Demo, kiểm tỷ lệ tham gia ≤ trần |
+| Scenario 4 | ✅ | E2E: `Scenario 4: quét xong thì phần còn lại đặt bị động một lệnh LO tại giá mua tốt nhất, chặn bởi giá tối đa`; DEMO: Scenario 4 | |
 | Scenario 5 | ✅ FE, ⏳ BE | E2E: `Scenario 5 Core mất ACK: UNKNOWN → đối soát → khớp → Iceberg chạy tiếp, không có lệnh trùng`. Liên quan FLT: `TC-E2E-141 khớp tiếp sau đối soát: …` | Bắt buộc chạy lại trong UAT với Core thật |
-| Scenario 6 | ⏳ chờ backend | | OMS sập trong lúc Core vẫn khớp |
+| Scenario 6 | ⚠️ FE, ⏳ BE | DEMO: Scenario 6 | FE mô phỏng: ghi trạng thái engine ra JSON, xóa bộ nhớ, nạp lại, nhận báo khớp bị lỡ. Với backend thật phải chạy lại (CSDL, tra Core lúc khởi động) |

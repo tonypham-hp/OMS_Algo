@@ -55,7 +55,9 @@ export default function OrderDetail() {
                     {SIDE_LABELS[order.data.side]}
                   </span>
                   <span>{STRATEGIES[order.data.strategy_type].label}</span>
-                  <OrderStatusBadge status={order.data.status} />
+                  <span data-demo-id="order-status" className="inline-flex">
+                    <OrderStatusBadge status={order.data.status} />
+                  </span>
                 </div>
                 <OrderDetailActions order={order.data} />
               </div>

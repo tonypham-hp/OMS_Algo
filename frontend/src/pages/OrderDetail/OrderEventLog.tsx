@@ -17,7 +17,7 @@ export function OrderEventLog({ events, childOrders }: OrderEventLogProps) {
   const cycleOf = new Map(childOrders.map((child) => [child.child_order_id, child.cycle_no]))
 
   return (
-    <div className={SCROLL_TABLE}>
+    <div className={SCROLL_TABLE} data-demo-id="event-log">
       <Table>
         <TableHeader className={STICKY_HEADER}>
           <TableRow>

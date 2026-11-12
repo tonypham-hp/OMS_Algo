@@ -16,12 +16,14 @@ import { fromCreateOrderRequest, validateOrderValues } from '@/pages/PlaceOrder/
 import type {
   CreateOrderRequest,
   MarketState,
+  OrderBookDepth,
   SessionCode,
   StrategyParameter,
   StrategyType,
   SymbolQuote,
 } from '@/types'
 import { getSessionAt } from '@/utils/hose'
+import { getParticipation } from '@/utils/execQuality'
 import { getVwapTarget } from '@/utils/schedule'
 import { SYSTEM_PARAM_DEFAULTS } from '@/config/systemParams'
 import { createOrderEngine, isChildLive, type OrderEngine } from './engine'
@@ -37,8 +39,9 @@ const AT_1000 = hhmm(10, 0)
 /** BUY LO ở giá này không khớp khi thị trường ở 100.000: KL khớp chỉ đến từ `fill`, nên kết quả không phụ thuộc engine tự khớp. */
 const PASSIVE_BUY = 99_000
 
-function quoteAt(last: number, volume: number): SymbolQuote {
+function quoteAt(last: number, volume: number, depth?: OrderBookDepth): SymbolQuote {
   return {
+    depth,
     symbol: 'FPT',
     ref_price: 100_000,
     ceiling_price: 107_000,
@@ -59,6 +62,8 @@ interface TickOptions {
   quoteAge?: number
   session?: SessionCode
   date?: string
+  /** Sổ lệnh nhiều mức (HUNT quét mức). */
+  depth?: OrderBookDepth
 }
 
 function marketAt(seconds: number, options: TickOptions = {}): MarketState {
@@ -68,7 +73,7 @@ function marketAt(seconds: number, options: TickOptions = {}): MarketState {
     quote_age_seconds: options.quoteAge ?? 0,
     session: options.session ?? getSessionAt(seconds),
     speed: 1,
-    quotes: [quoteAt(options.last ?? 100_000, options.volume ?? 0)],
+    quotes: [quoteAt(options.last ?? 100_000, options.volume ?? 0, options.depth)],
   }
 }
 
@@ -591,9 +596,91 @@ describe('I. VWAP', () => {
 // ===== J. HUNT =====
 
 describe('J. HUNT', () => {
-  it.todo('TC-E2E-090 quét thanh khoản 3 mức giá, tối đa 60.000 (engine không có độ sâu sổ lệnh, HUNT là lệnh chờ giá săn)')
-  it.todo('TC-E2E-091 không quét mức giá vượt giá tối đa (engine không có độ sâu sổ lệnh)')
-  it.todo('TC-E2E-092 không có thanh khoản trong khoảng chấp nhận: đánh giá lại sau chu kỳ thử (engine không có độ sâu sổ lệnh)')
+  // HUNT quét sổ lệnh dùng hai tham số tùy chọn: max_levels (số mức tối đa) và remainder_passive (1: phần còn lại
+  // đặt bị động tại giá mua tốt nhất, 0: kết thúc lệnh). Giá 100.5 của tài liệu quy đổi thành 100.500.
+  const levels = (...items: Array<[number, number]>) => items.map(([price, qty]) => ({ price, qty }))
+  const BIDS = levels([99_900, 50_000])
+  const hunt = (passive: 0 | 1, extra: Partial<CreateOrderRequest> = {}) =>
+    request(
+      'HUNT',
+      [int('hunt_price', 100_000), int('max_wait_min', 5), int('max_levels', 3), int('remainder_passive', passive)],
+      { total_qty: 100_000, limit_price: 100_500, ...extra },
+    )
+  const prices = (engine: OrderEngine, id: string) => engine.getChildren(id).map((child) => [child.price, child.quantity])
+
+  it('TC-E2E-090 quét thanh khoản: tối đa 3 mức, mỗi mức 20.000 → chỉ 3 mức đầu, tổng 60.000', () => {
+    const { engine, place, tick } = setup()
+    const id = place(hunt(1))
+    const depth = { asks: levels([100_100, 20_000], [100_300, 20_000], [100_500, 20_000], [100_500, 20_000]), bids: BIDS }
+    tick({ depth })
+    expect(prices(engine, id)).toEqual([
+      [100_100, 20_000],
+      [100_300, 20_000],
+      [100_500, 20_000],
+    ])
+  })
+
+  it('TC-E2E-091 giới hạn giá: mức thứ 3 ở 100.600 vượt giá tối đa → chỉ quét 30.000', () => {
+    const { engine, place, tick } = setup()
+    const id = place(hunt(1))
+    tick({ depth: { asks: levels([100_100, 15_000], [100_300, 15_000], [100_600, 20_000]), bids: BIDS } })
+    expect(prices(engine, id)).toEqual([
+      [100_100, 15_000],
+      [100_300, 15_000],
+    ])
+    expect(engine.getChildren(id).every((child) => (child.price ?? 0) <= 100_500)).toBe(true)
+  })
+
+  it('TC-E2E-092 không có thanh khoản trong khoảng chấp nhận: không sinh lệnh con, nhịp sau có thanh khoản thì quét', () => {
+    const { engine, place, tick } = setup()
+    const id = place(hunt(1))
+    tick({ depth: { asks: levels([100_600, 20_000], [100_700, 20_000]), bids: BIDS } })
+    tick({ depth: { asks: levels([100_600, 20_000]), bids: BIDS } })
+    expect(engine.getChildren(id)).toHaveLength(0)
+    expect(engine.getOrder(id).status).toBe('ACTIVE')
+    tick({ depth: { asks: levels([100_400, 10_000]), bids: BIDS } })
+    expect(prices(engine, id)).toEqual([[100_400, 10_000]])
+  })
+
+  it('HUNT quét mức mà mãi không có thanh khoản: hết thời gian săn thì EXPIRED, không sinh lệnh con', () => {
+    const { engine, place, at } = setup()
+    const id = place(hunt(1))
+    const empty = { asks: levels([100_600, 20_000]), bids: BIDS }
+    at(AT_1000 + 60, { depth: empty })
+    expect(engine.getOrder(id).status).toBe('ACTIVE')
+    at(AT_1000 + 5 * 60, { depth: empty })
+    expect(engine.getOrder(id).status).toBe('EXPIRED')
+    expect(engine.getChildren(id)).toHaveLength(0)
+  })
+
+  it('Scenario 4: quét xong thì phần còn lại đặt bị động một lệnh LO tại giá mua tốt nhất, chặn bởi giá tối đa', () => {
+    const { engine, place, tick, fillLive } = setup()
+    const id = place(hunt(1, { total_qty: 50_000 }))
+    tick({ depth: { asks: levels([100_100, 10_000], [100_200, 10_000], [100_600, 20_000]), bids: BIDS } })
+    tick()
+    fillLive(id)
+    tick()
+    expect(lastChild(engine, id)).toMatchObject({ order_type: 'LO', price: 99_900, quantity: 30_000 })
+    expect(engine.getChildren(id)).toHaveLength(3)
+  })
+
+  it('remainder_passive = 0: quét xong thì kết thúc lệnh (EXPIRED), không đuổi giá', () => {
+    const { engine, place, tick, fillLive } = setup()
+    const id = place(hunt(0, { total_qty: 50_000 }))
+    tick({ depth: { asks: levels([100_100, 10_000]), bids: BIDS } })
+    tick()
+    fillLive(id)
+    tick()
+    expect(engine.getOrder(id)).toMatchObject({ status: 'EXPIRED', executed_qty: 10_000 })
+    expect(engine.getChildren(id)).toHaveLength(1)
+  })
+
+  it('không có max_levels thì HUNT chạy như cũ: một lệnh con tại giá giới hạn', () => {
+    const { engine, place, tick } = setup()
+    const id = place(request('HUNT', [int('hunt_price', 100_000), int('max_wait_min', 5)], { limit_price: 100_500 }))
+    tick()
+    expect(prices(engine, id)).toEqual([[100_500, 1_000]])
+  })
 
   it('TC-E2E-093 hết thời gian săn, chính sách hủy: dừng săn, không sinh lệnh con', () => {
     // Tài liệu: cửa sổ 5 giây. Engine tính bằng phút (tối thiểu 1), nên dùng 1 phút.
@@ -967,7 +1054,11 @@ describe('X. Báo cáo', () => {
     expect(childFilled).toBe(order.executed_qty)
   })
 
-  it.todo('TC-E2E-232 tỷ lệ tham gia thực tế 80.000 / 1.000.000 = 8% (chưa có hàm tính, engine không lưu KL thị trường theo lệnh)')
+  it('TC-E2E-232 tỷ lệ tham gia thực tế: OMS khớp 80.000 trên KL thị trường 1.000.000 = 8%', () => {
+    // Hàm tính dùng chung với báo cáo hiệu quả thực hiện; KL thị trường lấy từ băng tick của cùng khoảng thời gian.
+    expect(getParticipation(80_000, 1_000_000)).toBeCloseTo(0.08)
+    expect(getParticipation(80_000, 0)).toBeNull()
+  })
 })
 
 // ===== Y. Nhật ký kiểm toán =====
@@ -1053,9 +1144,30 @@ describe('Kịch bản E2E', () => {
     expect(quantities(engine, id)).toEqual([10_000, 10_000, 10_000, 10_000, 10_000, 5_000])
   })
 
-  it.todo('Scenario 2 Stop → Iceberg: kích hoạt một lần rồi chạy Iceberg slice 10.000 (engine chưa ghép được điều kiện với thuật toán)')
+  it('Scenario 2 Stop → Iceberg (Stop Limit bán có slice_qty): giá 100.000 không làm gì, về 95.000 kích hoạt một lần rồi chia 10.000', () => {
+    // Tài liệu ghi lệnh mua, điều kiện giá ≤ 95. Stop của engine kích hoạt lệnh mua khi giá TĂNG chạm ngưỡng,
+    // nên dùng Stop Limit BÁN (kích hoạt khi giá giảm chạm ngưỡng) để giữ đúng diễn biến của kịch bản.
+    const { engine, place, tick, ticks, fillLive } = setup()
+    const id = place(
+      request('STOP_LIMIT', [int('trigger_price', 95_000), int('slice_qty', 10_000)], {
+        side: 'SELL',
+        total_qty: 100_000,
+        limit_price: 96_000,
+      }),
+    )
+    ticks(3)
+    expect(engine.getChildren(id)).toHaveLength(0)
+    tick({ last: 95_000 })
+    expect(conditionOf(engine, id, 'STOP')?.status).toBe('TRIGGERED')
+    ticks(3, { last: 94_000 })
+    expect(quantities(engine, id)).toEqual([10_000])
+    fillLive(id)
+    tick({ last: 94_000 })
+    expect(quantities(engine, id)).toEqual([10_000, 10_000])
+    expect(engine.getEvents(id).filter((event) => event.action === 'TRIGGER')).toHaveLength(1)
+  })
   it.todo('Scenario 3 POV + Adaptive: giá lệnh con theo Bid/Ask (engine chưa có Adaptive)')
-  it.todo('Scenario 4 HUNT quét 60.000 rồi đặt bị động 40.000 (engine không có độ sâu sổ lệnh)')
+  // Scenario 4 (HUNT quét mức rồi đặt bị động phần còn lại): xem nhóm J. HUNT ở trên và src/demo/scenarios.test.ts.
 
   it('Scenario 5 Core mất ACK: UNKNOWN → đối soát → khớp → Iceberg chạy tiếp, không có lệnh trùng', () => {
     const { engine, place, tick, ticks, fillLive, live } = setup()

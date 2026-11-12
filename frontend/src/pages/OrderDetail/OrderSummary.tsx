@@ -28,7 +28,7 @@ export function OrderSummary({ order, detail }: OrderSummaryProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3 lg:grid-cols-6">
+      <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3 lg:grid-cols-6" data-demo-id="order-executed">
         <Stat label="KL đặt">{formatNumber(order.total_qty)}</Stat>
         <Stat label="KL khớp">{formatNumber(order.executed_qty)}</Stat>
         <Stat label="KL còn lại">{formatNumber(order.total_qty - order.executed_qty)}</Stat>
@@ -56,7 +56,7 @@ export function OrderSummary({ order, detail }: OrderSummaryProps) {
         label={`Tiến độ khớp lệnh ${order.parent_order_id}`}
       />
 
-      <dl className="grid grid-cols-2 gap-4 border-t pt-4 text-sm sm:grid-cols-3 lg:grid-cols-6">
+      <dl className="grid grid-cols-2 gap-4 border-t pt-4 text-sm sm:grid-cols-3 lg:grid-cols-6" data-demo-id="order-params">
         {getStrategyParamRows(order, detail.parameters).map((row) => (
           <Stat key={row.label} label={row.label}>
             {row.value}

@@ -162,6 +162,17 @@ Lệnh PAUSED_SYSTEM do giá ngoài biên độ (reason_code = PRICE_OUT_OF_BAND
   - 5 lệnh đã hoàn tất ở 1–4 phiên trước (TWAP, POV, VWAP, HUNT, Iceberg). Cùng lệnh Iceberg đã hoàn tất sẵn có, bộ
     lệnh mẫu có đủ 5 chiến lược, cả mua và bán, cả có lợi và bất lợi so với arrival. Lần khớp trải theo thời gian, kèm
     tick thị trường sinh tất định trong khoảng chạy của từng lệnh.
+- Tham số tùy chọn, chỉ dùng qua API và Chế độ Demo (ticket đặt lệnh không có):
+  - Stop Limit `slice_qty`: kích hoạt xong thì chia lệnh con như Iceberg, mỗi lần một phần, phần trước xong mới gửi
+    phần sau.
+  - HUNT `max_levels` và `remainder_passive`:
+    - Khi giá về mức săn, quét tối đa `max_levels` mức phía đối ứng, chỉ các mức không vượt giá giới hạn (giá tối
+      đa khi mua). Mỗi mức một lệnh con LO đúng giá mức đó.
+    - Chưa có mức hợp lệ thì thử lại nhịp sau, tới hạn `max_wait_min`.
+    - Quét xong: `remainder_passive` = 1 thì phần còn lại đặt một lệnh LO tại giá tốt nhất cùng phía (chặn bởi giá
+      giới hạn); 0 thì kết thúc lệnh (EXPIRED).
+    - Sổ lệnh lấy từ `quote.depth`; không có thì dựng 5 mức tất định từ bid, ask.
+- Core hủy phần chưa khớp của lệnh con (`cancelChildByCore`): lệnh con CANCELLED, lệnh cha giữ phần đã khớp.
 - Băng tick khớp toàn thị trường (`src/mocks/marketTape.ts`):
   - Mỗi nhịp ghi lần khớp của bộ giả lập và của chính OMS (thời điểm, giá, KL).
   - Giữ 5 ngày giao dịch gần nhất, tối đa 40.000 tick.
@@ -238,3 +249,87 @@ Quy ước dấu khác nhau giữa các màn:
 - Không ghi dòng `sep=;`, vì có dòng đó thì Excel bỏ qua BOM và làm hỏng dấu tiếng Việt.
 - Đúng 10 cột của bảng, đúng các dòng đang lọc và theo thứ tự đang sắp xếp. Ô không tính được để trống.
 - Tên file: `hieu-qua-thuc-hien-YYYY-MM-DD.csv`. Không dùng thư viện xlsx.
+
+## 13. Chế độ Demo
+
+App tự chạy 6 kịch bản E2E của [TC-E2E.md](test-cases/TC-E2E.md) để trình bày. Kịch bản trình bày:
+[demo-script.md](demo-script.md).
+
+### Kiến trúc
+- **Kịch bản là dữ liệu**, không viết cứng trong component.
+  - Mỗi file trong `src/demo/scenarios/` là một kịch bản: `{ id, number, title, summary, tcRefs, seed, setup, steps }`.
+  - Mỗi bước: `{ id, caption, action: { type, params }, route?, highlight?, waitMs?, settle?, checks? }`.
+    - `caption`: 1–2 câu tiếng Việt, nói VÌ SAO hệ thống làm vậy.
+    - `route`, `highlight`: viết dạng `{order}`, `{child:order:2}`, runner thay bằng mã thật.
+    - `checks`: `{ label, fn(state) }`.
+- **Action** (`src/demo/actions.ts`) chỉ gọi engine và bộ giả lập; mọi quyết định nghiệp vụ vẫn do engine làm.
+  - Các loại: đặt lệnh, khớp thị trường, đặt sổ lệnh, tua / nhảy giờ, bơm lỗi (từ chối, mất ACK trước / sau Core, khớp
+    trùng, giá trễ), đối soát, Core báo khớp / hủy phần còn lại, tạm dừng / tiếp tục / hủy lệnh.
+  - Riêng kịch bản OMS sập: "sập" (ghi trạng thái ra đĩa, xóa bộ nhớ), Core khớp lúc OMS tắt, "bật lại", nhận báo khớp
+    bị lỡ.
+- **Runner** (`src/demo/runner.ts`) thuần logic, không phụ thuộc React, không dùng `setTimeout`.
+  - Lệnh điều khiển: `play`, `pause`, `next`, `reset`, `setSpeed(1 | 2 | 4)`, `runToEnd`.
+  - Mỗi bước:
+    1. Mở màn.
+    2. Chạy action.
+    3. Chờ engine ổn định: tua từng giây giả lập tới khi 3 nhịp liền không có OrderEvent mới, tối đa 120 nhịp.
+    4. Chấm check.
+    5. Ghi kết quả.
+  - Thời gian chờ giữa các bước do UI cấp qua `advanceClock(ms thật)`. Tốc độ chỉ đổi thời gian chờ để người xem đọc,
+    không đổi số nhịp giả lập, nên kết quả không phụ thuộc tốc độ.
+- **Check chung** (`src/demo/checks.ts`) chạy sau mọi bước, theo mục 8:
+  - tổng khớp không vượt `total_qty`;
+  - `executed_qty` = tổng Execution của lệnh vào;
+  - `allowed = total − executed − working`, với UNKNOWN tính là working;
+  - không trùng `client_order_id` / `idempotency_key`;
+  - mỗi `exchange_match_id` ghi nhận một lần;
+  - trạng thái hiện tại của mọi lệnh cha, lệnh con khớp với OrderEvent cuối cùng của nó.
+
+### Cô lập dữ liệu (`src/demo/session.ts`)
+- **Vào Demo:**
+  - Lưu bản sao sâu: engine, bộ giả lập giá, băng tick, cấu hình, mọi khóa `oms-*` trong localStorage, store thông báo.
+  - Bật cờ `demoGuard`: runtime không ghi trạng thái giả lập vào localStorage.
+  - Bộ giả lập chuyển sang chế độ có kịch bản: giá và giờ chỉ đổi theo action.
+- **Mỗi kịch bản:** sổ lệnh trống, random của engine có seed cố định, thị trường FPT do kịch bản đặt, nên chạy lại cho
+  cùng kết quả.
+- **Thoát Demo:**
+  - Nạp lại nguyên bản lưu, trả random về `Math.random`, tắt cờ.
+  - Điều hướng qua Sổ lệnh trước khi đổi dữ liệu, để màn chi tiết của lệnh sắp biến mất không gọi API.
+
+### Giao diện
+- **Ai thấy nút "▶ Demo":** vai trò OPS; mọi vai trò khi `VITE_DEMO_MODE=true`. Phần chạy Demo nạp chậm (lazy), chỉ
+  tải khi vai trò được dùng.
+- **Thanh trên khi đang chạy:**
+  - Có nhãn vàng "ĐANG CHẠY DEMO · Scenario n" và nút "Thoát Demo".
+  - Ẩn nút tua x1/x10/x60 và "Về đầu ngày" để không phá kịch bản.
+- **Khung điều khiển nổi ở giữa đáy:**
+  - Nội dung: tên kịch bản, "Bước x / y", thanh tiến độ, chú thích (16px), Phát / Tạm dừng, Bước tiếp, Làm lại, x1 / x2 / x4.
+  - Kéo bằng thanh tiêu đề; thả gần góc thì bám góc.
+  - Phím tắt chỉ khi đang Demo: Space, →, Esc.
+- **Tô sáng phần tử:**
+  - Viền vàng 2px và nền vàng nhạt, tự cuộn tới; không che phần còn lại của màn.
+  - Áp theo `[data-demo-id]` bằng rule CSS, nên React vẽ lại phần tử cũng không mất.
+  - Các `data-demo-id` đang có:
+    - Sổ lệnh: `order-row-<mã>`.
+    - Chi tiết lệnh: `order-status`, `order-executed`, `order-params`, `child-<mã>`, `child-status-<mã>`,
+      `executions`, `event-log`, `progress-chart`, `exec-quality`.
+    - Trung tâm lệnh: `kpi-running`, `kpi-filled`, `kpi-attention`, `kpi-slippage`, `attention-table`.
+    - Giám sát hệ thống: `ops-alerts`.
+- **Bảng "Điều kiện kiểm tra"** bên phải (300px, thu gọn được): ĐẠT (xanh), KHÔNG ĐẠT (đỏ), CHỜ (xám); nội dung trang
+  chừa lề phải tương ứng.
+- **Hộp kết quả:**
+  - Số bước, số điều kiện đạt / tổng, thời gian giả lập đã chạy, các điều kiện không đạt.
+  - Nút: Chạy lại, Kịch bản khác, Xuất kết quả, Thoát Demo.
+  - File xuất: CSV UTF-8 có BOM, các cột Kịch bản; Bước; Chú thích; Điều kiện; Kết quả; Giờ giả lập.
+
+### 6 kịch bản
+| # | Kịch bản | TC | Ghi chú |
+|---|---|---|---|
+| 1 | Iceberg thành công | 050, 051, 052, 220, 231 | Core khớp thiếu rồi hủy phần còn lại; lệnh con kế tiếp theo KL đã khớp thật |
+| 2 | Stop kích hoạt → Iceberg | 010, 011, 012, 050 | Stop Limit bán có `slice_qty`. Tài liệu ghi lệnh mua "giá ≤ ngưỡng"; Stop của engine kích hoạt lệnh mua khi giá tăng, nên dùng lệnh bán |
+| 3 | POV điều chỉnh theo thị trường | 070, 071, 072, 232 | Tài liệu ghép với Adaptive; engine chưa có Adaptive nên chỉ trình diễn phần POV |
+| 4 | HUNT quét mức + phần còn lại | 090, 091 | Quét tối đa 3 mức trong giá tối đa, phần còn lại đặt bị động |
+| 5 | Core mất ACK → UNKNOWN → đối soát | 140, 141, 150 | Có thêm một báo khớp trùng bị bỏ qua |
+| 6 | OMS sập → khôi phục | 200, 202 | "Đĩa" là bản ghi JSON trong bộ nhớ; backend thật dùng CSDL |
+
+Test: `src/demo/scenarios.test.ts` chạy cả 6 kịch bản headless, mọi check phải ĐẠT, chạy 2 lần cho kết quả giống nhau.

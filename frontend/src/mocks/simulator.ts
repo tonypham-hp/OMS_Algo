@@ -1,6 +1,6 @@
 import { QTY_LOT_SIZE, TRADING_SESSIONS } from '@/config/hose'
 import { formatClock, toDateString } from '@/lib/format'
-import type { MarketState, MarketTrade, SimSpeed, SymbolQuote } from '@/types'
+import type { MarketState, MarketTrade, OrderBookDepth, SimSpeed, SymbolQuote } from '@/types'
 import {
   getCeilingPrice,
   getDisplayPrice,
@@ -147,6 +147,8 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
   let quoteAgeMs = 0
   /** Đang bơm lỗi giá trễ: đồng hồ vẫn chạy nhưng không có giá mới. */
   let feedStale = false
+  /** Chế độ có kịch bản (Demo). */
+  let scripted = false
 
   function getState(): MarketState {
     return {
@@ -178,6 +180,8 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
 
   /** Một nhịp giả lập: tua đồng hồ theo tốc độ, rồi cho giá nhảy nếu thị trường đang mở. */
   function tick(elapsedMs = TICK_INTERVAL_MS) {
+    // Chế độ có kịch bản (Demo): đồng hồ và giá chỉ đổi theo lệnh của kịch bản.
+    if (scripted) return
     const previous = getSessionAt(simSeconds)
     let next = Math.min(simSeconds + (elapsedMs / 1000) * speed, END_SECONDS)
     if (isAuctionSession(previous)) {
@@ -216,6 +220,38 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
       listener(getState())
       return () => {
         listeners.delete(listener)
+      }
+    },
+    // ===== Điều khiển có kịch bản (Chế độ Demo) =====
+    /** Bật thì nhịp hẹn giờ không làm gì: giá không tự đi, đồng hồ đứng, chỉ đổi qua các hàm bên dưới. */
+    setScripted(on: boolean) {
+      scripted = on
+    },
+    isScripted: () => scripted,
+    /** Một lần khớp trên thị trường của mã: cập nhật giá khớp, KL, giá mua bán, phát tick khớp. */
+    pushTrade(symbol: string, price: number, qty: number) {
+      const before = quotes
+      quotes = quotes.map((quote) => (quote.symbol === symbol ? withMatch(quote, price, qty) : quote))
+      emitTrades(before)
+      notify()
+    },
+    /** Đặt sổ lệnh nhiều mức cho mã. Truyền undefined để bỏ, engine dùng sổ lệnh tất định. */
+    setDepth(symbol: string, depth: OrderBookDepth | undefined) {
+      quotes = quotes.map((quote) => (quote.symbol === symbol ? { ...quote, depth } : quote))
+      notify()
+    },
+    /** Nhảy tới giờ giả lập (giây trong ngày), phát trạng thái để engine chạy một nhịp. */
+    jumpTo(seconds: number) {
+      simSeconds = Math.min(Math.max(seconds, 0), END_SECONDS)
+      notify()
+    },
+    /** Tua thêm `seconds` giây giả lập, mỗi giây một nhịp. Giá đứng yên; đang bơm giá trễ thì tuổi giá tăng. */
+    advance(seconds: number) {
+      for (let step = 0; step < seconds && simSeconds < END_SECONDS; step += 1) {
+        simSeconds += 1
+        quoteAgeMs = feedStale ? quoteAgeMs + TICK_INTERVAL_MS : 0
+        quotes = quotes.map((quote) => (quote.tick_direction === 0 ? quote : { ...quote, tick_direction: 0 }))
+        notify()
       }
     },
     /** Nhận các tick khớp toàn thị trường sau mỗi nhịp. Trả về hàm hủy đăng ký. */
@@ -280,3 +316,5 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
 }
 
 export const marketSimulator = createMarketSimulator()
+
+export type MarketSimulator = ReturnType<typeof createMarketSimulator>

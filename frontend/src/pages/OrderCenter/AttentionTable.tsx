@@ -15,7 +15,7 @@ const KIND_STYLES: Record<AttentionKind, { label: string; className: string }> =
 export function AttentionTable({ items }: { items: AttentionItem[] }) {
   const navigate = useNavigate()
   return (
-    <Table>
+    <Table data-demo-id="attention-table">
       <TableHeader>
         <TableRow>
           <TableHead>Mã lệnh</TableHead>

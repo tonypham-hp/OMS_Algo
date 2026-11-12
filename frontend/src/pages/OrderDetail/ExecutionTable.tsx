@@ -19,7 +19,7 @@ export function ExecutionTable({ items, childOrders }: ExecutionTableProps) {
   const sideOf = new Map(childOrders.map((child) => [child.child_order_id, child.side]))
 
   return (
-    <div className={SCROLL_TABLE}>
+    <div className={SCROLL_TABLE} data-demo-id="executions">
       <Table>
         <TableHeader className={STICKY_HEADER}>
           <TableRow>

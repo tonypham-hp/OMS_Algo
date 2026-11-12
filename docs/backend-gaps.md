@@ -227,3 +227,19 @@ thật phải cung cấp các dữ liệu dưới đây.
 - Có thể trả tick thô theo mã và khoảng thời gian thay vì tổng hợp sẵn; khi đó frontend tự tính bằng `summarizeTicks`.
   Tổng hợp sẵn nhẹ hơn nhiều khi có nhiều lệnh.
 - Khi có nhiều lệnh, báo cáo nên lọc và phân trang ở backend, không gửi toàn bộ lệnh như bản demo.
+
+## 10. Chế độ Demo (Đợt 3)
+
+Chế độ Demo chạy hoàn toàn trên engine giả lập trong trình duyệt, không cần API mới. Những gì nó bổ sung vào engine mà
+backend cũng phải có, nếu muốn hành vi giống:
+
+| Hành vi / dữ liệu | Hình dạng | Lý do cần | Luồng E2E |
+|---|---|---|---|
+| Tham số `slice_qty` của STOP_LIMIT (tùy chọn) | INTEGER, bội số lô | Stop kích hoạt rồi chia lệnh con như Iceberg | Scenario 2 |
+| Tham số `max_levels`, `remainder_passive` của HUNT (tùy chọn) | INTEGER; `remainder_passive` = 1 đặt bị động phần còn lại, 0 kết thúc lệnh | HUNT quét thanh khoản theo mức giá, không vượt giá tối đa | TC-E2E-090, 091, 092; Scenario 4 |
+| Sổ lệnh nhiều mức theo mã | `{bids: {price, qty}[], asks: {price, qty}[]}` | HUNT cần biết KL ở từng mức giá. Hiện dữ liệu giá chỉ có Bid/Ask tốt nhất | TC-E2E-090, 091, 092 |
+| Core hủy phần chưa khớp của lệnh con | Sự kiện từ Core: lệnh con CANCELLED, giữ `filled_qty` | Lệnh cha phải sinh lệnh con kế tiếp theo KL đã khớp thật | TC-E2E-051; Scenario 1 |
+| Khôi phục sau khi OMS khởi động lại | Trạng thái lệnh cha, lệnh con, Execution ghi vào CSDL trước khi gửi lệnh; lúc khởi động tra Core các lệnh con chưa kết thúc và nhận báo khớp bị lỡ | Không mất phần khớp trong lúc OMS tắt, không gửi lại lệnh con | TC-E2E-200, 202; Scenario 6 |
+
+Hai tham số mới lưu trong `StrategyParameter` như các tham số khác. Ticket đặt lệnh hiện chưa có ô nhập cho chúng, chỉ
+dùng qua API.

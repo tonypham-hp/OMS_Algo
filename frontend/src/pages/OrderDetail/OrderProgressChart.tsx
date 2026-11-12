@@ -28,7 +28,7 @@ export function OrderProgressChart({ order, detail }: OrderProgressChartProps) {
   const span = max - min
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2" data-demo-id="progress-chart">
       <dl className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs tabular-nums">
         <div className="flex gap-1">
           <dt>Thực tế:</dt>

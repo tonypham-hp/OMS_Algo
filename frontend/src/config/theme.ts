@@ -30,4 +30,6 @@ export const LAYOUT = {
   sidebarWidth: 232,
   sidebarCollapsedWidth: 64,
   topBarHeight: 56,
+  /** Bảng "Điều kiện kiểm tra" của Chế độ Demo, bên phải. */
+  demoChecksWidth: 300,
 } as const

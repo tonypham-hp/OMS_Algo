@@ -6,6 +6,7 @@ import { ROLE_LABELS } from '@/config/permissions'
 import { LAYOUT } from '@/config/theme'
 import { formatWallClock } from '@/lib/format'
 import { useAuthStore } from '@/store/auth.store'
+import { useDemoStore } from '@/store/demo.store'
 import { useMarketStore } from '@/store/market.store'
 import { getBreadcrumb } from '@/utils/breadcrumb'
 import { SessionStatus } from './SessionStatus'
@@ -54,6 +55,7 @@ function DemoDataLabel() {
 export function TopBar({ actions }: { actions?: ReactNode }) {
   const user = useAuthStore((state) => state.user)
   const logout = useAuthStore((state) => state.logout)
+  const demoActive = useDemoStore((state) => state.snapshot !== null)
 
   return (
     <header
@@ -63,7 +65,8 @@ export function TopBar({ actions }: { actions?: ReactNode }) {
       <Breadcrumb />
       <div className="ml-auto flex shrink-0 items-center gap-3">
         <SessionStatus />
-        <DemoDataLabel />
+        {/* Đang Demo: chỗ này dành cho nhãn Demo; dữ liệu lúc đó là của kịch bản, không phải giá demo thường. */}
+        {!demoActive && <DemoDataLabel />}
         {actions}
         {user && (
           <span className="flex flex-col text-right leading-tight whitespace-nowrap">
