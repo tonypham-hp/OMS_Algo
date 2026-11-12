@@ -33,10 +33,15 @@ VWAP, POV, HUNT). OMS tự chia thành lệnh con, gửi xuống Core, theo dõi
   - Nút "Xuất Excel" tải file CSV mở được bằng Excel tiếng Việt.
   - Chi tiết lệnh có thẻ "Hiệu quả" dùng cùng công thức.
   - Công thức: [docs/frontend-spec.md](docs/frontend-spec.md), mục 12.
+- **Chế độ Demo**: app tự chạy 6 kịch bản E2E (Iceberg, Stop → Iceberg, POV, HUNT, Core mất ACK, OMS sập).
+  - Mỗi bước có chú thích, tô sáng phần tử liên quan và tự chấm điều kiện kiểm tra.
+  - Chạy trên dữ liệu riêng; thoát thì dữ liệu của bạn trở về nguyên vẹn.
+  - Cách bật ở mục [Chế độ Demo](#chế-độ-demo).
 - **5 màn nghiệp vụ**: xem bảng [Màn hình](#màn-hình). Mọi màn dùng chung các trạng thái đang tải, trống và lỗi.
 
 Ảnh chụp ở 1440px và 1366px: [docs/screenshots/dot1/](docs/screenshots/dot1/) (khung ứng dụng, Trung tâm lệnh),
-[docs/screenshots/dot2/](docs/screenshots/dot2/) (báo cáo hiệu quả, thẻ Hiệu quả ở chi tiết lệnh).
+[docs/screenshots/dot2/](docs/screenshots/dot2/) (báo cáo hiệu quả, thẻ Hiệu quả ở chi tiết lệnh),
+[docs/screenshots/dot3/](docs/screenshots/dot3/) (Chế độ Demo, ảnh 1440px).
 
 ## Cấu trúc thư mục
 
@@ -83,7 +88,33 @@ Lệnh khác trong `frontend/`:
 | `npm run build` | Kiểm tra kiểu (`tsc -b`) và build |
 | `npm run test` | Vitest. Test lệch tài liệu bị bỏ qua mặc định; chạy `VITE_TC_DEVIATIONS=1 npm run test` để xem chúng |
 
-Cấu hình qua biến môi trường: xem `frontend/.env.example` (`VITE_API_BASE_URL`, `VITE_USE_MOCK`).
+Cấu hình qua biến môi trường: xem `frontend/.env.example` (`VITE_API_BASE_URL`, `VITE_USE_MOCK`, `VITE_DEMO_MODE`).
+
+## Chế độ Demo
+
+App tự chạy 6 kịch bản E2E trong [TC-E2E.md](docs/test-cases/TC-E2E.md), để trình bày mà không phải thao tác tay.
+
+**Bật Demo:**
+- Đăng nhập `vanhanh` (vai trò Vận hành), bấm **▶ Demo** trên thanh trên cùng, chọn một kịch bản.
+- Muốn mọi vai trò đều thấy nút Demo (ví dụ trình bày bằng tài khoản khách hàng): thêm `VITE_DEMO_MODE=true` vào
+  `frontend/.env.local` rồi chạy lại `npm run dev`.
+
+**Khi đang chạy:**
+- Thanh trên có nhãn vàng "ĐANG CHẠY DEMO · Scenario n" và nút "Thoát Demo".
+- Khung điều khiển ở đáy màn hình:
+  - bước hiện tại và chú thích;
+  - Phát / Tạm dừng, Bước tiếp, Làm lại, tốc độ x1 / x2 / x4;
+  - kéo được, thả gần góc thì bám góc.
+- Bảng "Điều kiện kiểm tra" bên phải: ĐẠT / KHÔNG ĐẠT / CHỜ.
+- Phím tắt (chỉ khi đang Demo): `Space` phát / tạm dừng, `→` bước tiếp, `Esc` thoát.
+- Chạy xong có hộp kết quả: chạy lại, chọn kịch bản khác, xuất kết quả ra CSV.
+
+**Dữ liệu:**
+- Trước khi chạy, app lưu nguyên trạng thái (lệnh, giá, cấu hình, localStorage của app, thông báo).
+- Kịch bản chạy trên sổ lệnh trống với random có seed cố định, nên lần nào cũng ra cùng kết quả.
+- Thoát Demo thì mọi thứ trở về đúng như lúc trước khi bấm.
+
+Kịch bản trình bày 10 phút: [docs/demo-script.md](docs/demo-script.md).
 
 ## Tài khoản demo
 
@@ -114,4 +145,5 @@ khi cần người duyệt thứ hai.
 - [docs/frontend-spec.md](docs/frontend-spec.md): đặc tả frontend (màn hình, luật HOSE, mô hình dữ liệu, quy tắc nghiệp vụ).
 - [docs/test-cases/](docs/test-cases/): [bộ test case E2E](docs/test-cases/TC-E2E.md) và
   [bảng phủ test](docs/test-cases/coverage.md), gồm danh sách chỗ engine giả lập còn lệch tài liệu.
+- [docs/demo-script.md](docs/demo-script.md): kịch bản trình bày Chế độ Demo trong 10 phút.
 - [docs/backend-gaps.md](docs/backend-gaps.md): bảng, trường, API backend cần thêm ngoài ERD; tồn đọng kỹ thuật.
