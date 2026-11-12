@@ -32,12 +32,7 @@ export function ResultDialog() {
   if (!result || !snapshot) return null
   const allPassed = result.failed.length === 0
 
-  const rerun = () => {
-    const runner = demoController.getRunner()
-    close()
-    runner?.reset()
-    runner?.play()
-  }
+  const rerun = () => demoController.restart(true)
   const pickAnother = () => {
     close()
     useDemoStore.getState().setPickerOpen(true)

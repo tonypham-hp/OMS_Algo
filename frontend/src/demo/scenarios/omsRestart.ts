@@ -53,6 +53,14 @@ export const omsRestart: Scenario = {
       ],
     },
     {
+      id: 'to-book',
+      caption:
+        'Mở Sổ lệnh để thấy rõ chuyện gì xảy ra khi OMS sập: lệnh đang chạy, đã khớp 30.000, còn 10.000 chờ trên sàn.',
+      action: { type: 'note' },
+      route: BOOK_ROUTE,
+      highlight: 'order-row-{order}',
+    },
+    {
       id: 'crash',
       caption:
         'OMS sập. Trạng thái đã được ghi ra đĩa từ trước; bộ nhớ của OMS trống trơn, sổ lệnh không còn gì.',

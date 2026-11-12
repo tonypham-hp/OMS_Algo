@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/auth.store'
 import { useDemoStore } from '@/store/demo.store'
 import { demoController } from './controller'
@@ -16,9 +16,15 @@ function isTyping(target: EventTarget | null) {
  */
 export function useDemoRunner() {
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   const status = useDemoStore((state) => state.snapshot?.status)
   const active = useDemoStore((state) => state.snapshot !== null)
   const user = useAuthStore((state) => state.user)
+
+  // Effect chạy sau khi commit: lúc này màn mới đã thay màn cũ (điều hướng của router chạy trong transition).
+  useEffect(() => {
+    useDemoStore.setState({ committedPath: pathname })
+  }, [pathname])
 
   useEffect(() => {
     demoController.setNavigate((path) => navigate(path))

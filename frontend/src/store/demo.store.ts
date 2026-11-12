@@ -19,6 +19,8 @@ interface DemoStoreState {
   checksOpen: boolean
   /** Vị trí khung điều khiển sau khi kéo; null là giữa đáy màn hình. */
   position: ControllerPosition | null
+  /** Đường dẫn màn đã vẽ xong (cập nhật sau khi React commit), để biết màn cũ đã đóng hẳn. */
+  committedPath: string
   setPickerOpen: (open: boolean) => void
   setChecksOpen: (open: boolean) => void
   setPosition: (position: ControllerPosition | null) => void
@@ -33,6 +35,7 @@ export const useDemoStore = create<DemoStoreState>()((set) => ({
   result: null,
   checksOpen: true,
   position: null,
+  committedPath: '',
   setPickerOpen: (pickerOpen) => set({ pickerOpen }),
   setChecksOpen: (checksOpen) => set({ checksOpen }),
   setPosition: (position) => set({ position }),

@@ -107,7 +107,7 @@ export function DemoController() {
           <Button size="sm" variant="outline" onClick={() => runner?.next()} disabled={status === 'finished'} aria-keyshortcuts="ArrowRight">
             <SkipForward aria-hidden /> Bước tiếp
           </Button>
-          <Button size="sm" variant="outline" onClick={() => runner?.reset()}>
+          <Button size="sm" variant="outline" onClick={() => demoController.restart()}>
             <RotateCcw aria-hidden /> Làm lại
           </Button>
           <div className="ml-auto flex gap-1" role="group" aria-label="Tốc độ Demo">
