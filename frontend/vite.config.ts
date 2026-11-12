@@ -11,6 +11,14 @@ export default defineConfig({
       '@': path.resolve(import.meta.dirname, './src'),
     },
   },
+  build: {
+    rolldownOptions: {
+      output: {
+        // zod dùng chung cho form và engine giả lập: để chunk riêng, không bị gộp vào gói chính khi đổi cách chia chunk.
+        advancedChunks: { groups: [{ name: 'zod', test: /node_modules[\\/]zod[\\/]/ }] },
+      },
+    },
+  },
   test: {
     environment: 'node',
     include: ['src/**/*.test.{ts,tsx}'],

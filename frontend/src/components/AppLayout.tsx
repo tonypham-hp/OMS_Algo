@@ -1,18 +1,19 @@
+import { lazy, Suspense } from 'react'
 import { Outlet } from 'react-router-dom'
-import { ChecksPanel } from '@/components/demo/ChecksPanel'
-import { DemoController } from '@/components/demo/DemoController'
-import { DemoHighlight } from '@/components/demo/DemoHighlight'
 import { DemoTopBar } from '@/components/demo/DemoTopBar'
 import { NotificationBell } from '@/components/layout/NotificationBell'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import { LAYOUT } from '@/config/theme'
-import { useDemoRunner } from '@/demo/useDemoRunner'
+import { canUseDemo } from '@/demo/access'
 import { useMarketStream } from '@/hooks/useMarketStream'
 import { useNotificationSync } from '@/hooks/useNotificationSync'
 import { useAuthStore } from '@/store/auth.store'
 import { useDemoStore } from '@/store/demo.store'
 import { useUiStore } from '@/store/ui.store'
+
+/** Phần chạy Chế độ Demo: chỉ tải khi vai trò được dùng Demo. */
+const DemoLayer = lazy(() => import('@/components/demo/DemoLayer'))
 
 /** Chừa chỗ dưới đáy cho khung điều khiển Demo, để phần cuối trang vẫn cuộn tới được. */
 const DEMO_BOTTOM_SPACE = 240
@@ -21,7 +22,6 @@ const DEMO_BOTTOM_SPACE = 240
 export function AppLayout() {
   useMarketStream()
   useNotificationSync()
-  useDemoRunner()
   const role = useAuthStore((state) => state.user?.role)
   const collapsed = useUiStore((state) => state.sidebarCollapsed)
   const toggleSidebar = useUiStore((state) => state.toggleSidebar)
@@ -51,9 +51,11 @@ export function AppLayout() {
           <Outlet />
         </main>
       </div>
-      <DemoController />
-      <DemoHighlight />
-      <ChecksPanel />
+      {canUseDemo(role) && (
+        <Suspense fallback={null}>
+          <DemoLayer />
+        </Suspense>
+      )}
     </div>
   )
 }
