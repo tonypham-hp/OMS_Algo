@@ -59,6 +59,15 @@ export function planHuntSweep(input: PlanInput): HuntSweepPlan {
   }
 }
 
+/** Kế hoạch quét gần nhất ghi trong nhật ký (event DECISION HUNT_SWEEP); null nếu HUNT chưa quét. */
+export function findSweepPlan(events: Array<{ action: string; sweep_plan?: HuntSweepPlan }>): HuntSweepPlan | null {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const plan = events[index].sweep_plan
+    if (events[index].action === 'DECISION' && plan) return plan
+  }
+  return null
+}
+
 /** Số mức trong giới hạn giá (TAKE hoặc UNUSED). */
 export function countLevelsInLimit(plan: HuntSweepPlan) {
   return plan.steps.filter((step) => step.status !== 'OUT_OF_LIMIT').length

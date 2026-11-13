@@ -12,6 +12,7 @@ import { OrderDetailActions } from './OrderDetailActions'
 import { OrderEventLog } from './OrderEventLog'
 import { OrderProgressChart } from './OrderProgressChart'
 import { ExecQualityCard } from './ExecQualityCard'
+import { HuntSweepPanel } from './HuntSweepPanel'
 import { OrderBookCard } from './OrderBookCard'
 import { OrderSummary } from './OrderSummary'
 import { PausedOrderBanner } from './PausedOrderBanner'
@@ -70,10 +71,17 @@ export default function OrderDetail() {
 
       {order.data && detail.data && (
         <>
-          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-            <ExecQualityCard order={order.data} detail={detail.data} />
-            <OrderBookCard symbol={order.data.symbol} />
-          </div>
+          {order.data.strategy_type === 'HUNT' ? (
+            <>
+              <HuntSweepPanel order={order.data} detail={detail.data} />
+              <ExecQualityCard order={order.data} detail={detail.data} />
+            </>
+          ) : (
+            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <ExecQualityCard order={order.data} detail={detail.data} />
+              <OrderBookCard symbol={order.data.symbol} />
+            </div>
+          )}
           <div className="grid items-start gap-4 lg:grid-cols-[3fr_2fr]">
             <Card className="min-w-0">
               <CardHeader>
