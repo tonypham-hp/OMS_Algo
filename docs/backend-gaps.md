@@ -241,5 +241,35 @@ backend cũng phải có, nếu muốn hành vi giống:
 | Core hủy phần chưa khớp của lệnh con | Sự kiện từ Core: lệnh con CANCELLED, giữ `filled_qty` | Lệnh cha phải sinh lệnh con kế tiếp theo KL đã khớp thật | TC-E2E-051; Scenario 1 |
 | Khôi phục sau khi OMS khởi động lại | Trạng thái lệnh cha, lệnh con, Execution ghi vào CSDL trước khi gửi lệnh; lúc khởi động tra Core các lệnh con chưa kết thúc và nhận báo khớp bị lỡ | Không mất phần khớp trong lúc OMS tắt, không gửi lại lệnh con | TC-E2E-200, 202; Scenario 6 |
 
-Hai tham số mới lưu trong `StrategyParameter` như các tham số khác. Ticket đặt lệnh hiện chưa có ô nhập cho chúng, chỉ
-dùng qua API.
+Hai tham số mới lưu trong `StrategyParameter` như các tham số khác. Từ Đợt 4, ticket đặt lệnh có ô nhập cho
+`max_levels` (1–3) và `remainder_passive` (Chờ / Hủy); `slice_qty` vẫn chỉ dùng qua API.
+
+## 11. Sổ lệnh 3 mức, HUNT quét mức, mẫu chiến lược (Đợt 4)
+
+### Sổ lệnh 3 mức realtime
+Frontend đang tự sinh sổ lệnh trong bộ giả lập. Khi chạy với backend, backend phải đẩy sổ lệnh thật theo từng mã.
+
+| Dữ liệu | Hình dạng | Ghi chú |
+|---|---|---|
+| Sổ lệnh theo mã | `{symbol, bids: {price, qty}[3], asks: {price, qty}[3], session, indicative_price, updated_at}` | Đẩy qua kênh realtime (WebSocket/SSE) cùng nhịp với giá, không gọi API theo chu kỳ. Giá đúng bước giá HOSE, trong trần – sàn, KL bội 100, bán 1 > mua 1 |
+| Phiên định kỳ | `session` = ATO/ATC, `indicative_price` | Màn hình hiện giá dự kiến khớp và ghi "Phiên khớp lệnh định kỳ", không coi là sổ lệnh liên tục |
+| KL của chính OMS đã lấy | Không cần trường riêng | Frontend tự tính phần `own_taken` từ báo khớp của lệnh con quét; backend chỉ cần sổ lệnh sau khớp phản ánh đúng KL còn lại |
+
+HUNT quét mức cần sổ lệnh **tại thời điểm quyết định**. Backend phải dùng cùng một bản sổ lệnh để lập kế hoạch quét và
+để ghi `sweep_plan`.
+
+### HUNT quét mức
+| Hành vi / dữ liệu | Hình dạng | Lý do cần |
+|---|---|---|
+| Lệnh con quét khớp theo KL của mức | Lệnh con LO tại giá mức, KL ≤ KL đang có ở mức lúc quét | Không lấy quá thanh khoản đang có; giá BQ đúng như kế hoạch |
+| `OrderEvent.sweep_plan` (ngoài ERD, tùy chọn, ở event DECISION HUNT_SWEEP) | JSON: `side, qty, limit_price, steps[{price, available, take, short_after, status, child_order_id}], take_qty, avg_price, remainder, remainder_policy, book{bids, asks}` | Màn "HUNT quét từng mức" và nút Xem lại đọc từ đây. Có thể lưu cột JSON hoặc bảng con `HuntSweepStep` |
+| Tùy chọn "chuyển phần còn lại sang chiến lược khác" | Chưa có | Hiện chỉ có Chờ (LO bị động) và Hủy. Nếu cần, backend phải định nghĩa tham số (ví dụ `remainder_strategy`, tham số kèm theo) và luồng sinh lệnh con mới; frontend sẽ thêm lựa chọn khi có |
+
+### Mẫu chiến lược
+| Câu hỏi | Hiện tại (frontend) | Đề xuất cho backend |
+|---|---|---|
+| Mẫu lưu ở đâu | Cấu hình tĩnh `src/config/strategyTemplates.ts`, đóng gói cùng frontend | Bảng `StrategyTemplate` (`template_id`, `name`, `description`, `strategy_type`, `side`, `default_qty`, `params` JSON tương đối, `roles`, `hint`, `suitable_when`, `is_active`, `version`), quản lý ở màn Cấu hình chiến lược theo maker-checker như tham số hệ thống |
+| API | Không có | `GET /strategy-templates` trả mẫu theo vai trò người gọi và loại lệnh đang bật |
+| Mẫu riêng của người dùng | Chưa có | Nếu cần "lưu mẫu của tôi", thêm `owner_user_id`; mẫu hệ thống có `owner_user_id = null` |
+| Ghi nhận mẫu đã dùng | `CreateOrderRequest.template_id`, `ParentOrder.template_id`, `OrderEvent.template_id` (event CREATE), đều tùy chọn | Thêm cột `template_id` (nullable) vào ParentOrder; lưu thêm `template_version` nếu mẫu đổi được |
+| Kiểm tra | Mẫu chỉ điền sẵn; lệnh vẫn qua toàn bộ luật HOSE và luật đặt lệnh | Backend không cần tin `template_id`: vẫn kiểm tra đầy đủ tham số như lệnh đặt tay |

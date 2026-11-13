@@ -162,16 +162,17 @@ Lệnh PAUSED_SYSTEM do giá ngoài biên độ (reason_code = PRICE_OUT_OF_BAND
   - 5 lệnh đã hoàn tất ở 1–4 phiên trước (TWAP, POV, VWAP, HUNT, Iceberg). Cùng lệnh Iceberg đã hoàn tất sẵn có, bộ
     lệnh mẫu có đủ 5 chiến lược, cả mua và bán, cả có lợi và bất lợi so với arrival. Lần khớp trải theo thời gian, kèm
     tick thị trường sinh tất định trong khoảng chạy của từng lệnh.
-- Tham số tùy chọn, chỉ dùng qua API và Chế độ Demo (ticket đặt lệnh không có):
-  - Stop Limit `slice_qty`: kích hoạt xong thì chia lệnh con như Iceberg, mỗi lần một phần, phần trước xong mới gửi
+- Tham số tùy chọn:
+  - Stop Limit `slice_qty` (chỉ qua API và Chế độ Demo): kích hoạt xong thì chia lệnh con như Iceberg, mỗi lần một phần, phần trước xong mới gửi
     phần sau.
-  - HUNT `max_levels` và `remainder_passive`:
+  - HUNT `max_levels` và `remainder_passive` (từ Đợt 4 có ô nhập trên ticket, xem mục 15):
     - Khi giá về mức săn, quét tối đa `max_levels` mức phía đối ứng, chỉ các mức không vượt giá giới hạn (giá tối
       đa khi mua). Mỗi mức một lệnh con LO đúng giá mức đó.
     - Chưa có mức hợp lệ thì thử lại nhịp sau, tới hạn `max_wait_min`.
     - Quét xong: `remainder_passive` = 1 thì phần còn lại đặt một lệnh LO tại giá tốt nhất cùng phía (chặn bởi giá
       giới hạn); 0 thì kết thúc lệnh (EXPIRED).
     - Sổ lệnh lấy từ `quote.depth`; không có thì dựng 5 mức tất định từ bid, ask.
+- Sổ lệnh 3 mức mỗi mã (Đợt 4): xem mục 14.
 - Core hủy phần chưa khớp của lệnh con (`cancelChildByCore`): lệnh con CANCELLED, lệnh cha giữ phần đã khớp.
 - Băng tick khớp toàn thị trường (`src/mocks/marketTape.ts`):
   - Mỗi nhịp ghi lần khớp của bộ giả lập và của chính OMS (thời điểm, giá, KL).
@@ -315,6 +316,10 @@ App tự chạy 6 kịch bản E2E của [TC-E2E.md](test-cases/TC-E2E.md) để
       `executions`, `event-log`, `progress-chart`, `exec-quality`.
     - Trung tâm lệnh: `kpi-running`, `kpi-filled`, `kpi-attention`, `kpi-slippage`, `attention-table`.
     - Giám sát hệ thống: `ops-alerts`.
+    - Sổ lệnh 3 mức: `orderbook3`, `orderbook-level-ask-<giá>`, `orderbook-level-bid-<giá>`, `orderbook-spread`.
+    - HUNT: `hunt-sweep`, `hunt-step-<n>`, `hunt-avg`, `hunt-remainder`, `hunt-replay`.
+    - Mẫu chiến lược: `template-strip`, `template-<id>`, `template-active`, `template-grid`, `template-card-<id>`,
+      `order-template`, `report-template`.
 - **Bảng "Điều kiện kiểm tra"** bên phải (300px, thu gọn được): ĐẠT (xanh), KHÔNG ĐẠT (đỏ), CHỜ (xám); nội dung trang
   chừa lề phải tương ứng.
 - **Hộp kết quả:**
@@ -328,8 +333,131 @@ App tự chạy 6 kịch bản E2E của [TC-E2E.md](test-cases/TC-E2E.md) để
 | 1 | Iceberg thành công | 050, 051, 052, 220, 231 | Core khớp thiếu rồi hủy phần còn lại; lệnh con kế tiếp theo KL đã khớp thật |
 | 2 | Stop kích hoạt → Iceberg | 010, 011, 012, 050 | Stop Limit bán có `slice_qty`. Tài liệu ghi lệnh mua "giá ≤ ngưỡng"; Stop của engine kích hoạt lệnh mua khi giá tăng, nên dùng lệnh bán |
 | 3 | POV điều chỉnh theo thị trường | 070, 071, 072, 232 | Tài liệu ghép với Adaptive; engine chưa có Adaptive nên chỉ trình diễn phần POV |
-| 4 | HUNT quét mức + phần còn lại | 090, 091 | Quét tối đa 3 mức trong giá tối đa, phần còn lại đặt bị động |
+| 4 | HUNT quét mức + phần còn lại | 090, 091 | Quét tối đa 3 mức trong giá tối đa, phần còn lại đặt bị động. Từ Đợt 4 tô sáng OrderBook3 và khung "HUNT quét từng mức"; kiểm thêm khớp tại giá mức (BQ 118.157) và sổ lệnh dồn mức |
 | 5 | Core mất ACK → UNKNOWN → đối soát | 140, 141, 150 | Có thêm một báo khớp trùng bị bỏ qua |
 | 6 | OMS sập → khôi phục | 200, 202 | "Đĩa" là bản ghi JSON trong bộ nhớ; backend thật dùng CSDL |
 
 Test: `src/demo/scenarios.test.ts` chạy cả 6 kịch bản headless, mọi check phải ĐẠT, chạy 2 lần cho kết quả giống nhau.
+
+## 14. Sổ lệnh 3 mức (Đợt 4)
+
+### Dữ liệu (`src/mocks/depth.ts`, hàm thuần)
+- Mỗi mã có `quote.depth = { bids, asks }`, mỗi phía 3 mức `{ price, qty, own_taken? }`.
+- Luật HOSE:
+  - Giá đúng bước giá theo vùng: dưới 10.000 bước 10, 10.000–49.950 bước 50, từ 50.000 bước 100. Đi từng bước qua
+    ngưỡng, ví dụ 49.950 → 50.000 → 50.100.
+  - Giá nằm trong trần – sàn; gần trần (sàn) thì phía bán (mua) có thể ít hơn 3 mức.
+  - KL là bội số 100.
+  - Giá bán 1 > giá mua 1; các mức cùng phía cách nhau từ 1 bước giá trở lên.
+  - `validateDepth` kiểm đủ các luật này.
+- Các hàm:
+  - `generateDepth`: sinh 3 mức mỗi phía từ giá mua, bán tốt nhất. Mỗi mức 1.000–9.900 CP.
+  - `consumeLevel`: lệnh của OMS lấy KL ở một mức, tối đa bằng KL đang có (`taken ≤ qty` của mức). Mức hết KL thì bỏ,
+    các mức sau dồn lên và sinh mức mới phía sau. Mức còn KL ghi `own_taken` để màn hình hiện số âm.
+  - `replenishDepth`: mỗi nhịp phiên liên tục, mỗi mức có 30% khả năng được thêm 1–5 lô (tối đa 20.000 CP/mức).
+    `own_taken` tự xóa sau 3 nhịp.
+  - `rebaseDepth`: giá khớp đổi thì neo lại theo mua 1, bán 1 mới, giữ KL của các mức còn hợp lệ.
+- Bộ giả lập dùng dãy random riêng (có seed) cho sổ lệnh, nên dãy giá cũ không đổi.
+- Chế độ có kịch bản (Demo): sổ lệnh chỉ đổi qua `setDepth` và khi bị lệnh của OMS lấy, để kết quả lặp lại được.
+- Giá mua, bán tốt nhất của quote luôn bằng mức đầu của sổ lệnh.
+
+### Phiên khớp lệnh định kỳ (ATO, ATC)
+- OrderBook3 hiện khung "Phiên khớp lệnh định kỳ (Phiên ATO/ATC)" kèm **giá dự kiến khớp**.
+- Các mức hiển thị mờ, chỉ để tham khảo. Dòng giữa ghi rõ không có chênh lệch mua bán liên tục.
+
+### Component `OrderBook3` (`src/components/OrderBook3.tsx`)
+- Bảng 3 cột: Khối lượng | Giá | Bên. Bán ở trên (Bán 3 → Bán 1), dòng "Chênh lệch mua bán: x đ (n bước giá)" ở giữa,
+  mua ở dưới (Mua 1 → Mua 3). Thiếu mức thì hiện "—".
+- Màu giá theo `getPriceColor`: trần tím, tăng xanh lá, TC vàng, giảm đỏ, sàn xanh lam.
+- Ô đổi giá trị nháy màu 600ms (`.flash-cell`; tắt khi người dùng chọn giảm chuyển động).
+- Phần KL vừa bị lệnh của mình lấy hiện số âm màu vàng, ví dụ `-1.600`.
+- Có `onPickPrice` thì mỗi mức bấm được, dùng chuột hoặc Enter/Space:
+  - Màn Đặt lệnh: điền giá vào ô Giá giới hạn, hoặc ô giá đầu tiên nếu loại lệnh không có giá giới hạn. Form vẫn kiểm
+    tra như cũ.
+- `highlightPrice`: viền nhấn mức đang bị HUNT quét.
+- `depth`: thay sổ lệnh trực tiếp bằng ảnh chụp (khi xem lại).
+- Trạng thái: đang tải (`LoadingState`); chưa chọn mã, chưa có sổ lệnh (`EmptyState`).
+- Vị trí:
+  - **Đặt lệnh:** ≥1536px là 3 cột bảng giá | sổ lệnh | ticket. Ở 1366–1440px sổ lệnh nằm ngay trên ticket, cùng cột
+    phải.
+  - **Chi tiết lệnh:** sổ lệnh chỉ đọc của mã thuộc lệnh, cạnh thẻ Hiệu quả. Với HUNT thì nằm cạnh khung quét.
+
+## 15. HUNT quét từng mức (Đợt 4)
+
+### Quy tắc (`planHuntSweep` trong `src/utils/huntSweep.ts`, hàm thuần)
+Giữ nguyên quy tắc cũ; Đợt 4 đưa phần tính toán ra hàm thuần và cho lệnh con quét khớp theo sổ lệnh.
+- Quét lần lượt từ mức tốt nhất phía đối ứng:
+  - MUA quét phía bán, giá tăng dần, không vượt **giá tối đa** (giá giới hạn).
+  - BÁN quét phía mua, giá giảm dần, không thấp hơn **giá tối thiểu**.
+- Chỉ xét tối đa `max_levels` mức (ticket cho nhập 1–3, bằng số mức hiển thị).
+- Mỗi mức trong giới hạn sinh một lệnh con LO đúng giá mức, KL = min(KL của mức, KL còn thiếu).
+- Dừng khi đủ KL hoặc hết mức trong giới hạn.
+- Trạng thái từng mức trong kế hoạch: TAKE (lấy), UNUSED (trong giới hạn nhưng đã đủ), OUT_OF_LIMIT (vượt giới hạn).
+- Phần còn lại theo `remainder_passive`:
+  - 1, "Chờ ở giá tốt nhất": một LO tại giá tốt nhất cùng phía, chặn bởi giá giới hạn.
+  - 0, "Hủy phần còn lại": lệnh kết thúc (EXPIRED).
+  - Chưa có tùy chọn chuyển phần còn lại sang chiến lược khác (xem backend-gaps mục 11).
+- Ví dụ: MUA 8.000, mức 27.650 có 6.400, mức 27.700 có 9.800 → lấy 6.400 + 1.600, giá BQ 27.660.
+
+### Khớp
+- Lệnh con quét khớp ngay **tại giá của mức**, tối đa KL đang có ở mức (trừ phần lệnh khác đã lấy trong cùng nhịp).
+- Engine báo các lần lấy qua `drainDepthTakes()`; runtime trừ KL đó khỏi sổ lệnh của bộ giả lập
+  (`marketSimulator.consumeDepth`).
+- Các chiến lược khác và lệnh chờ phần còn lại vẫn khớp theo giá khớp gần nhất như trước.
+- Quote không có sổ lệnh (test cũ) thì giữ hành vi cũ.
+
+### Ghi nhận
+- Event `DECISION` giữ `old_value = HUNT_SWEEP:<số mức trong giới hạn>`, `new_value = LEVELS:<giá,…>`.
+- Event có thêm trường `sweep_plan`: các mức, KL lấy, KL còn thiếu, mã lệnh con của từng mức, giá BQ dự kiến, phần còn
+  lại, cách xử lý, và ảnh chụp sổ lệnh lúc quét.
+
+### Giao diện "HUNT quét từng mức" (`src/pages/OrderDetail/HuntSweepPanel.tsx`)
+- Có ở Chi tiết lệnh HUNT, và ở dạng gọn ngay trong hộp "Đặt lệnh thành công".
+- Hàng tóm tắt: cần mua/bán, giá tối đa/tối thiểu, đã khớp khi quét, giá bình quân. Chưa khớp thì hiện giá BQ dự kiến.
+- Mỗi bước có một câu, ví dụ "Quét mức 27.650: lấy 6.400, còn thiếu 1.600", và nhãn trạng thái: Đã khớp / Đang chờ /
+  Không cần dùng / Vượt giới hạn giá / Đã hủy.
+- Dòng phần còn lại, ví dụ "Phần còn lại 3.000: chờ ở giá 117.900".
+- Mức đang bị quét (lệnh con quét đầu tiên chưa khớp xong) được viền nhấn trên OrderBook3 bên cạnh.
+- Nút **Xem lại**: phát lại từng bước, mỗi 700ms. Sổ lệnh khi đó là ảnh chụp lúc quét, mức đang phát được viền nhấn.
+- Chưa tới giá săn thì hiện trạng thái trống "Chưa đến giá săn …". Lệnh không đặt số mức quét thì ghi rõ là vào một
+  lệnh tại giá giới hạn.
+
+## 16. Mẫu chiến lược (Đợt 4)
+
+### Dữ liệu (`src/config/strategyTemplates.ts`)
+- Mỗi mẫu: `{ id, name, description, strategy_type, side?, total_qty?, params, suitableWhen, roles?, hint? }`.
+- Giá trong `params` không ghi cứng mà tính lúc chọn mẫu (`applyTemplate`, hàm thuần):
+  - Giá: giá khớp, mua 1 hoặc bán 1, dịch n bước giá, kẹp trần – sàn.
+  - Khoảng trượt: n bước giá của giá tham chiếu.
+  - Giờ: theo đồng hồ giả lập, kẹp trong 09:15–14:45.
+- Cách tính này giữ mọi mẫu đúng luật HOSE ở mọi vùng giá và mọi giờ trong ngày (có test).
+
+| id | Tên | Loại | Vai trò |
+|---|---|---|---|
+| `iceberg-quiet` | Mua âm thầm | Iceberg, mua 20.000, mỗi phần 2.000 | Mọi vai trò |
+| `twap-2h` | Bán êm trong 2 giờ | TWAP, bán 30.000, chu kỳ 10 phút | Mọi vai trò |
+| `pov-10` | Theo nhịp thị trường | POV 10%, tối đa 15% | Dealer, Vận hành |
+| `vwap-day` | Bám VWAP cả phiên | VWAP 09:15–14:30 | Dealer, Vận hành |
+| `hunt-liquidity` | Mua nhanh khi có thanh khoản | HUNT, quét tối đa 3 mức, phần còn lại chờ | Dealer, Vận hành |
+| `stop-loss-trailing` | Cắt lỗ tự động | Trailing Stop bán, khoảng trượt 3 bước giá | Mọi vai trò |
+
+- `getVisibleTemplates(role, enabledStrategies)` ẩn mẫu của vai trò không được thấy và mẫu của loại lệnh đang bị vận
+  hành tắt.
+
+### Dải mẫu trên ticket Đặt lệnh (`TemplateStrip`)
+- Bấm một thẻ thì điền sẵn chiều, loại lệnh, KL và tham số; tài khoản và mã giữ như đang chọn.
+- Không tự đặt lệnh. Người dùng sửa được mọi ô, và form kiểm tra luật HOSE như cũ.
+- Thẻ đang chọn có viền nhấn, kèm dòng "Đã điền theo mẫu …" và lưu ý của mẫu.
+- Nút "Bỏ chọn mẫu" giữ nguyên giá trị đã điền. Đổi loại lệnh khác loại của mẫu thì tự bỏ chọn.
+
+### Trang `/mau-chien-luoc`
+- Mục "Mẫu chiến lược" trên thanh bên đã mở, cần quyền `place_order`.
+- Lưới thẻ: tên, loại, chiều, mô tả, tham số mặc định (tính theo mã đang chọn), "Phù hợp khi…", lưu ý.
+- "Dùng mẫu này" mở `/dat-lenh?mau=<id>`. Ticket điền mẫu một lần rồi xóa tham số khỏi địa chỉ; không dùng localStorage.
+
+### Ghi nhận mẫu đã dùng
+- Lệnh đặt từ mẫu gửi `template_id`. Trường này được lưu ở `ParentOrder.template_id` và ở event CREATE
+  (`OrderEvent.template_id`); cả hai là trường tùy chọn.
+- Báo cáo hiệu quả hiện "Mẫu: <tên>" dưới cột Chiến lược. CSV ghi "<chiến lược> (mẫu: <tên>)" trong cùng ô, để không
+  đổi bộ cột cũ.
+- Chi tiết lệnh hiện tên mẫu cạnh loại lệnh.

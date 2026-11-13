@@ -108,11 +108,15 @@ Câu chốt:
 
 ## 6. Scenario 4 · HUNT quét mức + phần còn lại (1 phút)
 
-- **Bước 3:**
-  > "Được phép quét 3 mức nhưng mức thứ 3 là 118.400, vượt giá tối đa 118.300, nên chỉ quét 2 mức. Hệ thống không bao
-  > giờ trả giá cao hơn mức khách cho phép."
+- **Bước 2:** chỉ vào khung Sổ lệnh 3 mức bên phải.
+  > "Bán 1 là 118.100 có 3.000, bán 2 là 118.200 có 4.000, bán 3 là 118.400 có 5.000."
+- **Bước 3:** chỉ vào khung "HUNT quét từng mức".
+  > "Mức 118.100 lấy 3.000, còn thiếu 7.000; mức 118.200 lấy 4.000, còn thiếu 3.000. Mức 118.400 vượt giá tối đa
+  > 118.300 nên ghi 'Vượt giới hạn giá' và không quét. Hệ thống không bao giờ trả giá cao hơn mức khách cho phép."
 - **Bước 4:**
-  > "Phần còn lại 3.000 không đuổi giá mà đặt chờ ở giá mua tốt nhất."
+  > "Hai lệnh quét khớp ngay tại giá của mức, không lấy quá KL đang có; giá bình quân 118.157. Mức 118.100 hết KL nên
+  > sổ lệnh dồn mức lên. Phần còn lại 3.000 không đuổi giá mà đặt chờ ở giá mua tốt nhất."
+  - Nếu có thời gian, bấm **Xem lại** để phát lại từng bước trên ảnh chụp sổ lệnh lúc quét.
 - **Kết thúc:** hộp kết quả hiện "Mọi điều kiện kiểm tra đều ĐẠT". Bấm **Xuất kết quả** để có file CSV gửi kèm biên bản.
 - **Thoát Demo** (`Esc`):
   > "Dữ liệu thật trở về như lúc trước khi bấm Demo."
