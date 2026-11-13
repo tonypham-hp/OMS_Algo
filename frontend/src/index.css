@@ -143,8 +143,16 @@
 .flash-up { animation: flash-up 0.8s ease-out; }
 .flash-down { animation: flash-down 0.8s ease-out; }
 
+/* Ô sổ lệnh đổi giá trị: nháy 600ms. */
+@keyframes flash-cell {
+  from { background-color: color-mix(in srgb, var(--color-price-ref) 35%, transparent); }
+  to { background-color: transparent; }
+}
+
+.flash-cell { animation: flash-cell 0.6s ease-out; }
+
 @media (prefers-reduced-motion: reduce) {
-  .flash-up, .flash-down { animation: none; }
+  .flash-up, .flash-down, .flash-cell { animation: none; }
 }
 
 @layer base {

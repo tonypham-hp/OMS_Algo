@@ -36,7 +36,16 @@ function renderCell(row: ExecQualityRow, key: ReportSortKey): ReactNode {
       // Không tô màu chiều: xanh, đỏ trong bảng này dành cho có lợi, bất lợi.
       return SIDE_LABELS[row.order.side]
     case 'strategy_type':
-      return STRATEGIES[row.order.strategy_type].label
+      return (
+        <span className="flex flex-col">
+          <span>{STRATEGIES[row.order.strategy_type].label}</span>
+          {row.templateName && (
+            <span className="text-muted-foreground text-xs" data-demo-id="report-template">
+              Mẫu: {row.templateName}
+            </span>
+          )}
+        </span>
+      )
     case 'avgPrice':
     case 'arrivalPrice':
     case 'vwap':

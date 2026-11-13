@@ -1,3 +1,4 @@
+import { formatNumber } from '@/lib/format'
 import type { PersistenceMode, Side, StrategyType } from '@/types'
 
 export const SIDE_LABELS: Record<Side, string> = { BUY: 'Mua', SELL: 'Bán' }
@@ -22,8 +23,10 @@ export type StrategyFieldName =
   | 'max_pct'
   | 'hunt_price'
   | 'max_wait_min'
+  | 'max_levels'
+  | 'remainder_passive'
 
-export type StrategyFieldKind = 'price' | 'money' | 'qty' | 'number' | 'time'
+export type StrategyFieldKind = 'price' | 'money' | 'qty' | 'number' | 'time' | 'select'
 
 export interface StrategyField {
   name: StrategyFieldName
@@ -32,7 +35,22 @@ export interface StrategyField {
   unit?: string
   min?: number
   max?: number
+  /** Ô không bắt buộc: để trống thì không gửi tham số này. */
+  optional?: boolean
+  /** Gợi ý ngắn dưới ô. */
+  hint?: string
+  /** Chỉ cho kind = 'select': các giá trị (số nguyên) được chọn. */
+  options?: Array<{ value: number; label: string }>
 }
+
+/** Số mức tối đa HUNT được quét: bằng số mức sổ lệnh hiển thị. */
+export const HUNT_MAX_LEVELS = 3
+
+/** Cách xử lý phần còn lại sau khi HUNT quét: 1 = chờ (LO bị động), 0 = hủy. */
+export const REMAINDER_OPTIONS = [
+  { value: 1, label: 'Chờ ở giá tốt nhất' },
+  { value: 0, label: 'Hủy phần còn lại' },
+]
 
 const LIMIT_PRICE: StrategyField = { name: 'limit_price', label: 'Giá giới hạn', kind: 'price', unit: 'đ' }
 const TRIGGER_PRICE: StrategyField = { name: 'trigger_price', label: 'Giá kích hoạt', kind: 'price', unit: 'đ' }
@@ -125,14 +143,40 @@ export const STRATEGIES: Record<StrategyType, StrategyConfig> = {
   },
   HUNT: {
     label: 'HUNT',
-    description: 'Chờ giá về mức săn trong thời gian cho phép rồi vào lệnh.',
+    description: 'Chờ giá về mức săn trong thời gian cho phép rồi vào lệnh; có thể quét nhiều mức của sổ lệnh.',
     fields: [
       { name: 'hunt_price', label: 'Giá săn', kind: 'price', unit: 'đ' },
       { name: 'max_wait_min', label: 'Thời gian chờ tối đa', kind: 'number', unit: 'phút', min: 1 },
-      LIMIT_PRICE,
+      { ...LIMIT_PRICE, hint: 'Tối đa khi mua, tối thiểu khi bán.' },
+      {
+        name: 'max_levels',
+        label: 'Số mức quét tối đa',
+        kind: 'number',
+        unit: 'mức',
+        min: 1,
+        max: HUNT_MAX_LEVELS,
+        optional: true,
+        hint: 'Để trống: vào một lệnh tại giá giới hạn như cũ.',
+      },
+      {
+        name: 'remainder_passive',
+        label: 'Phần còn lại sau khi quét',
+        kind: 'select',
+        options: REMAINDER_OPTIONS,
+        optional: true,
+      },
     ],
     usesMtl: false,
   },
 }
 
 export const STRATEGY_TYPES = Object.keys(STRATEGIES) as StrategyType[]
+
+/** Định dạng giá trị một tham số để hiển thị (hộp xác nhận, chi tiết lệnh, thẻ mẫu). */
+export function formatStrategyFieldValue(field: StrategyField, raw: string | number | null | undefined): string {
+  if (raw === null || raw === undefined || raw === '') return field.optional ? 'Mặc định' : '—'
+  if (field.kind === 'time') return String(raw)
+  if (field.kind === 'select') return field.options?.find((option) => option.value === Number(raw))?.label ?? String(raw)
+  const text = formatNumber(Number(raw))
+  return field.unit ? `${text} ${field.unit}` : text
+}

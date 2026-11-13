@@ -20,12 +20,19 @@ describe('getNavSections', () => {
 
   it('mục Sắp có không có đường dẫn', () => {
     const comingSoon = getNavSections('OPS').flatMap((section) => section.items.filter((item) => item.comingSoon))
-    expect(comingSoon.map((item) => item.label)).toEqual(['Mẫu chiến lược', 'Lịch sử và đối soát'])
+    expect(comingSoon.map((item) => item.label)).toEqual(['Lịch sử và đối soát'])
     expect(comingSoon.every((item) => item.path === undefined)).toBe(true)
   })
 
+  it('Mẫu chiến lược đã mở: có đường dẫn /mau-chien-luoc, cần quyền đặt lệnh', () => {
+    const item = getNavSections('CUSTOMER').flatMap((section) => section.items).find((entry) => entry.label === 'Mẫu chiến lược')
+    expect(item?.path).toBe('/mau-chien-luoc')
+    expect(item?.permission).toBe('place_order')
+    expect(item?.comingSoon).toBeUndefined()
+  })
+
   it('thẻ đăng nhập ghi các màn mở được, không tính mục Sắp có', () => {
-    expect(getAccessibleLabels('CUSTOMER')).toEqual(['Trung tâm lệnh', 'Đặt lệnh', 'Sổ lệnh', 'Hiệu quả thực hiện'])
+    expect(getAccessibleLabels('CUSTOMER')).toEqual(['Trung tâm lệnh', 'Đặt lệnh', 'Sổ lệnh', 'Mẫu chiến lược', 'Hiệu quả thực hiện'])
     expect(getAccessibleLabels('OPS')).toContain('Cấu hình chiến lược')
   })
 })

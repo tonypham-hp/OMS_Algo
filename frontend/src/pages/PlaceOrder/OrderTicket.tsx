@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Controller, useForm, useWatch, type Resolver } from 'react-hook-form'
+import { useSearchParams } from 'react-router-dom'
 import { FieldError } from '@/components/FieldError'
 import { NumberInput } from '@/components/NumberInput'
 import { Button } from '@/components/ui/button'
@@ -17,6 +18,7 @@ import {
 import { SESSION_LABELS } from '@/config/hose'
 import { getPriceColor, PRICE_COLOR } from '@/config/priceColors'
 import { PERSISTENCE_LABELS, STRATEGIES, STRATEGY_TYPES } from '@/config/strategies'
+import { getTemplate, type StrategyTemplate } from '@/config/strategyTemplates'
 import { useCreateOrder } from '@/hooks/useOrders'
 import { useOrderRules } from '@/hooks/useSystemConfig'
 import { formatNumber } from '@/lib/format'
@@ -26,9 +28,11 @@ import { useMarketStore } from '@/store/market.store'
 import { useUiStore } from '@/store/ui.store'
 import type { OrderRules, PersistenceMode, Side, StrategyType } from '@/types'
 import { getDisplayPrice, getTickSize, isAuctionSession, isMtlAllowed } from '@/utils/hose'
+import { applyTemplate, getVisibleTemplates } from '@/utils/strategyTemplates'
 import { ConfirmDialog } from './ConfirmDialog'
 import { createOrderSchema, toCreateOrderRequest, type OrderFormValues } from './orderSchema'
 import { StrategyFields } from './StrategyFields'
+import { TemplateStrip } from './TemplateStrip'
 
 interface OrderResolverContext {
   /** Luật đặt lệnh từ cấu hình hệ thống. Chưa tải xong thì dùng mặc định. */
@@ -86,6 +90,60 @@ export function OrderTicket() {
   const persistenceMode = values.persistence_mode ?? 'DAY'
   const quote = quotes.find((item) => item.symbol === selectedSymbol)
 
+  // Mẫu chiến lược: chỉ điền sẵn loại lệnh và tham số, người dùng vẫn sửa được mọi ô, form vẫn kiểm tra như cũ.
+  // Đổi sang loại lệnh khác loại của mẫu thì coi như bỏ chọn mẫu.
+  const role = user?.role
+  const templates = getVisibleTemplates(role, enabledTypes)
+  // Mở từ trang Mẫu chiến lược (/dat-lenh?mau=<id>): chọn sẵn mẫu đó ngay lần vẽ đầu.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedTemplate = searchParams.get('mau')
+  const [templateId, setTemplateId] = useState<string | null>(() =>
+    templates.some((item) => item.id === requestedTemplate) ? requestedTemplate : null,
+  )
+  const activeTemplate = templates.find((item) => item.id === templateId && item.strategy_type === strategyType) ?? null
+
+  /** Điền giá trị của mẫu vào form (không đổi mẫu đang chọn). */
+  const fillFromTemplate = useCallback(
+    (template: StrategyTemplate) => {
+      const current = getValues()
+      const market = useMarketStore.getState()
+      const templateQuote = market.quotes.find((item) => item.symbol === current.symbol)
+      if (!templateQuote) return
+      const applied = applyTemplate(template, templateQuote, market.sim_seconds)
+      reset({
+        account_no: current.account_no,
+        symbol: current.symbol,
+        side: applied.side ?? current.side,
+        strategy_type: applied.strategy_type,
+        total_qty: applied.total_qty ?? current.total_qty,
+        persistence_mode: current.persistence_mode,
+        valid_to: current.valid_to,
+        ...(applied.values as Partial<OrderFormValues>),
+      })
+    },
+    [getValues, reset],
+  )
+
+  function selectTemplate(template: StrategyTemplate) {
+    fillFromTemplate(template)
+    setTemplateId(template.id)
+  }
+
+  // Có giá của mã rồi thì điền mẫu được yêu cầu qua địa chỉ một lần, rồi bỏ tham số khỏi địa chỉ.
+  const hasQuote = quote !== undefined
+  useEffect(() => {
+    if (!requestedTemplate || !hasQuote) return
+    const template = getTemplate(requestedTemplate)
+    const visible = template && getVisibleTemplates(role, enabledTypes).some((item) => item.id === template.id)
+    if (template && visible) fillFromTemplate(template)
+    setSearchParams((params) => {
+      params.delete('mau')
+      return params
+    }, { replace: true })
+    // enabledTypes đổi tham chiếu mỗi lần vẽ; chỉ cần chạy lại khi có yêu cầu mẫu mới.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedTemplate, hasQuote, role, fillFromTemplate, setSearchParams])
+
   // Loại lệnh đang chọn vừa bị vận hành tắt: chuyển sang loại đầu tiên còn bật.
   useEffect(() => {
     if (orderRules && !orderRules.enabledStrategies.includes(getValues('strategy_type'))) {
@@ -97,6 +155,17 @@ export function OrderTicket() {
   useEffect(() => {
     setValue('symbol', selectedSymbol)
   }, [selectedSymbol, setValue])
+
+  // Bấm một mức trên sổ lệnh: điền vào ô giá giới hạn (hoặc ô giá đầu tiên của loại lệnh). Form vẫn kiểm tra như cũ.
+  // Bỏ qua lần bấm đã có trước khi ticket được mở, để quay lại màn không bị điền giá cũ.
+  const pickedPrice = useUiStore((state) => state.pickedPrice)
+  const [initialPickNonce] = useState(() => useUiStore.getState().pickedPrice?.nonce ?? 0)
+  useEffect(() => {
+    if (!pickedPrice || pickedPrice.nonce <= initialPickNonce) return
+    const fields = STRATEGIES[getValues('strategy_type')].fields
+    const target = fields.find((field) => field.name === 'limit_price') ?? fields.find((field) => field.kind === 'price')
+    if (target) setValue(target.name, pickedPrice.price, { shouldValidate: true, shouldDirty: true })
+  }, [pickedPrice, initialPickNonce, getValues, setValue])
 
   // Các ô phụ thuộc nhau: đổi chiều, mã hay khối lượng có thể làm ô khác đúng hoặc sai.
   // Nên kiểm tra lại mọi ô đã nhập, nhưng không báo "vui lòng nhập" ở ô chưa đụng tới.
@@ -118,8 +187,11 @@ export function OrderTicket() {
 
   function confirmOrder() {
     if (!pendingValues) return
-    createOrder.mutate(toCreateOrderRequest(pendingValues, crypto.randomUUID()), {
-      onSuccess: () => reset(buildDefaults(pendingValues.account_no, selectedSymbol, defaultStrategy)),
+    createOrder.mutate(toCreateOrderRequest(pendingValues, crypto.randomUUID(), { templateId: activeTemplate?.id }), {
+      onSuccess: () => {
+        reset(buildDefaults(pendingValues.account_no, selectedSymbol, defaultStrategy))
+        setTemplateId(null)
+      },
     })
   }
 
@@ -135,6 +207,18 @@ export function OrderTicket() {
           className="flex flex-col gap-4"
           onSubmit={handleSubmit((submitted) => setPendingValues(submitted))}
         >
+          <TemplateStrip
+            templates={templates}
+            activeId={activeTemplate?.id ?? null}
+            onSelect={selectTemplate}
+            onClear={() => setTemplateId(null)}
+          />
+          {activeTemplate && (
+            <p role="status" className="bg-primary/10 rounded-md p-2 text-xs" data-demo-id="template-active">
+              Đã điền theo mẫu <span className="font-medium">{activeTemplate.name}</span>. Kiểm tra lại các ô rồi bấm Đặt lệnh.
+              {activeTemplate.hint && <span className="text-muted-foreground block">{activeTemplate.hint}</span>}
+            </p>
+          )}
           <Controller
             control={control}
             name="side"

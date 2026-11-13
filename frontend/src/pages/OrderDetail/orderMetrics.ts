@@ -1,5 +1,4 @@
-import { STRATEGIES } from '@/config/strategies'
-import { formatNumber } from '@/lib/format'
+import { formatStrategyFieldValue, STRATEGIES } from '@/config/strategies'
 import type { ChildOrder, Execution, MarketSnapshot, ParentOrder, StrategyParameter } from '@/types'
 
 /**
@@ -60,8 +59,7 @@ export function getStrategyParamRows(order: ParentOrder, parameters: StrategyPar
       field.name === 'limit_price'
         ? order.limit_price
         : parameters.find((parameter) => parameter.parameter_code === field.name)?.parameter_value
-    if (raw === null || raw === undefined) return { label: field.label, value: '—' }
-    const text = field.kind === 'time' ? String(raw) : formatNumber(Number(raw))
-    return { label: field.label, value: field.unit ? `${text} ${field.unit}` : text }
+    if (raw === null || raw === undefined) return { label: field.label, value: field.optional ? 'Mặc định' : '—' }
+    return { label: field.label, value: formatStrategyFieldValue(field, raw) }
   })
 }

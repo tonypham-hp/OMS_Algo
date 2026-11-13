@@ -4,6 +4,7 @@ import { SessionLockNotice } from '@/components/SessionLockNotice'
 import { ErrorState, LoadingState } from '@/components/states'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { SIDE_LABELS, STRATEGIES } from '@/config/strategies'
+import { getTemplate } from '@/config/strategyTemplates'
 import { useOrder, useOrderDetail } from '@/hooks/useOrders'
 import { cn } from '@/lib/utils'
 import { ChildOrderTimeline } from './ChildOrderTimeline'
@@ -12,6 +13,8 @@ import { OrderDetailActions } from './OrderDetailActions'
 import { OrderEventLog } from './OrderEventLog'
 import { OrderProgressChart } from './OrderProgressChart'
 import { ExecQualityCard } from './ExecQualityCard'
+import { HuntSweepPanel } from './HuntSweepPanel'
+import { OrderBookCard } from './OrderBookCard'
 import { OrderSummary } from './OrderSummary'
 import { PausedOrderBanner } from './PausedOrderBanner'
 
@@ -55,6 +58,11 @@ export default function OrderDetail() {
                     {SIDE_LABELS[order.data.side]}
                   </span>
                   <span>{STRATEGIES[order.data.strategy_type].label}</span>
+                  {getTemplate(order.data.template_id) && (
+                    <span className="text-muted-foreground text-sm" data-demo-id="order-template">
+                      Mẫu: {getTemplate(order.data.template_id)?.name}
+                    </span>
+                  )}
                   <span data-demo-id="order-status" className="inline-flex">
                     <OrderStatusBadge status={order.data.status} />
                   </span>
@@ -69,7 +77,17 @@ export default function OrderDetail() {
 
       {order.data && detail.data && (
         <>
-          <ExecQualityCard order={order.data} detail={detail.data} />
+          {order.data.strategy_type === 'HUNT' ? (
+            <>
+              <HuntSweepPanel order={order.data} detail={detail.data} />
+              <ExecQualityCard order={order.data} detail={detail.data} />
+            </>
+          ) : (
+            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <ExecQualityCard order={order.data} detail={detail.data} />
+              <OrderBookCard symbol={order.data.symbol} />
+            </div>
+          )}
           <div className="grid items-start gap-4 lg:grid-cols-[3fr_2fr]">
             <Card className="min-w-0">
               <CardHeader>

@@ -1,6 +1,6 @@
 # Bảng phủ test TC-E2E
 
-Đối chiếu [TC-E2E.md](TC-E2E.md) với test tự động của frontend (Vitest), cập nhật 12/11/2026 (Đợt 3: HUNT quét mức, Stop Limit chia phần, Chế độ Demo).
+Đối chiếu [TC-E2E.md](TC-E2E.md) với test tự động của frontend (Vitest), cập nhật 13/11/2026 (Đợt 3: HUNT quét mức, Stop Limit chia phần, Chế độ Demo; Đợt 4: sổ lệnh 3 mức, HUNT khớp theo sổ lệnh — `src/mocks/depth.test.ts`, `src/mocks/engine.depth.test.ts`, `src/utils/huntSweep.test.ts`, mẫu chiến lược — `src/utils/strategyTemplates.test.ts`).
 
 ## Tóm tắt
 

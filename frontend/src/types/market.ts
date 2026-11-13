@@ -26,6 +26,10 @@ export interface SymbolQuote {
 export interface BookLevel {
   price: number
   qty: number
+  /** KL lệnh của mình vừa lấy ở mức này (cộng dồn), để hiển thị số âm. Tự xóa sau vài nhịp. */
+  own_taken?: number
+  /** Số nhịp đã giữ dấu `own_taken`. */
+  own_taken_age?: number
 }
 
 /** Sổ lệnh: bids giảm dần từ giá mua tốt nhất, asks tăng dần từ giá bán tốt nhất. */

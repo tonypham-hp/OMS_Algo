@@ -12,7 +12,7 @@ VWAP, POV, HUNT). OMS tự chia thành lệnh con, gửi xuống Core, theo dõi
 - **Giới thiệu và đăng nhập** (`/`, `/login`): một màn hai cột. Bên trái giới thiệu sản phẩm, bên phải chọn tài khoản
   demo. Đã đăng nhập thì vào thẳng Trung tâm lệnh.
 - **Khung ứng dụng** cho mọi trang sau đăng nhập. Thanh bên có menu theo vai trò, thu gọn được còn icon và nhớ lựa chọn
-  sau khi tải lại trang. Các mục Mẫu chiến lược, Lịch sử và đối soát đang khóa, ghi "Sắp có".
+  sau khi tải lại trang. Mục Lịch sử và đối soát đang khóa, ghi "Sắp có".
   Thanh trên có phiên HOSE và giờ giả lập, nút tua x1/x10/x60, breadcrumb, nhãn "Dữ liệu demo · cập nhật", chuông
   thông báo và tài khoản.
 - **Trung tâm lệnh** (`/trung-tam`, trang mặc định):
@@ -33,6 +33,19 @@ VWAP, POV, HUNT). OMS tự chia thành lệnh con, gửi xuống Core, theo dõi
   - Nút "Xuất Excel" tải file CSV mở được bằng Excel tiếng Việt.
   - Chi tiết lệnh có thẻ "Hiệu quả" dùng cùng công thức.
   - Công thức: [docs/frontend-spec.md](docs/frontend-spec.md), mục 12.
+- **Sổ lệnh 3 mức** (Đợt 4): 3 mức mua, 3 mức bán theo đúng luật HOSE.
+  - Có ở màn Đặt lệnh (bấm một mức để điền giá vào lệnh) và ở Chi tiết lệnh.
+  - Ô đổi giá trị nháy màu; KL lệnh của bạn vừa lấy hiện số âm màu vàng.
+  - Trong ATO, ATC hiện giá dự kiến khớp và ghi rõ là phiên khớp lệnh định kỳ.
+- **HUNT quét từng mức** (Đợt 4): lệnh HUNT quét lần lượt từng mức giá, không vượt giá tối đa (mua) hoặc thấp hơn giá
+  tối thiểu (bán).
+  - Chi tiết lệnh hiện từng bước, ví dụ "Quét mức 27.650: lấy 6.400, còn thiếu 1.600", kèm trạng thái và giá bình quân.
+  - Mức đang quét được viền nhấn trên sổ lệnh; nút "Xem lại" phát lại các bước.
+- **Mẫu chiến lược** (Đợt 4, `/mau-chien-luoc`): 6 mẫu một chạm, gồm Mua âm thầm, Bán êm trong 2 giờ, Theo nhịp thị
+  trường, Bám VWAP cả phiên, Mua nhanh khi có thanh khoản, Cắt lỗ tự động.
+  - Bấm thẻ mẫu trên ticket hoặc "Dùng mẫu này" thì form được điền sẵn; bạn vẫn sửa được mọi ô và form vẫn kiểm tra như
+    cũ.
+  - Báo cáo hiệu quả ghi tên mẫu của lệnh.
 - **Chế độ Demo**: app tự chạy 6 kịch bản E2E (Iceberg, Stop → Iceberg, POV, HUNT, Core mất ACK, OMS sập).
   - Mỗi bước có chú thích, tô sáng phần tử liên quan và tự chấm điều kiện kiểm tra.
   - Chạy trên dữ liệu riêng; thoát thì dữ liệu của bạn trở về nguyên vẹn.
@@ -41,7 +54,9 @@ VWAP, POV, HUNT). OMS tự chia thành lệnh con, gửi xuống Core, theo dõi
 
 Ảnh chụp ở 1440px và 1366px: [docs/screenshots/dot1/](docs/screenshots/dot1/) (khung ứng dụng, Trung tâm lệnh),
 [docs/screenshots/dot2/](docs/screenshots/dot2/) (báo cáo hiệu quả, thẻ Hiệu quả ở chi tiết lệnh),
-[docs/screenshots/dot3/](docs/screenshots/dot3/) (Chế độ Demo, ảnh 1440px).
+[docs/screenshots/dot3/](docs/screenshots/dot3/) (Chế độ Demo, ảnh 1440px),
+[docs/screenshots/dot4/](docs/screenshots/dot4/) (Đặt lệnh có dải mẫu và sổ lệnh 3 mức, Chi tiết lệnh HUNT có khung quét
+từng mức, trang Mẫu chiến lược).
 
 ## Cấu trúc thư mục
 
@@ -133,12 +148,13 @@ khi cần người duyệt thứ hai.
 | # | Đường dẫn | Màn hình | Nội dung chính |
 |---|---|---|---|
 | 0 | `/trung-tam` | Trung tâm lệnh | KPI, lệnh cần chú ý, hoạt động gần nhất. Trang mặc định sau đăng nhập |
-| 1 | `/dat-lenh` | Đặt lệnh nâng cao | Bảng giá VN30 thu gọn, ticket đặt 11 loại lệnh, kiểm tra luật HOSE ngay khi nhập |
+| 1 | `/dat-lenh` | Đặt lệnh nâng cao | Bảng giá VN30 thu gọn, sổ lệnh 3 mức, dải mẫu một chạm, ticket đặt 11 loại lệnh, kiểm tra luật HOSE ngay khi nhập |
 | 2 | `/so-lenh` | Sổ lệnh nâng cao | Bảng lệnh cha, tiến độ, trạng thái, lọc; Sửa, Hủy, Tạm dừng, Tiếp tục |
-| 3 | `/so-lenh/:id` | Chi tiết lệnh | Lệnh con, khớp, biểu đồ thực hiện so với kế hoạch, giá bình quân so với arrival, nhật ký |
+| 3 | `/so-lenh/:id` | Chi tiết lệnh | Lệnh con, khớp, biểu đồ thực hiện so với kế hoạch, giá bình quân so với arrival, sổ lệnh 3 mức, khung HUNT quét từng mức, nhật ký |
 | 4 | `/van-hanh` | Giám sát hệ thống | Cảnh báo, lệnh hệ thống tạm dừng, kill switch, nút bơm lỗi demo |
 | 5 | `/cau-hinh` | Cấu hình chiến lược | Tham số hệ thống, đổi theo maker-checker, lịch sử thay đổi |
-| 6 | `/bao-cao/hieu-qua` | Hiệu quả thực hiện | So giá BQ với arrival và VWAP, tỷ lệ tham gia, biểu đồ theo chiến lược, xuất CSV |
+| 6 | `/bao-cao/hieu-qua` | Hiệu quả thực hiện | So giá BQ với arrival và VWAP, tỷ lệ tham gia, biểu đồ theo chiến lược, tên mẫu đã dùng, xuất CSV |
+| 7 | `/mau-chien-luoc` | Mẫu chiến lược | Lưới thẻ mẫu, tham số mặc định, "Phù hợp khi…", "Dùng mẫu này" mở Đặt lệnh đã điền sẵn |
 
 ## Tài liệu
 

@@ -43,6 +43,7 @@ export function createDemoEnv(options: { startDate?: Date; account?: string } = 
   simulator.onTrades((trades) => tape.record(trades))
   simulator.subscribe((state) => {
     engine.onMarketTick(state)
+    engine.drainDepthTakes().forEach((take) => simulator.consumeDepth(take.symbol, take.side, take.price, take.qty))
     // Lần khớp của OMS cũng là KL thị trường (giống runtime của app); ghi theo mã khớp để không ghi trùng.
     const fresh = engine.listExecutions().filter((execution) => !recorded.has(execution.exchange_match_id))
     if (fresh.length === 0) return

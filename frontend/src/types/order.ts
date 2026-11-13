@@ -54,6 +54,8 @@ export interface ParentOrder {
   valid_from: string
   valid_to: string
   persistence_mode: PersistenceMode
+  /** Ngoài ERD: mẫu chiến lược đã dùng khi đặt lệnh (tùy chọn). */
+  template_id?: string
   version: number
   created_at: string
   updated_at: string
@@ -152,6 +154,8 @@ export interface CreateOrderRequest {
   persistence_mode: PersistenceMode
   valid_to: string | null
   parameters: StrategyParameter[]
+  /** Ngoài ERD: mẫu chiến lược đã dùng để điền sẵn form (tùy chọn). */
+  template_id?: string
 }
 
 export interface CreateOrderResponse {

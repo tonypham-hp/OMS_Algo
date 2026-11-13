@@ -17,7 +17,9 @@ function toCell(row: ExecQualityRow, key: ReportSortKey): CsvCell {
     case 'side':
       return SIDE_LABELS[row.order.side]
     case 'strategy_type':
-      return STRATEGIES[row.order.strategy_type].label
+      return row.templateName
+        ? `${STRATEGIES[row.order.strategy_type].label} (mẫu: ${row.templateName})`
+        : STRATEGIES[row.order.strategy_type].label
     case 'avgPrice':
     case 'vwap':
       return toCsvNumber(row[key])

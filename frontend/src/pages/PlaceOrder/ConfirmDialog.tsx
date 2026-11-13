@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+import { LoadingState } from '@/components/states'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -9,8 +11,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { PARENT_STATUS_STYLES } from '@/config/orderStatus'
-import { PERSISTENCE_LABELS, SIDE_LABELS, STRATEGIES } from '@/config/strategies'
+import { formatStrategyFieldValue, PERSISTENCE_LABELS, SIDE_LABELS, STRATEGIES } from '@/config/strategies'
 import { formatDate, formatNumber } from '@/lib/format'
+import { useOrderDetail } from '@/hooks/useOrders'
+import { HuntSweepPanel } from '@/pages/OrderDetail/HuntSweepPanel'
 import type { ParentOrder } from '@/types'
 import type { OrderFormValues } from './orderSchema'
 
@@ -22,6 +26,14 @@ interface ConfirmDialogProps {
   errorMessage: string | undefined
   onConfirm: () => void
   onClose: () => void
+}
+
+/** Ngay sau khi đặt lệnh HUNT: hiện khung quét từng mức, tự cập nhật khi giá về mức săn. */
+function CreatedHuntSweep({ order }: { order: ParentOrder }) {
+  const detail = useOrderDetail(order.parent_order_id)
+  if (detail.isPending) return <LoadingState label="Đang tải tiến trình HUNT…" />
+  if (!detail.data) return null
+  return <HuntSweepPanel order={order} detail={detail.data} compact />
 }
 
 function buildSummary(values: OrderFormValues): Array<[string, string]> {
@@ -37,11 +49,7 @@ function buildSummary(values: OrderFormValues): Array<[string, string]> {
     ['Chiều', SIDE_LABELS[values.side]],
     ['Loại lệnh', strategy.label],
     ['Khối lượng', `${formatNumber(values.total_qty ?? 0)} CP`],
-    ...strategy.fields.map((field): [string, string] => {
-      const value = values[field.name]
-      const text = typeof value === 'number' ? formatNumber(value) : (value ?? '')
-      return [field.label, field.unit ? `${text} ${field.unit}` : text]
-    }),
+    ...strategy.fields.map((field): [string, string] => [field.label, formatStrategyFieldValue(field, values[field.name])]),
     ['Hiệu lực', validity],
   ]
 }
@@ -69,7 +77,11 @@ export function ConfirmDialog({
                 {PARENT_STATUS_STYLES[createdOrder.status].label}
               </Badge>
             </div>
+            {createdOrder.strategy_type === 'HUNT' && <CreatedHuntSweep order={createdOrder} />}
             <DialogFooter>
+              <Button variant="outline" asChild>
+                <Link to={`/so-lenh/${createdOrder.parent_order_id}`}>Xem chi tiết lệnh</Link>
+              </Button>
               <Button onClick={onClose}>Đóng</Button>
             </DialogFooter>
           </>
