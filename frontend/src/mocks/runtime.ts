@@ -101,6 +101,8 @@ marketSimulator.onTrades((trades) => marketTape.record(trades))
 let ticksSinceSave = 0
 marketSimulator.subscribe((state) => {
   orderEngine.onMarketTick(state)
+  // Lệnh quét của OMS lấy thanh khoản ở sổ lệnh: trừ KL đó khỏi sổ lệnh của thị trường.
+  orderEngine.drainDepthTakes().forEach((take) => marketSimulator.consumeDepth(take.symbol, take.side, take.price, take.qty))
   recordNewExecutions()
   ticksSinceSave += 1
   if (ticksSinceSave >= SAVE_EVERY_TICKS) {

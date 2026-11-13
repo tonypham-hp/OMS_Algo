@@ -9,7 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { PARENT_STATUS_STYLES } from '@/config/orderStatus'
-import { PERSISTENCE_LABELS, SIDE_LABELS, STRATEGIES } from '@/config/strategies'
+import { formatStrategyFieldValue, PERSISTENCE_LABELS, SIDE_LABELS, STRATEGIES } from '@/config/strategies'
 import { formatDate, formatNumber } from '@/lib/format'
 import type { ParentOrder } from '@/types'
 import type { OrderFormValues } from './orderSchema'
@@ -37,11 +37,7 @@ function buildSummary(values: OrderFormValues): Array<[string, string]> {
     ['Chiều', SIDE_LABELS[values.side]],
     ['Loại lệnh', strategy.label],
     ['Khối lượng', `${formatNumber(values.total_qty ?? 0)} CP`],
-    ...strategy.fields.map((field): [string, string] => {
-      const value = values[field.name]
-      const text = typeof value === 'number' ? formatNumber(value) : (value ?? '')
-      return [field.label, field.unit ? `${text} ${field.unit}` : text]
-    }),
+    ...strategy.fields.map((field): [string, string] => [field.label, formatStrategyFieldValue(field, values[field.name])]),
     ['Hiệu lực', validity],
   ]
 }

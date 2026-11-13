@@ -49,7 +49,16 @@ import {
   type OrderAction,
 } from '@/utils/orderActions'
 import { getTwapTarget, getVwapTarget } from '@/utils/schedule'
-import { getBookLevels, isWithinLimit } from './depth'
+import { countLevelsInLimit, planHuntSweep } from '@/utils/huntSweep'
+import { type BookSide, getBookLevels, oppositeBookSide } from './depth'
+
+/** Một lần lệnh của OMS lấy thanh khoản ở một mức của sổ lệnh; runtime trừ KL này khỏi sổ lệnh của bộ giả lập. */
+export interface DepthTake {
+  symbol: string
+  side: BookSide
+  price: number
+  qty: number
+}
 
 const LOT = QTY_LOT_SIZE
 const SECONDS_PER_DAY = 86_400
@@ -136,6 +145,8 @@ interface ParentRuntime {
   rejectStreak: number
   /** HUNT có `max_levels`: đã quét sổ lệnh xong. Trường tùy chọn để bản lưu cũ vẫn đọc được. */
   huntSwept?: boolean
+  /** HUNT: các lệnh con quét sổ lệnh, khớp theo KL của mức giá thay vì theo giá khớp gần nhất. */
+  sweepChildIds?: string[]
 }
 
 /** Lệnh con đã gửi, đang chờ ACK (SENDING). Hết thời gian chờ thì chuyển UNKNOWN. */
@@ -222,6 +233,10 @@ export function createOrderEngine(options: EngineOptions = {}) {
   let eventSequence = 0
   let matchSequence = 0
   let coreSequence = 0
+  /** KL lệnh của OMS đã lấy ở sổ lệnh, chờ runtime trừ khỏi bộ giả lập. */
+  let depthTakes: DepthTake[] = []
+  /** KL đã lấy ở từng mức trong nhịp hiện tại, để nhiều lệnh con cùng mức không lấy quá KL đang có. */
+  const tickTakes = new Map<string, number>()
 
   // ===== Đọc dữ liệu =====
 
@@ -306,7 +321,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
     oldValue: string | null,
     newValue: string | null,
     userId = 'SYSTEM',
-    extra?: Pick<OrderEvent, 'fill_detail' | 'reason'>,
+    extra?: Pick<OrderEvent, 'fill_detail' | 'reason' | 'sweep_plan' | 'template_id'>,
   ) {
     eventSequence += 1
     events.push({
@@ -364,8 +379,15 @@ export function createOrderEngine(options: EngineOptions = {}) {
     notify(parent.parent_order_id, 'PARENT_PAUSED', `Lệnh ${parent.parent_order_id} tạm dừng: ${message}`)
   }
 
-  function createChild(parent: ParentOrder, side: Side, orderType: ChildOrderType, price: number | null, quantity: number) {
-    if (quantity <= 0) return
+  /** Sinh lệnh con; trả về mã lệnh con, hoặc undefined nếu KL không dương. */
+  function createChild(
+    parent: ParentOrder,
+    side: Side,
+    orderType: ChildOrderType,
+    price: number | null,
+    quantity: number,
+  ): string | undefined {
+    if (quantity <= 0) return undefined
     // MTL không hợp lệ trong ATO, ATC: lệnh không có giá ở hai phiên này là lệnh ATO, ATC.
     const session = market?.session
     const finalType = orderType === 'MTL' && session && isAuctionSession(session) ? (session as ChildOrderType) : orderType
@@ -389,6 +411,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
       sent_at: null,
     })
     logEvent(parent.parent_order_id, childId, 'CHILD_CREATE', null, 'CREATED')
+    return childId
   }
 
   /** Hủy lệnh con đang chờ. Child SENDING, UNKNOWN giữ nguyên vì chưa biết Core đang giữ gì. */
@@ -645,9 +668,35 @@ export function createOrderEngine(options: EngineOptions = {}) {
     return childrenOf(parent).filter((child) => child.status === 'ACKNOWLEDGED' || child.status === 'PARTIAL_FILLED')
   }
 
+  /**
+   * Lệnh con quét của HUNT lấy thanh khoản ngay tại mức giá của nó trong sổ lệnh, tối đa KL đang có ở mức đó
+   * (trừ phần lệnh khác đã lấy trong nhịp này). Mức không còn trong sổ lệnh thì chờ như một lệnh LO.
+   */
+  function fillSweepChild(parent: ParentOrder, child: ChildOrder, quote: SymbolQuote) {
+    if (!quote.depth || child.price === null) return
+    const side = oppositeBookSide(child.side)
+    const level = quote.depth[side].find((item) => item.price === child.price)
+    if (!level) return
+    const key = `${quote.symbol}|${side}|${level.price}`
+    const available = level.qty - (tickTakes.get(key) ?? 0)
+    const qty = Math.min(child.quantity - child.filled_qty, available)
+    if (qty <= 0) return
+    const before = child.filled_qty
+    fillChild(child, level.price, qty)
+    const taken = child.filled_qty - before
+    if (taken <= 0) return
+    tickTakes.set(key, (tickTakes.get(key) ?? 0) + taken)
+    depthTakes.push({ symbol: parent.symbol, side, price: level.price, qty: taken })
+  }
+
   /** Phiên liên tục: khớp dần từng phần. */
   function fillChildren(parent: ParentOrder, quote: SymbolQuote) {
+    const sweepIds = quote.depth ? runtimeOf(parent).sweepChildIds : undefined
     for (const child of getOpenChildren(parent)) {
+      if (sweepIds?.includes(child.child_order_id)) {
+        fillSweepChild(parent, child, quote)
+        continue
+      }
       if (!isMarketable(child, quote.last_price)) continue
       fillChild(child, quote.last_price, (1 + Math.floor(random() * MAX_FILL_LOTS_PER_TICK)) * LOT)
     }
@@ -813,13 +862,37 @@ export function createOrderEngine(options: EngineOptions = {}) {
     const runtime = runtimeOf(parent)
 
     if (!runtime.huntSwept) {
-      const levels = getBookLevels(quote, parent.side)
-        .slice(0, getNumberParam(parent, 'max_levels'))
-        .filter((level) => isWithinLimit(parent.side, level.price, parent.limit_price))
-      if (levels.length === 0) return
-      for (const level of levels) createChild(parent, parent.side, 'LO', level.price, Math.min(level.qty, allowedOf(parent)))
+      const plan = planHuntSweep({
+        side: parent.side,
+        levels: getBookLevels(quote, parent.side),
+        qty: allowedOf(parent),
+        limitPrice: parent.limit_price,
+        maxLevels: getNumberParam(parent, 'max_levels'),
+        remainderPolicy: getNumberParam(parent, 'remainder_passive') === 1 ? 'WAIT' : 'CANCEL',
+      })
+      const inLimit = plan.steps.filter((step) => step.status !== 'OUT_OF_LIMIT')
+      if (inLimit.length === 0) return
+      const sweepChildIds: string[] = []
+      for (const step of plan.steps) {
+        if (step.status !== 'TAKE') continue
+        const created = createChild(parent, parent.side, 'LO', step.price, step.take)
+        if (created) {
+          step.child_order_id = created
+          sweepChildIds.push(created)
+        }
+      }
       runtime.huntSwept = true
-      logEvent(parent.parent_order_id, null, 'DECISION', `HUNT_SWEEP:${levels.length}`, `LEVELS:${levels.map((level) => level.price).join(',')}`)
+      runtime.sweepChildIds = sweepChildIds
+      if (quote.depth) plan.book = { bids: quote.depth.bids.map(({ price, qty }) => ({ price, qty })), asks: quote.depth.asks.map(({ price, qty }) => ({ price, qty })) }
+      logEvent(
+        parent.parent_order_id,
+        null,
+        'DECISION',
+        `HUNT_SWEEP:${countLevelsInLimit(plan)}`,
+        `LEVELS:${inLimit.map((step) => step.price).join(',')}`,
+        'SYSTEM',
+        { sweep_plan: plan },
+      )
       return
     }
 
@@ -985,6 +1058,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
     // Đổi tốc độ cũng phát lại trạng thái, nhưng đồng hồ chưa nhích thì chưa phải một nhịp mới.
     const isSameMoment = market?.sim_seconds === state.sim_seconds && market?.trading_date === state.trading_date
     market = state
+    tickTakes.clear()
     // Ba việc này phải chạy cả khi đồng hồ đứng yên (đã tới 15:00), nếu không lệnh sẽ kẹt mãi.
     // Đối soát trước, chờ ACK sau: Child vừa sang UNKNOWN ở nhịp này bắt đầu đếm đối soát từ nhịp sau.
     processRecoveries()
@@ -1113,6 +1187,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
       valid_from: now,
       valid_to: request.valid_to ?? today,
       persistence_mode: request.persistence_mode,
+      ...(request.template_id ? { template_id: request.template_id } : {}),
       version: 1,
       created_at: now,
       updated_at: now,
@@ -1130,7 +1205,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
         arrival_timestamp: now,
       })
     }
-    logEvent(parentOrderId, null, 'CREATE', null, 'ACTIVE', userId)
+    logEvent(parentOrderId, null, 'CREATE', null, 'ACTIVE', userId, request.template_id ? { template_id: request.template_id } : undefined)
     return parent
   }
 
@@ -1580,6 +1655,12 @@ export function createOrderEngine(options: EngineOptions = {}) {
 
   return {
     onMarketTick,
+    /** Lấy và xóa các lần lệnh của OMS lấy thanh khoản ở sổ lệnh từ sau lần gọi trước. */
+    drainDepthTakes: () => {
+      const taken = depthTakes
+      depthTakes = []
+      return taken
+    },
     applyExecution,
     createOrder,
     pauseOrder,

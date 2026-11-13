@@ -41,6 +41,8 @@ const orderFormShape = z.object({
   max_pct: z.number().optional(),
   hunt_price: z.number().optional(),
   max_wait_min: z.number().optional(),
+  max_levels: z.number().optional(),
+  remainder_passive: z.number().optional(),
 })
 
 export type OrderFormValues = z.infer<typeof orderFormShape>
@@ -85,6 +87,10 @@ function validateField(
         return `${field.label} không được lớn hơn khối lượng đặt`
       }
       return null
+    }
+    case 'select': {
+      const allowed = field.options?.some((option) => option.value === value) ?? false
+      return allowed ? null : `${field.label}: lựa chọn không hợp lệ`
     }
     case 'number': {
       const number = value as number
@@ -221,6 +227,7 @@ export function validateOrderValues(
   for (const field of STRATEGIES[values.strategy_type].fields) {
     const value = values[field.name]
     if (isMissing(value)) {
+      if (field.optional) continue
       fieldErrors.push({ field: field.name, message: `Vui lòng nhập ${field.label.toLowerCase()}` })
       continue
     }
@@ -291,11 +298,14 @@ export function createOrderSchema(getContext: () => OrderValidationContext) {
 export function toCreateOrderRequest(
   values: OrderFormValues,
   clientRequestId: string,
+  options: { templateId?: string } = {},
 ): CreateOrderRequest {
   const fields = STRATEGIES[values.strategy_type].fields
   const hasLimitPrice = fields.some((field) => field.name === 'limit_price')
   const parameters: StrategyParameter[] = fields
     .filter((field) => field.name !== 'limit_price')
+    // Ô không bắt buộc mà để trống thì không gửi.
+    .filter((field) => !(field.optional && isMissing(values[field.name])))
     .map((field) => ({
       parameter_code: field.name,
       parameter_value: String(values[field.name]),
@@ -313,6 +323,7 @@ export function toCreateOrderRequest(
     persistence_mode: values.persistence_mode,
     valid_to: values.persistence_mode === 'DAY' ? null : (values.valid_to ?? null),
     parameters,
+    ...(options.templateId ? { template_id: options.templateId } : {}),
   }
 }
 
