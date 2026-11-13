@@ -10,6 +10,7 @@ import { ProtectedRoute } from './ProtectedRoute'
 const Login = lazy(() => import('@/pages/Login'))
 const OrderCenter = lazy(() => import('@/pages/OrderCenter'))
 const PlaceOrder = lazy(() => import('@/pages/PlaceOrder'))
+const StrategyTemplates = lazy(() => import('@/pages/StrategyTemplates'))
 const OrderBook = lazy(() => import('@/pages/OrderBook'))
 const OrderDetail = lazy(() => import('@/pages/OrderDetail'))
 const ExecutionReport = lazy(() => import('@/pages/ExecutionReport'))
@@ -43,7 +44,10 @@ export const routes: RouteObject[] = [
           { path: '/bao-cao/hieu-qua', element: page(ExecutionReport) },
           {
             element: <PermissionRoute permission="place_order" />,
-            children: [{ path: '/dat-lenh', element: page(PlaceOrder) }],
+            children: [
+              { path: '/dat-lenh', element: page(PlaceOrder) },
+              { path: '/mau-chien-luoc', element: page(StrategyTemplates) },
+            ],
           },
           {
             element: <PermissionRoute permission="order_book" />,

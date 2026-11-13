@@ -4,6 +4,7 @@ import { SessionLockNotice } from '@/components/SessionLockNotice'
 import { ErrorState, LoadingState } from '@/components/states'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { SIDE_LABELS, STRATEGIES } from '@/config/strategies'
+import { getTemplate } from '@/config/strategyTemplates'
 import { useOrder, useOrderDetail } from '@/hooks/useOrders'
 import { cn } from '@/lib/utils'
 import { ChildOrderTimeline } from './ChildOrderTimeline'
@@ -57,6 +58,11 @@ export default function OrderDetail() {
                     {SIDE_LABELS[order.data.side]}
                   </span>
                   <span>{STRATEGIES[order.data.strategy_type].label}</span>
+                  {getTemplate(order.data.template_id) && (
+                    <span className="text-muted-foreground text-sm" data-demo-id="order-template">
+                      Mẫu: {getTemplate(order.data.template_id)?.name}
+                    </span>
+                  )}
                   <span data-demo-id="order-status" className="inline-flex">
                     <OrderStatusBadge status={order.data.status} />
                   </span>

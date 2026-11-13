@@ -1,3 +1,4 @@
+import { getTemplate } from '@/config/strategyTemplates'
 import { STRATEGIES } from '@/config/strategies'
 import { formatPercent } from '@/lib/format'
 import { getEntryExecutions } from '@/pages/OrderDetail/orderMetrics'
@@ -115,6 +116,8 @@ export interface ExecQualityRow {
   marketVolume: number | null
   /** Lúc lệnh kết thúc; lệnh chưa kết thúc là null. */
   completedAt: string | null
+  /** Tên mẫu chiến lược đã dùng khi đặt lệnh; null nếu đặt tay. */
+  templateName: string | null
 }
 
 export function getExecQuality(
@@ -146,6 +149,7 @@ export function getExecQuality(
     participation: getParticipation(filledQty, market?.volume ?? null),
     marketVolume: market?.volume ?? null,
     completedAt: isTerminalStatus(order.status) ? order.updated_at : null,
+    templateName: getTemplate(order.template_id)?.name ?? null,
   }
 }
 

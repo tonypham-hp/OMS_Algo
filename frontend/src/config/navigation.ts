@@ -38,7 +38,7 @@ export const NAV_SECTIONS: ReadonlyArray<NavSection> = [
     items: [
       { label: 'Đặt lệnh', icon: SquarePen, path: '/dat-lenh', permission: 'place_order' },
       { label: 'Sổ lệnh', icon: ListOrdered, path: '/so-lenh', permission: 'order_book' },
-      { label: 'Mẫu chiến lược', icon: LayoutTemplate, comingSoon: true },
+      { label: 'Mẫu chiến lược', icon: LayoutTemplate, path: '/mau-chien-luoc', permission: 'place_order' },
     ],
   },
   {
