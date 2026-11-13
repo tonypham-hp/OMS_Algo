@@ -6,10 +6,11 @@ import {
   getDisplayPrice,
   getFloorPrice,
   getSessionAt,
-  getTickSize,
   isAuctionSession,
+  stepPrice,
 } from '@/utils/hose'
 import { DEMO_SYMBOLS } from './data'
+import { type BookSide, consumeLevel, createDepthRandom, generateDepth, rebaseDepth, replenishDepth } from './depth'
 
 const hhmm = (hour: number, minute: number) => hour * 3600 + minute * 60
 
@@ -28,6 +29,8 @@ type TradeListener = (trades: MarketTrade[]) => void
 interface SimulatorOptions {
   /** Truyền hàm random cố định khi test để kết quả lặp lại được. */
   random?: RandomFn
+  /** Seed của dãy random riêng cho sổ lệnh, tách khỏi dãy random của giá để không làm lệch kết quả cũ. */
+  depthSeed?: number
   symbols?: ReadonlyArray<{ symbol: string; ref_price: number }>
   /** Ngày giao dịch đầu tiên. Không truyền thì lấy ngày hiện tại. */
   startDate?: Date
@@ -51,27 +54,10 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max)
 }
 
-/**
- * Đi từng bước một thay vì nhân (tick x số bước), vì bước giá đổi khi qua ngưỡng 10.000 và 50.000.
- * Ví dụ 49.950 + 100 = 50.050 sai bước, còn 49.950 → 50.000 → 50.100 thì đúng.
- */
-function stepPrice(price: number, steps: number): number {
-  let result = price
-  for (let index = 0; index < Math.abs(steps); index += 1) {
-    if (steps > 0) {
-      result += getTickSize(result)
-    } else {
-      // Bước xuống dùng bước giá của mức giá phía dưới: 50.000 xuống 49.950, không phải 49.900.
-      result -= getTickSize(result - 1)
-    }
-  }
-  return result
-}
-
-function createInitialQuote(symbol: string, refPrice: number): SymbolQuote {
+function createInitialQuote(symbol: string, refPrice: number, depthRandom: RandomFn): SymbolQuote {
   const ceiling = getCeilingPrice(refPrice)
   const floor = getFloorPrice(refPrice)
-  return {
+  const quote: SymbolQuote = {
     symbol,
     ref_price: refPrice,
     ceiling_price: ceiling,
@@ -83,6 +69,23 @@ function createInitialQuote(symbol: string, refPrice: number): SymbolQuote {
     bid_price: clamp(stepPrice(refPrice, -1), floor, ceiling),
     ask_price: clamp(stepPrice(refPrice, 1), floor, ceiling),
     tick_direction: 0,
+  }
+  return { ...quote, depth: generateDepth(quote, depthRandom) }
+}
+
+/** Neo lại sổ lệnh theo giá mua, bán tốt nhất mới (hoặc sinh mới nếu chưa có). */
+function withDepth(quote: SymbolQuote, depthRandom: RandomFn): SymbolQuote {
+  const depth = quote.depth ? rebaseDepth(quote.depth, quote, depthRandom) : generateDepth(quote, depthRandom)
+  return { ...quote, depth }
+}
+
+/** Giá mua, bán tốt nhất luôn bằng mức đầu của sổ lệnh (khi phía đó còn mức). */
+function syncBestFromDepth(quote: SymbolQuote): SymbolQuote {
+  if (!quote.depth) return quote
+  return {
+    ...quote,
+    bid_price: quote.depth.bids[0]?.price ?? quote.bid_price,
+    ask_price: quote.depth.asks[0]?.price ?? quote.ask_price,
   }
 }
 
@@ -136,12 +139,13 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
   const symbols = options.symbols ?? DEMO_SYMBOLS
   const listeners = new Set<Listener>()
   const tradeListeners = new Set<TradeListener>()
+  const depthRandom = createDepthRandom(options.depthSeed ?? 20_261_113)
 
   const getStartDate = () => toDateString(options.startDate ?? new Date())
   let tradingDate = getStartDate()
   let simSeconds = START_SECONDS
   let speed: SimSpeed = 1
-  let quotes = symbols.map((item) => createInitialQuote(item.symbol, item.ref_price))
+  let quotes = symbols.map((item) => createInitialQuote(item.symbol, item.ref_price, depthRandom))
   let timer: ReturnType<typeof setInterval> | null = null
   /** Thời gian thật (mili giây) kể từ lần cuối nhận được giá. Cố ý không nhân với tốc độ tua. */
   let quoteAgeMs = 0
@@ -202,9 +206,12 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
     const session = getSessionAt(simSeconds)
     const before = quotes
     quotes = quotes.map((quote) => {
-      if (isAuctionSession(previous) && session !== previous) return matchAuction(quote, random)
+      if (isAuctionSession(previous) && session !== previous) return withDepth(matchAuction(quote, random), depthRandom)
       if (isAuctionSession(session)) return nextIndicative(quote, random)
-      if (session === 'CONTINUOUS') return nextQuote(quote, random)
+      if (session === 'CONTINUOUS') {
+        const next = withDepth(nextQuote(quote, random), depthRandom)
+        return next.depth ? { ...next, depth: replenishDepth(next.depth, depthRandom) } : next
+      }
       return { ...quote, tick_direction: 0 }
     })
     emitTrades(before)
@@ -235,10 +242,27 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
       emitTrades(before)
       notify()
     },
-    /** Đặt sổ lệnh nhiều mức cho mã. Truyền undefined để bỏ, engine dùng sổ lệnh tất định. */
+    /**
+     * Đặt sổ lệnh nhiều mức cho mã; giá mua, bán tốt nhất theo mức đầu của sổ lệnh.
+     * Truyền undefined để bỏ, engine dùng sổ lệnh tất định.
+     */
     setDepth(symbol: string, depth: OrderBookDepth | undefined) {
-      quotes = quotes.map((quote) => (quote.symbol === symbol ? { ...quote, depth } : quote))
+      quotes = quotes.map((quote) => (quote.symbol === symbol ? syncBestFromDepth({ ...quote, depth }) : quote))
       notify()
+    },
+    /**
+     * Lệnh của OMS vừa lấy `qty` ở mức `price` phía `side` của sổ lệnh: trừ KL, dồn mức, cập nhật giá tốt nhất.
+     * Không phát trạng thái (gọi từ trong nhịp của engine); nhịp sau mọi nơi thấy sổ lệnh mới. Trả về KL thực lấy được.
+     */
+    consumeDepth(symbol: string, side: BookSide, price: number, qty: number): number {
+      let taken = 0
+      quotes = quotes.map((quote) => {
+        if (quote.symbol !== symbol || !quote.depth) return quote
+        const result = consumeLevel(quote.depth, side, price, qty, quote, depthRandom)
+        taken = result.taken
+        return syncBestFromDepth({ ...quote, depth: result.depth })
+      })
+      return taken
     },
     /** Nhảy tới giờ giả lập (giây trong ngày), phát trạng thái để engine chạy một nhịp. */
     jumpTo(seconds: number) {
@@ -283,7 +307,7 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
       simSeconds = START_SECONDS
       quoteAgeMs = 0
       feedStale = false
-      quotes = symbols.map((item) => createInitialQuote(item.symbol, item.ref_price))
+      quotes = symbols.map((item) => createInitialQuote(item.symbol, item.ref_price, depthRandom))
       notify()
     },
     /** Sang ngày giao dịch mới: giá đóng cửa hôm trước thành giá tham chiếu hôm nay. */
@@ -291,7 +315,7 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
       tradingDate = getNextTradingDate(tradingDate)
       simSeconds = START_SECONDS
       quoteAgeMs = 0
-      quotes = quotes.map((quote) => createInitialQuote(quote.symbol, quote.last_price))
+      quotes = quotes.map((quote) => createInitialQuote(quote.symbol, quote.last_price, depthRandom))
       notify()
     },
     exportState(): SimulatorState {
@@ -310,7 +334,8 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
       quoteAgeMs = state.quote_age_ms
       feedStale = state.feed_stale
       speed = state.speed
-      quotes = state.quotes
+      // Bản lưu cũ chưa có sổ lệnh: sinh mới.
+      quotes = state.quotes.map((quote) => (quote.depth ? quote : withDepth(quote, depthRandom)))
     },
   }
 }

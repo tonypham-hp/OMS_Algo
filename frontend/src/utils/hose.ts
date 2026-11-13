@@ -19,6 +19,37 @@ export function isValidTick(price: number): boolean {
   return Number.isInteger(price) && price > 0 && price % getTickSize(price) === 0
 }
 
+/**
+ * Dịch giá `steps` bước giá. Đi từng bước một thay vì nhân (tick x số bước), vì bước giá đổi khi qua ngưỡng
+ * 10.000 và 50.000. Ví dụ 49.950 + 100 = 50.050 sai bước, còn 49.950 → 50.000 → 50.100 thì đúng.
+ * Bước xuống dùng bước giá của mức phía dưới: 50.000 xuống 49.950, không phải 49.900.
+ */
+export function stepPrice(price: number, steps: number): number {
+  let result = price
+  for (let index = 0; index < Math.abs(steps); index += 1) {
+    result = steps > 0 ? result + getTickSize(result) : result - getTickSize(result - 1)
+  }
+  return result
+}
+
+/** Làm tròn giá về bước giá gần nhất phía dưới (`down`) hoặc phía trên. */
+export function roundToTick(price: number, direction: 'down' | 'up' = 'down'): number {
+  const tick = getTickSize(price)
+  return direction === 'down' ? Math.floor(price / tick) * tick : Math.ceil(price / tick) * tick
+}
+
+/** Số bước giá từ `from` tới `to` (to > from cho số dương). */
+export function countTicks(from: number, to: number): number {
+  let count = 0
+  let price = from
+  const direction = to >= from ? 1 : -1
+  while (direction > 0 ? price < to : price > to) {
+    price = stepPrice(price, direction)
+    count += direction
+  }
+  return count
+}
+
 /** Giá trần: +7% rồi làm tròn xuống theo bước giá, để không vượt biên độ. */
 export function getCeilingPrice(refPrice: number): number {
   const raw = Math.floor((refPrice * (100 + PRICE_BAND_PCT)) / 100)
