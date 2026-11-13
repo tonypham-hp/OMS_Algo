@@ -98,6 +98,17 @@ export function OrderTicket() {
     setValue('symbol', selectedSymbol)
   }, [selectedSymbol, setValue])
 
+  // Bấm một mức trên sổ lệnh: điền vào ô giá giới hạn (hoặc ô giá đầu tiên của loại lệnh). Form vẫn kiểm tra như cũ.
+  // Bỏ qua lần bấm đã có trước khi ticket được mở, để quay lại màn không bị điền giá cũ.
+  const pickedPrice = useUiStore((state) => state.pickedPrice)
+  const [initialPickNonce] = useState(() => useUiStore.getState().pickedPrice?.nonce ?? 0)
+  useEffect(() => {
+    if (!pickedPrice || pickedPrice.nonce <= initialPickNonce) return
+    const fields = STRATEGIES[getValues('strategy_type')].fields
+    const target = fields.find((field) => field.name === 'limit_price') ?? fields.find((field) => field.kind === 'price')
+    if (target) setValue(target.name, pickedPrice.price, { shouldValidate: true, shouldDirty: true })
+  }, [pickedPrice, initialPickNonce, getValues, setValue])
+
   // Các ô phụ thuộc nhau: đổi chiều, mã hay khối lượng có thể làm ô khác đúng hoặc sai.
   // Nên kiểm tra lại mọi ô đã nhập, nhưng không báo "vui lòng nhập" ở ô chưa đụng tới.
   const valuesKey = JSON.stringify(values)

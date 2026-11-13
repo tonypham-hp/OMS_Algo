@@ -29,11 +29,16 @@ interface UiState {
   /** Thanh bên thu gọn chỉ còn icon. Nhớ qua các lần tải lại trang. */
   sidebarCollapsed: boolean
   toggleSidebar: () => void
+  /** Giá vừa bấm trên sổ lệnh, để ticket điền vào ô giá. `nonce` đổi mỗi lần bấm, kể cả bấm lại cùng giá. */
+  pickedPrice: { price: number; nonce: number } | null
+  pickPrice: (price: number) => void
 }
 
 export const useUiStore = create<UiState>()((set, get) => ({
   selectedSymbol: 'FPT',
   setSelectedSymbol: (selectedSymbol) => set({ selectedSymbol }),
+  pickedPrice: null,
+  pickPrice: (price) => set({ pickedPrice: { price, nonce: (get().pickedPrice?.nonce ?? 0) + 1 } }),
   sidebarCollapsed: readCollapsed(),
   toggleSidebar: () => {
     const sidebarCollapsed = !get().sidebarCollapsed
