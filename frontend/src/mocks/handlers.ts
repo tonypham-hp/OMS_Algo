@@ -167,8 +167,8 @@ export const handlers = [
   ),
 
   http.post('*/api/ops/faults/reject', async ({ request }) => {
-    const { parent_order_id } = (await request.json()) as FaultTargetRequest
-    return handleOps(request, () => orderEngine.injectRejectNext(parent_order_id))
+    const { parent_order_id, reject_code } = (await request.json()) as FaultTargetRequest
+    return handleOps(request, () => orderEngine.injectRejectNext(parent_order_id, reject_code))
   }),
 
   http.post('*/api/ops/faults/timeout-before-core', async ({ request }) => {

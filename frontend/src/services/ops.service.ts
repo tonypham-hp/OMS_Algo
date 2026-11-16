@@ -1,4 +1,4 @@
-import type { ChildOrder, KillSwitchRequest, KillSwitchState, OpsOverview, ParentOrder, ReopenOrderRequest } from '@/types'
+import type { ChildOrder, CoreRejectCode, KillSwitchRequest, KillSwitchState, OpsOverview, ParentOrder, ReopenOrderRequest } from '@/types'
 import { http } from './http'
 
 const injectInto = (path: string) => (parentOrderId: string) =>
@@ -6,7 +6,8 @@ const injectInto = (path: string) => (parentOrderId: string) =>
 
 export const opsService = {
   getOverview: () => http.get<OpsOverview>('/api/ops/overview'),
-  injectReject: injectInto('reject'),
+  injectReject: (parentOrderId: string, rejectCode?: CoreRejectCode) =>
+    http.post<ParentOrder>('/api/ops/faults/reject', { parent_order_id: parentOrderId, reject_code: rejectCode }),
   injectTimeoutBeforeCore: injectInto('timeout-before-core'),
   injectTimeoutAfterCore: injectInto('timeout-after-core'),
   injectDuplicateFill: injectInto('duplicate-fill'),
