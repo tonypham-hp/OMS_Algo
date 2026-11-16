@@ -128,17 +128,26 @@ export function TopBar({ actions }: { actions?: ReactNode }) {
 function PaletteButton() {
   const setPaletteOpen = useUiStore((state) => state.setPaletteOpen)
   const shortcut = paletteShortcutLabel()
+  const label = `Tìm lệnh, mã, màn hình… ${shortcut}`
   return (
+    // Thanh trên đã chật ở 1366–1440px (phiên, nút tua, nhãn dữ liệu, Demo): chữ chỉ hiện từ 1600px, phím tắt từ 1440px,
+    // màn hẹp hơn chỉ còn biểu tượng; tên đọc cho trình đọc màn hình và title vẫn đủ câu.
     <button
       type="button"
       onClick={() => setPaletteOpen(true)}
+      aria-label={label}
+      title={label}
       aria-keyshortcuts="Control+K Meta+K"
       data-demo-id="palette-button"
-      className="border-border-strong text-muted-foreground hover:text-foreground hover:bg-nav-active/60 ml-2 hidden h-8 min-w-0 shrink items-center gap-2 rounded-md border px-2.5 text-sm md:flex"
+      className="border-border-strong text-muted-foreground hover:text-foreground hover:bg-nav-active/60 flex h-8 shrink-0 items-center gap-2 rounded-md border px-2.5 text-sm"
     >
       <Search className="size-4 shrink-0" aria-hidden />
-      <span className="truncate">Tìm lệnh, mã, màn hình…</span>
-      <kbd className="bg-muted ml-auto rounded px-1.5 py-px font-mono text-[11px] whitespace-nowrap">{shortcut}</kbd>
+      <span className="hidden whitespace-nowrap min-[1600px]:inline" aria-hidden>
+        Tìm lệnh, mã, màn hình…
+      </span>
+      <kbd className="bg-muted hidden rounded px-1.5 py-px font-mono text-[11px] whitespace-nowrap min-[1440px]:inline" aria-hidden>
+        {shortcut}
+      </kbd>
     </button>
   )
 }
