@@ -2,11 +2,14 @@ import { lazy, Suspense } from 'react'
 import { Outlet } from 'react-router-dom'
 import { DemoTopBar } from '@/components/demo/DemoTopBar'
 import { NotificationBell } from '@/components/layout/NotificationBell'
+import { CommandPalette } from '@/components/palette/CommandPalette'
+import { usePaletteHotkey } from '@/components/palette/usePaletteHotkey'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import { LAYOUT } from '@/config/theme'
 import { canUseDemo } from '@/demo/access'
 import { useMarketStream } from '@/hooks/useMarketStream'
+import { TourOverlay } from '@/tour/TourOverlay'
 import { useNotificationSync } from '@/hooks/useNotificationSync'
 import { useAuthStore } from '@/store/auth.store'
 import { useDemoStore } from '@/store/demo.store'
@@ -22,6 +25,7 @@ const DEMO_BOTTOM_SPACE = 240
 export function AppLayout() {
   useMarketStream()
   useNotificationSync()
+  usePaletteHotkey()
   const role = useAuthStore((state) => state.user?.role)
   const collapsed = useUiStore((state) => state.sidebarCollapsed)
   const toggleSidebar = useUiStore((state) => state.toggleSidebar)
@@ -51,6 +55,8 @@ export function AppLayout() {
           <Outlet />
         </main>
       </div>
+      <CommandPalette />
+      <TourOverlay />
       {canUseDemo(role) && (
         <Suspense fallback={null}>
           <DemoLayer />

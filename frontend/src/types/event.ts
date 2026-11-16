@@ -13,6 +13,44 @@ export type OrderEventAction =
   | 'DECISION'
   | 'CHILD_UNKNOWN'
 
+/**
+ * Mã lý do chuẩn của một lần đổi trạng thái (ngoài ERD). Backend thật phải trả đúng bộ mã này (docs/backend-gaps.md mục 12).
+ * - Tạm dừng hệ thống: PRICE_OUT_OF_BAND, CHILD_REJECTED_REPEAT, MARKET_DATA_STALE, KILL_SWITCH.
+ * - Người dùng: USER_PAUSE, USER_RESUME, USER_CANCEL, USER_REPRICE; vận hành mở lại: OPS_REOPEN;
+ *   tự chạy lại khi có giá mới: MARKET_DATA_RESUMED.
+ * - Hết hạn: DAY_END (lệnh DAY hết ngày), VALID_TO_REACHED (GTD, MULTI_SESSION tới valid_to), WINDOW_END (hết khung TWAP, VWAP),
+ *   HUNT_MAX_WAIT (hết thời gian chờ săn), HUNT_NO_LEVEL (hết mức trong giới hạn giá, phần còn lại bị hủy).
+ * - Lệnh con: CORE_REJECT (kèm reject_code), ACK_TIMEOUT, RECONCILED_KEPT, RECONCILED_CANCELLED.
+ * - Quyết định của chiến lược: POV_THROTTLED (đã chạm % tham gia tối đa), HUNT_WAITING_LEVEL (chưa có mức trong giới hạn).
+ * - Kết thúc: COMPLETED (khớp đủ).
+ */
+export type EventReasonCode =
+  | 'PRICE_OUT_OF_BAND'
+  | 'CHILD_REJECTED_REPEAT'
+  | 'MARKET_DATA_STALE'
+  | 'MARKET_DATA_RESUMED'
+  | 'KILL_SWITCH'
+  | 'USER_PAUSE'
+  | 'USER_RESUME'
+  | 'USER_CANCEL'
+  | 'USER_REPRICE'
+  | 'OPS_REOPEN'
+  | 'DAY_END'
+  | 'VALID_TO_REACHED'
+  | 'WINDOW_END'
+  | 'HUNT_MAX_WAIT'
+  | 'HUNT_NO_LEVEL'
+  | 'CORE_REJECT'
+  | 'ACK_TIMEOUT'
+  | 'RECONCILED_KEPT'
+  | 'RECONCILED_CANCELLED'
+  | 'POV_THROTTLED'
+  | 'HUNT_WAITING_LEVEL'
+  | 'COMPLETED'
+
+/** Lý do Core từ chối lệnh con (ngoài ERD). */
+export type CoreRejectCode = 'LOT_SIZE' | 'TICK_SIZE' | 'MAX_QTY' | 'PRICE_BAND' | 'OTHER'
+
 /** Chi tiết của một lần khớp. `qty` là KL thực ghi nhận, có thể nhỏ hơn KL trong báo khớp nếu bị cắt bớt. */
 export interface FillDetail {
   qty: number
@@ -75,6 +113,10 @@ export interface OrderEvent {
   sweep_plan?: HuntSweepPlan
   /** Ngoài ERD: mẫu chiến lược đã dùng khi đặt lệnh, chỉ có ở event CREATE. */
   template_id?: string
+  /** Ngoài ERD: mã lý do chuẩn của lần đổi trạng thái này. */
+  reason_code?: EventReasonCode
+  /** Ngoài ERD: lý do Core từ chối, chỉ có khi reason_code = CORE_REJECT. */
+  reject_code?: CoreRejectCode
 }
 
 export type NotificationType =

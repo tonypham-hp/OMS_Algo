@@ -1,18 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { opsService } from '@/services/ops.service'
 import { useAuthStore } from '@/store/auth.store'
+import type { CoreRejectCode } from '@/types'
 
 const OPS_KEY = 'ops'
 const OPS_REFETCH_MS = 1000
 
 export type FaultCommand =
-  | { type: 'reject' | 'timeout-before-core' | 'timeout-after-core' | 'duplicate-fill'; parentOrderId: string }
+  | { type: 'reject'; parentOrderId: string; rejectCode?: CoreRejectCode }
+  | { type: 'timeout-before-core' | 'timeout-after-core' | 'duplicate-fill'; parentOrderId: string }
   | { type: 'market-data'; stale: boolean }
 
 function runFault(command: FaultCommand): Promise<unknown> {
   switch (command.type) {
     case 'reject':
-      return opsService.injectReject(command.parentOrderId)
+      return opsService.injectReject(command.parentOrderId, command.rejectCode)
     case 'timeout-before-core':
       return opsService.injectTimeoutBeforeCore(command.parentOrderId)
     case 'timeout-after-core':

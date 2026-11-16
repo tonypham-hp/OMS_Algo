@@ -273,3 +273,27 @@ HUNT quét mức cần sổ lệnh **tại thời điểm quyết định**. Bac
 | Mẫu riêng của người dùng | Chưa có | Nếu cần "lưu mẫu của tôi", thêm `owner_user_id`; mẫu hệ thống có `owner_user_id = null` |
 | Ghi nhận mẫu đã dùng | `CreateOrderRequest.template_id`, `ParentOrder.template_id`, `OrderEvent.template_id` (event CREATE), đều tùy chọn | Thêm cột `template_id` (nullable) vào ParentOrder; lưu thêm `template_version` nếu mẫu đổi được |
 | Kiểm tra | Mẫu chỉ điền sẵn; lệnh vẫn qua toàn bộ luật HOSE và luật đặt lệnh | Backend không cần tin `template_id`: vẫn kiểm tra đầy đủ tham số như lệnh đặt tay |
+
+## 12. Mã lý do cho mỗi lần đổi trạng thái (Đợt 5)
+
+Phần "Vì sao lệnh này…" ở frontend dựng câu giải thích hoàn toàn từ dữ liệu. Backend phải trả **`reason_code` chuẩn
+cho mỗi lần đổi trạng thái** của lệnh cha và lệnh con, không chỉ một câu thông báo dạng chữ. Hiện engine giả lập của
+frontend tự ghi mã này.
+
+| Trường | Ở đâu | Bắt buộc | Giá trị |
+|---|---|---|---|
+| `reason_code` | `OrderEvent` (mọi event đổi trạng thái) | Có | Bảng mã ở `docs/frontend-spec.md` mục 17 (`EventReasonCode` trong `src/types/event.ts`) |
+| `reject_code` | `OrderEvent` khi `reason_code = CORE_REJECT` | Có | `LOT_SIZE`, `TICK_SIZE`, `MAX_QTY`, `PRICE_BAND`, `OTHER`. Ánh xạ từ mã lỗi của Core |
+| `reason_code` | `ParentOrder` (đã có) | Có khi PAUSED_SYSTEM | Như cũ, phải khớp `reason_code` của event PAUSE gần nhất |
+| Chi tiết giá ngoài biên độ | Event DECISION `PRICE_OUT_OF_BAND` | Có | `old_value` = các giá vi phạm (`limit_price=…`), `new_value` = `floor`, `ceiling` của ngày đó |
+| Chi tiết POV bị chặn | Event DECISION `POV_THROTTLED` | Nên có | `new_value` = `max_pct`, KL được đặt (`cap`), KL thị trường của nhịp đó (`market`). Chỉ ghi lúc bắt đầu bị chặn |
+| Chi tiết HUNT chờ mức | Event DECISION `HUNT_WAITING_LEVEL` | Nên có | `old_value` = giá tốt nhất phía đối ứng lúc xét. Ghi một lần |
+
+Yêu cầu chung:
+- Mã là danh mục đóng. Thêm mã mới thì thêm vào `EventReasonCode` và danh mục `REASONS` của frontend cùng lúc.
+  Gặp mã lạ, frontend hiện "chưa đủ dữ liệu", không đoán.
+- Không đưa số vào mã. Số nằm trong `old_value`, `new_value` hoặc trường riêng, để frontend đối chiếu được.
+- Ngưỡng của cấu hình hệ thống (giá trễ, số lần từ chối liên tiếp) hiện chỉ vận hành đọc được. Muốn khách hàng thấy số
+  ngưỡng trong câu giải thích thì cần API công khai ngưỡng đó, hoặc ghi ngưỡng vào event lúc tạm dừng.
+- Dữ liệu cũ chưa có `reason_code`: frontend suy ra từ trạng thái lệnh con (ví dụ lệnh con UNKNOWN).
+  Không suy ra được thì ghi "chưa đủ dữ liệu".

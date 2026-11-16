@@ -18,10 +18,12 @@ import { STRATEGIES } from '@/config/strategies'
 import { useOrderPriceFields, useRepriceOrder } from '@/hooks/useOrders'
 import { formatNumber } from '@/lib/format'
 import { useMarketStore } from '@/store/market.store'
-import type { OrderPriceField, ParentOrder } from '@/types'
+import type { OrderPriceField, ParentOrder, PriceFieldName } from '@/types'
 import { createRepriceSchema, type RepriceOrderValues } from './repriceOrderSchema'
 
 interface RepriceOrderDialogProps {
+  /** Giá gợi ý điền sẵn (ví dụ giá trần, sàn hợp lệ từ phần giải thích lệnh). Ô không có gợi ý giữ giá cũ. */
+  suggested?: Partial<Record<PriceFieldName, number>>
   order: ParentOrder
   onClose: () => void
 }
@@ -34,13 +36,14 @@ function RepriceForm({
   order,
   fields,
   onClose,
+  suggested,
 }: RepriceOrderDialogProps & { fields: OrderPriceField[] }) {
   const reprice = useRepriceOrder()
   const [schema] = useState(() => createRepriceSchema(fields, () => getQuote(order.symbol)?.ref_price))
   const { control, handleSubmit } = useForm<RepriceOrderValues>({
     resolver: zodResolver(schema),
     mode: 'onChange',
-    defaultValues: Object.fromEntries(fields.map((field) => [field.name, field.value])),
+    defaultValues: Object.fromEntries(fields.map((field) => [field.name, suggested?.[field.name] ?? field.value])),
   })
   const labels = STRATEGIES[order.strategy_type].fields
 
@@ -100,7 +103,7 @@ function RepriceForm({
 }
 
 /** Sửa giá lệnh hệ thống tạm dừng vì giá ngoài biên độ. Sửa hợp lệ thì lệnh tự chạy lại. */
-export function RepriceOrderDialog({ order, onClose }: RepriceOrderDialogProps) {
+export function RepriceOrderDialog({ order, onClose, suggested }: RepriceOrderDialogProps) {
   const priceFields = useOrderPriceFields(order.parent_order_id)
   const quote = getQuote(order.symbol)
 
@@ -117,7 +120,7 @@ export function RepriceOrderDialog({ order, onClose }: RepriceOrderDialogProps) 
         </DialogHeader>
         {priceFields.error && <ErrorState message={priceFields.error.message} />}
         {priceFields.isPending && <LoadingState />}
-        {priceFields.data && <RepriceForm order={order} fields={priceFields.data} onClose={onClose} />}
+        {priceFields.data && <RepriceForm order={order} fields={priceFields.data} onClose={onClose} suggested={suggested} />}
       </DialogContent>
     </Dialog>
   )

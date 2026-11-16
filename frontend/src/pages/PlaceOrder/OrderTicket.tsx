@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Controller, useForm, useWatch, type Resolver } from 'react-hook-form'
 import { useSearchParams } from 'react-router-dom'
 import { FieldError } from '@/components/FieldError'
+import { Term } from '@/components/Term'
 import { NumberInput } from '@/components/NumberInput'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -15,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { STRATEGY_TERMS } from '@/config/glossary'
 import { SESSION_LABELS } from '@/config/hose'
 import { getPriceColor, PRICE_COLOR } from '@/config/priceColors'
 import { PERSISTENCE_LABELS, STRATEGIES, STRATEGY_TYPES } from '@/config/strategies'
@@ -268,7 +270,12 @@ export function OrderTicket() {
               name="strategy_type"
               render={({ field, fieldState }) => (
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="strategy_type">Loại lệnh</Label>
+                  <Label htmlFor="strategy_type">
+                    Loại lệnh
+                    <Term id={STRATEGY_TERMS[field.value]} className="text-muted-foreground font-normal">
+                      ({STRATEGIES[field.value].label} là gì?)
+                    </Term>
+                  </Label>
                   <Select
                     value={field.value}
                     onValueChange={(value) => field.onChange(value as StrategyType)}
@@ -345,7 +352,9 @@ export function OrderTicket() {
             name="total_qty"
             render={({ field, fieldState }) => (
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="total_qty">Khối lượng</Label>
+                <Label htmlFor="total_qty">
+                  <Term id="lot">Khối lượng</Term>
+                </Label>
                 <NumberInput
                   id="total_qty"
                   value={field.value}
@@ -372,7 +381,9 @@ export function OrderTicket() {
                     persistenceMode === 'DAY' && 'col-span-2',
                   )}
                 >
-                  <Label htmlFor="persistence_mode">Hiệu lực</Label>
+                  <Label htmlFor="persistence_mode">
+                    <Term id="persistence-mode">Hiệu lực</Term>
+                  </Label>
                   <Select value={field.value} onValueChange={field.onChange}>
                     <SelectTrigger id="persistence_mode" className="w-full">
                       <SelectValue />

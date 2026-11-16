@@ -4,6 +4,8 @@ import { NumberInput } from '@/components/NumberInput'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Term } from '@/components/Term'
+import { FIELD_TERMS } from '@/config/glossary'
 import type { StrategyField } from '@/config/strategies'
 import type { OrderFormValues } from './orderSchema'
 
@@ -27,7 +29,7 @@ export function StrategyFields({ control, fields }: StrategyFieldsProps) {
           render={({ field, fieldState }) => (
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={item.name}>
-                {item.label}
+                {FIELD_TERMS[item.name] ? <Term id={FIELD_TERMS[item.name]!}>{item.label}</Term> : item.label}
                 {item.optional && <span className="text-muted-foreground font-normal"> (không bắt buộc)</span>}
               </Label>
               {item.kind === 'select' ? (

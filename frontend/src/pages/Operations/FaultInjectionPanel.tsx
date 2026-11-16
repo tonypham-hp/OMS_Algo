@@ -3,9 +3,10 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { CORE_REJECT_CODES, CORE_REJECT_LABELS } from '@/config/coreReject'
 import { SIDE_LABELS, STRATEGIES } from '@/config/strategies'
 import { useInjectFault, type FaultCommand } from '@/hooks/useOperations'
-import type { OpsOverview, ParentOrder, PendingFaultType } from '@/types'
+import type { CoreRejectCode, OpsOverview, ParentOrder, PendingFaultType } from '@/types'
 import { isRunningStatus } from '@/utils/orderActions'
 
 const PENDING_LABELS: Record<PendingFaultType, string> = {
@@ -22,6 +23,7 @@ interface FaultInjectionPanelProps {
 export function FaultInjectionPanel({ orders, overview }: FaultInjectionPanelProps) {
   const inject = useInjectFault()
   const [pickedId, setPickedId] = useState('')
+  const [rejectCode, setRejectCode] = useState<CoreRejectCode>('LOT_SIZE')
   const [done, setDone] = useState<string | null>(null)
 
   const running = orders.filter((order) => isRunningStatus(order.status))
@@ -42,7 +44,11 @@ export function FaultInjectionPanel({ orders, overview }: FaultInjectionPanelPro
       expected: 'Child REJECTED. Từ chối 2 lần liên tiếp thì Parent PAUSED_SYSTEM.',
       button: 'Bơm lỗi',
       needsOrder: true,
-      run: () => run({ type: 'reject', parentOrderId: targetId }, `Đã bơm: Core sẽ từ chối lệnh con tiếp theo của ${targetId}.`),
+      run: () =>
+        run(
+          { type: 'reject', parentOrderId: targetId, rejectCode },
+          `Đã bơm: Core sẽ từ chối lệnh con tiếp theo của ${targetId} (${CORE_REJECT_LABELS[rejectCode]}).`,
+        ),
     },
     {
       code: 'TC-E2E-140',
@@ -101,6 +107,21 @@ export function FaultInjectionPanel({ orders, overview }: FaultInjectionPanelPro
             {running.map((order) => (
               <SelectItem key={order.parent_order_id} value={order.parent_order_id}>
                 {order.parent_order_id} · {order.symbol} · {SIDE_LABELS[order.side]} · {STRATEGIES[order.strategy_type].label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex max-w-xl flex-col gap-1.5">
+        <Label htmlFor="fault_reject_code">Lý do Core từ chối (TC-E2E-130)</Label>
+        <Select value={rejectCode} onValueChange={(value) => setRejectCode(value as CoreRejectCode)}>
+          <SelectTrigger id="fault_reject_code" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {CORE_REJECT_CODES.map((code) => (
+              <SelectItem key={code} value={code}>
+                {CORE_REJECT_LABELS[code]}
               </SelectItem>
             ))}
           </SelectContent>

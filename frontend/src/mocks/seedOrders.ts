@@ -467,7 +467,16 @@ export function createSeedData(now: Date): SeedData {
         sent_at: childAt,
       })
       addEvent({ parent_order_id: id, child_order_id: childId, action: 'CHILD_CREATE', old_value: null, new_value: 'CREATED', event_time: childAt })
-      addEvent({ parent_order_id: id, child_order_id: childId, action: 'CHILD_SEND', old_value: 'CREATED', new_value: child.status, event_time: childAt })
+      addEvent({
+        parent_order_id: id,
+        child_order_id: childId,
+        action: 'CHILD_SEND',
+        old_value: 'CREATED',
+        new_value: child.status,
+        event_time: childAt,
+        // Lệnh con mẫu UNKNOWN: mất ACK từ Core, để phần giải thích lệnh có mã lý do.
+        ...(child.status === 'UNKNOWN' ? { reason_code: 'ACK_TIMEOUT' as const } : {}),
+      })
       if (child.filled > 0) {
         const matchId = `M-SEED-${index + 1}${childIndex + 1}`
         executions.push({

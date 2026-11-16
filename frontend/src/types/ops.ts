@@ -1,3 +1,4 @@
+import type { CoreRejectCode } from './event'
 import type { ParentOrderStatus } from './order'
 
 export type OpsAlertType = 'CHILD_UNKNOWN' | 'CHILD_REJECTED' | 'MARKET_DATA_STALE' | 'PARENT_PAUSED_SYSTEM'
@@ -20,6 +21,8 @@ export type PendingFaultType = 'REJECT' | 'TIMEOUT_BEFORE_CORE' | 'TIMEOUT_AFTER
 export interface PendingFault {
   parent_order_id: string
   type: PendingFaultType
+  /** Chỉ với REJECT: lý do Core sẽ trả về. Không có thì là OTHER. */
+  reject_code?: CoreRejectCode
 }
 
 export interface ReopenOrderRequest {
@@ -28,6 +31,8 @@ export interface ReopenOrderRequest {
 
 export interface FaultTargetRequest {
   parent_order_id: string
+  /** Chỉ với lỗi từ chối. */
+  reject_code?: CoreRejectCode
 }
 
 export interface KillSwitchState {

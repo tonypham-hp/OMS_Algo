@@ -461,3 +461,105 @@ Giữ nguyên quy tắc cũ; Đợt 4 đưa phần tính toán ra hàm thuần v
 - Báo cáo hiệu quả hiện "Mẫu: <tên>" dưới cột Chiến lược. CSV ghi "<chiến lược> (mẫu: <tên>)" trong cùng ô, để không
   đổi bộ cột cũ.
 - Chi tiết lệnh hiện tên mẫu cạnh loại lệnh.
+
+## 17. Giải thích lệnh (Đợt 5)
+
+Mọi câu giải thích sinh bằng **quy tắc** từ dữ liệu có sẵn, không gọi AI và không ước đoán số.
+
+### Mã lý do trong engine
+Mỗi lần đổi trạng thái, `OrderEvent` có thêm `reason_code` (tùy chọn, ngoài ERD). Lệnh con bị Core từ chối có thêm
+`reject_code`: `LOT_SIZE`, `TICK_SIZE`, `MAX_QTY`, `PRICE_BAND`, `OTHER`.
+
+| Nhóm | `reason_code` |
+|---|---|
+| Hệ thống tạm dừng | `PRICE_OUT_OF_BAND`, `CHILD_REJECTED_REPEAT`, `MARKET_DATA_STALE`, `KILL_SWITCH` |
+| Người dùng, vận hành | `USER_PAUSE`, `USER_RESUME`, `USER_CANCEL`, `USER_REPRICE`, `OPS_REOPEN`, `MARKET_DATA_RESUMED` |
+| Hết hạn | `DAY_END`, `VALID_TO_REACHED`, `WINDOW_END`, `HUNT_MAX_WAIT`, `HUNT_NO_LEVEL` |
+| Lệnh con | `CORE_REJECT`, `ACK_TIMEOUT`, `RECONCILED_KEPT`, `RECONCILED_CANCELLED` |
+| Quyết định của chiến lược | `POV_THROTTLED` (ghi một lần lúc bắt đầu bị chặn), `HUNT_WAITING_LEVEL` (ghi một lần) |
+| Kết thúc | `COMPLETED` |
+
+Ô bơm lỗi "Core từ chối" ở màn Vận hành có thêm ô chọn lý do từ chối.
+
+### Hàm thuần (`src/explain/`)
+- `buildExplainContext` (`context.ts`) gom mọi dữ kiện của lệnh vào `ctx`. Số tính thêm (giá trần, sàn, bước giá,
+  khoảng cách tới giá kích hoạt) dùng đúng hàm của `src/utils/hose.ts`. Thiếu dữ kiện thì để `null`.
+- `REASONS` (`reasons.ts`): mỗi mã có `appliesTo`, `title`, `template(ctx)`, `actions[{label, kind, roles?, enabled(ctx)}]`,
+  `sources(ctx)`. Câu không có số viết cứng; mọi số lấy từ `ctx`.
+- `explainOrder(order, children, events, market, role, extra?)` (`explain.ts`) trả
+  `{ code, title, text, short, actions, sources, context }`. Không ném lỗi; thiếu dữ kiện thì câu nói "chưa đủ dữ liệu".
+- `explainChild(child, events)`: câu riêng cho từng lệnh con.
+
+| Mã | Khi nào | Nội dung chính |
+|---|---|---|
+| `PRICE_OUT_OF_BAND` | PAUSED_SYSTEM vì giá ngoài biên độ | Giá nào, tham chiếu, ±7%, trần/sàn đã làm tròn theo bước giá, giá gợi ý |
+| `SESSION_LOCKED` | Lệnh đang chạy trong ATO, ATC | Vì sao nút Sửa, Hủy bị khóa |
+| `STALE_MARKET_DATA` | Giá trễ | Độ trễ, ngưỡng (chỉ vận hành đọc được ngưỡng) |
+| `KILL_SWITCH` | Kill switch | Phạm vi, giờ kích hoạt, phải mở lại thủ công |
+| `CHILD_REJECTED` | Core từ chối | Chu kỳ, số lần liên tiếp, lý do (lô 100, bước giá, vượt 500.000…) |
+| `CHILD_UNKNOWN` | Lệnh con mất ACK | Đang đối soát, vì sao chưa gửi lại |
+| `CONDITION_WAITING` | Stop, TP, OCO, HUNT chưa kích hoạt | Giá kích hoạt, còn cách bao nhiêu đồng và bao nhiêu bước giá |
+| `POV_THROTTLED` | POV chạm % tối đa | KL thị trường, % tối đa, KL được đặt |
+| `HUNT_NO_LEVEL` | HUNT chưa có mức trong giới hạn, hoặc hết mức rồi hủy phần còn lại | Giới hạn giá, giá tốt nhất, phần bị hủy |
+| `PAUSED_USER` | Người dùng tạm dừng | Ai, lúc nào; nút Tiếp tục |
+| `EXPIRED` | Hết hạn | Theo `persistence_mode` và mã hết hạn |
+| `COMPLETED` | Hoàn tất | Giá bình quân, so với arrival theo bps (`getExecQuality`) |
+| `CANCELLED` | Đã hủy, đang hủy | Ai hủy, phần còn lại |
+| `RUNNING`, `NOT_ENOUGH_DATA` | Còn lại | Tiến độ; hoặc "chưa đủ dữ liệu" |
+
+Hành động: `REPRICE` (Sửa giá, điền sẵn giá trần hoặc sàn hợp lệ), `SCROLL_LOG` (Xem nhật ký), `RESUME`,
+`REOPEN` (Mở lại), `RECONCILE` (Đối soát ngay), `OPEN_OPS`. Ba hành động cuối chỉ vai trò Vận hành thấy; "Mở lại" chỉ
+hiện khi lệnh đang PAUSED_SYSTEM.
+
+### Giao diện
+- **ExplainCard** ở đầu Chi tiết lệnh, viền nhấn. Thay khung "Hệ thống đang tạm dừng" cũ và có ở mọi trạng thái:
+  tiêu đề ("Vì sao lệnh này đang dừng?"…), câu giải thích, nút hành động, dòng nhỏ "Dựa trên: …".
+  - "Xem nhật ký" cuộn tới event liên quan, tô sáng và đưa focus vào dòng đó.
+- **Lệnh con**: bấm (hoặc Enter, Space) một dòng ở bảng Lệnh con để hiện câu giải thích riêng ngay bên dưới.
+- **Sổ lệnh, Trung tâm lệnh**: rê chuột hoặc Tab vào badge trạng thái để xem câu rút gọn.
+  - Danh sách không có lệnh con và nhật ký. Lệnh PAUSED_SYSTEM không rõ mã lý do chỉ ghi "Mở Chi tiết lệnh để xem lý do".
+
+## 18. Thuật ngữ (Đợt 5)
+
+- Từ điển `src/config/glossary.ts`: `{ id, term, short, detail, formula?, example?(ctx) }`, 30 thuật ngữ.
+  - `example` dùng số của lệnh đang xem (Chi tiết lệnh truyền vào qua `TermExampleContext`); thiếu số thì không có ví dụ.
+- `<Term id="vwap">VWAP</Term>` (`src/components/Term.tsx`): gạch chân chấm.
+  - Rê chuột hoặc Tab tới thì hiện tooltip (nghĩa, công thức, ví dụ), Esc đóng.
+  - Phần tử nối với tooltip qua `aria-describedby`.
+- `Tooltip` (`src/components/Tooltip.tsx`) tự viết, không dùng thư viện. Nằm trong portal, tự lật lên khi thiếu chỗ.
+  Đặt lại vị trí khi trang cuộn, vì Tab tới phần tử ngoài màn hình làm trang cuộn.
+- Đã gắn ở: KPI Trung tâm lệnh, tiêu đề cột và KPI báo cáo hiệu quả, nhãn ticket Đặt lệnh, các chỉ số ở Chi tiết lệnh,
+  nhãn loại lệnh ở thẻ Mẫu chiến lược. Bảng mã động: `STRATEGY_TERMS`, `FIELD_TERMS`, `REPORT_COLUMN_TERMS`.
+- Trang `/thuat-ngu` (liên kết ở cuối thanh bên, mọi vai trò): danh sách, ô lọc không dấu, công thức.
+  Nhận `?q=` để điền sẵn ô lọc.
+- Test quét mã nguồn: mọi `<Term id="…">` và mọi mã trong ba bảng động phải có trong từ điển.
+
+## 19. Tìm nhanh Ctrl+K (Đợt 5)
+
+- Mở bằng Ctrl+K (Cmd+K trên Mac) hoặc nút tìm ở thanh trên cùng. Hộp ở giữa màn hình, nền mờ phía sau.
+  - Phím tắt bỏ qua khi đang gõ trong ô nhập khác.
+  - Nút hiện đủ chữ "Tìm lệnh, mã, màn hình… Ctrl K" từ 1600px; từ 1440px chỉ còn biểu tượng và phím tắt; hẹp hơn chỉ
+    còn biểu tượng, vì thanh trên của vai trò Vận hành đã đầy. Tên đọc cho trình đọc màn hình luôn đủ câu.
+- Hàm thuần `src/utils/search.ts`:
+  - `buildSearchIndex` lọc theo quyền: lệnh qua `canSeeOrder`, màn hình theo menu của vai trò, "Chạy Demo" theo
+    `canUseDemo`, "Dùng mẫu …" theo `getVisibleTemplates`.
+  - `normalizeVi` (`src/utils/text.ts`) bỏ dấu, gồm cả đ → d.
+  - Điểm: khớp cả chuỗi 100, đầu chuỗi 80, đầu từ 60, giữa chuỗi 30. Câu nhiều từ thì mọi từ phải khớp.
+- Nhóm kết quả: LỆNH, MÃ CHỨNG KHOÁN (mở Đặt lệnh với mã; mở Sổ lệnh 3 mức), MÀN HÌNH, THAO TÁC, THUẬT NGỮ.
+- ↑ ↓ chọn, Enter mở, Esc đóng; vai trò ARIA combobox/listbox.
+- Ô trống hiện 5 mục mở gần nhất (`src/utils/recentItems.ts`, localStorage bọc try/catch).
+  Chỉ hiện mục mà vai trò hiện tại còn thấy được.
+
+## 20. Tour lần đầu (Đợt 5)
+
+- 5 bước (`src/tour/tourSteps.ts`), tô sáng theo `data-demo-id`:
+  1. Thanh bên (`sidebar`).
+  2. Đồng hồ phiên và nút tua (`session-status`).
+  3. "Lệnh cần chú ý" (`attention-card`, mở `/trung-tam`).
+  4. Đặt lệnh và Mẫu chiến lược (`nav-dat-lenh`, `nav-mau-chien-luoc`).
+  5. Chuông thông báo (`notification-bell`).
+- Mỗi bước 1–2 câu, nút Tiếp / Bỏ qua. Esc là Bỏ qua; Tab chỉ đi giữa hai nút.
+- Tự chạy một lần mỗi vai trò. Đã xem hoặc bỏ qua thì lưu `oms-tour-<role>` trong localStorage (try/catch).
+  - localStorage bị chặn thì không tự hiện, để không lặp lại ở mỗi lần đăng nhập.
+- Không tự chạy khi đang Demo, và đóng nếu Demo bắt đầu. Xem lại từ menu tài khoản: "Xem hướng dẫn".
+- Logic ở `src/tour/tourState.ts` (hàm thuần, có test).

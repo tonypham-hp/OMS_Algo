@@ -30,7 +30,7 @@ function DashboardBody({ data }: { data: DashboardData }) {
         slippageBps={getAverageSlippageBps(data)}
       />
       <div className="grid gap-4 xl:grid-cols-[3fr_2fr]">
-        <Card className="min-w-0">
+        <Card className="min-w-0" data-demo-id="attention-card">
           <CardHeader>
             <CardTitle>
               <h2>Lệnh cần chú ý</h2>

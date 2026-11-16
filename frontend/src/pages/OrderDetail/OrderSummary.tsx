@@ -1,12 +1,13 @@
 import type { ReactNode } from 'react'
 import { ProgressBar } from '@/components/ProgressBar'
+import { Term } from '@/components/Term'
 import { PERSISTENCE_LABELS } from '@/config/strategies'
 import { formatBps, formatDate, formatDateTime, formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { OrderDetailData, ParentOrder } from '@/types'
 import { getFillSummary, getStrategyParamRows } from './orderMetrics'
 
-function Stat({ label, children }: { label: string; children: ReactNode }) {
+function Stat({ label, children }: { label: ReactNode; children: ReactNode }) {
   return (
     <div className="min-w-0">
       <dt className="text-muted-foreground text-xs">{label}</dt>
@@ -29,12 +30,12 @@ export function OrderSummary({ order, detail }: OrderSummaryProps) {
   return (
     <div className="flex flex-col gap-4">
       <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3 lg:grid-cols-6" data-demo-id="order-executed">
-        <Stat label="KL đặt">{formatNumber(order.total_qty)}</Stat>
+        <Stat label={<Term id="parent-order">KL đặt</Term>}>{formatNumber(order.total_qty)}</Stat>
         <Stat label="KL khớp">{formatNumber(order.executed_qty)}</Stat>
         <Stat label="KL còn lại">{formatNumber(order.total_qty - order.executed_qty)}</Stat>
         <Stat label="Giá BQ khớp">{formatPrice(fill.avgPrice)}</Stat>
-        <Stat label="Giá arrival">{formatPrice(fill.arrivalPrice)}</Stat>
-        <Stat label="Chênh lệch so với arrival">
+        <Stat label={<>Giá <Term id="arrival">arrival</Term></>}>{formatPrice(fill.arrivalPrice)}</Stat>
+        <Stat label={<><Term id="slippage">Chênh lệch</Term> so với arrival</>}>
           {fill.differenceBps === null ? (
             '—'
           ) : (

@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react'
+import { Term } from '@/components/Term'
 import { formatBps, formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { AttentionSummary, FilledToday, RunningStats } from '@/utils/dashboard'
 
 interface KpiProps {
-  label: string
+  label: ReactNode
   value: ReactNode
   note: ReactNode
   isAlert?: boolean
@@ -53,12 +54,17 @@ export function KpiCards({ running, filled, attention, slippageBps }: KpiCardsPr
         isAlert={attention.orders > 0}
         note={
           <span className="tabular-nums">
-            UNKNOWN {counts.UNKNOWN} · REJECTED {counts.REJECTED} · PAUSED_SYSTEM {counts.PAUSED_SYSTEM}
+            <Term id="unknown">UNKNOWN</Term> {counts.UNKNOWN} · REJECTED {counts.REJECTED} ·{' '}
+            <Term id="paused-system">PAUSED_SYSTEM</Term> {counts.PAUSED_SYSTEM}
           </span>
         }
       />
       <Kpi
-        label="Slippage TB so với arrival"
+        label={
+          <>
+            <Term id="slippage">Slippage</Term> TB so với <Term id="arrival">arrival</Term>
+          </>
+        }
         demoId="kpi-slippage"
         value={slippageBps === null ? '—' : formatBps(slippageBps)}
         note={

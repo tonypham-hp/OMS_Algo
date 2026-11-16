@@ -1,9 +1,11 @@
 import { ArrowRight, LayoutTemplate } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { EmptyState } from '@/components/states'
+import { Term } from '@/components/Term'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { STRATEGY_TERMS } from '@/config/glossary'
 import { SIDE_LABELS, STRATEGIES } from '@/config/strategies'
 import { useOrderRules } from '@/hooks/useSystemConfig'
 import { formatNumber } from '@/lib/format'
@@ -43,7 +45,9 @@ export default function StrategyTemplates() {
                 <CardHeader>
                   <CardTitle className="flex flex-wrap items-center gap-2">
                     <span>{template.name}</span>
-                    <Badge variant="secondary">{STRATEGIES[template.strategy_type].label}</Badge>
+                    <Term id={STRATEGY_TERMS[template.strategy_type]} className="rounded-md">
+                      <Badge variant="secondary">{STRATEGIES[template.strategy_type].label}</Badge>
+                    </Term>
                     {template.side && (
                       <Badge className={cn(template.side === 'BUY' ? 'bg-price-up/15 text-price-up' : 'bg-price-down/15 text-price-down')}>
                         {SIDE_LABELS[template.side]}
