@@ -1,17 +1,11 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs'
-import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { FIELD_TERMS, GLOSSARY, getGlossaryEntry, REPORT_COLUMN_TERMS, STRATEGY_TERMS } from './glossary'
 
-const SRC = path.resolve(import.meta.dirname, '..')
-
-function sourceFiles(dir: string): string[] {
-  return readdirSync(dir).flatMap((name) => {
-    const full = path.join(dir, name)
-    if (statSync(full).isDirectory()) return sourceFiles(full)
-    return /\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name) ? [full] : []
-  })
-}
+/** Mã nguồn dạng chữ của mọi file .tsx (trừ test), đọc qua Vite để không cần kiểu của Node trong tsconfig app. */
+const SOURCES = import.meta.glob(['/src/**/*.tsx', '!/src/**/*.test.tsx'], { query: '?raw', import: 'default', eager: true }) as Record<
+  string,
+  string
+>
 
 /** Thuật ngữ tối thiểu theo yêu cầu Đợt 5. */
 const REQUIRED = [
@@ -35,8 +29,9 @@ describe('từ điển thuật ngữ', () => {
 
   it('mọi <Term id="…"> trong mã nguồn đều có trong từ điển', () => {
     const used = new Map<string, string>()
-    for (const file of sourceFiles(SRC)) {
-      for (const match of readFileSync(file, 'utf8').matchAll(/<Term\s+id="([^"]+)"/g)) used.set(match[1], path.relative(SRC, file))
+    expect(Object.keys(SOURCES).length).toBeGreaterThan(50)
+    for (const [file, source] of Object.entries(SOURCES)) {
+      for (const match of source.matchAll(/<Term\s+id="([^"]+)"/g)) used.set(match[1], file)
     }
     // Kiểm tra phép quét có chạy: hiện có ít nhất 8 mã viết thẳng (mã động nằm ở test bên dưới).
     expect(used.size).toBeGreaterThanOrEqual(8)
