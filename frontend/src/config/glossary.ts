@@ -1,6 +1,9 @@
 import { formatBps, formatNumber } from '@/lib/format'
+import type { StrategyType } from '@/types'
+import type { ReportSortKey } from '@/utils/execQuality'
 import { getCeilingPrice, getFloorPrice, getTickSize } from '@/utils/hose'
 import { MAX_ORDER_QTY, PRICE_BAND_PCT, QTY_LOT_SIZE } from './hose'
+import type { StrategyFieldName } from './strategies'
 
 /** Số của lệnh đang xem, để ví dụ trong tooltip dùng đúng số thật. Trường nào không có thì ví dụ bị bỏ. */
 export interface GlossaryContext {
@@ -239,6 +242,43 @@ export const GLOSSARY: GlossaryEntry[] = [
     detail: 'DAY hết hạn khi đóng cửa. GTD và nhiều phiên mang phần còn lại sang phiên sau tới ngày hết hiệu lực; đầu mỗi ngày giá được kiểm lại theo trần, sàn mới.',
   },
 ]
+
+/** Thuật ngữ của từng loại lệnh, cho nhãn loại lệnh ở thẻ mẫu và ticket. */
+export const STRATEGY_TERMS: Record<StrategyType, string> = {
+  STOP: 'stop',
+  STOP_LIMIT: 'stop-limit',
+  TAKE_PROFIT: 'take-profit',
+  TRAILING_STOP: 'trailing-stop',
+  OCO: 'oco',
+  BRACKET: 'bracket',
+  ICEBERG: 'iceberg',
+  TWAP: 'twap',
+  VWAP: 'vwap',
+  POV: 'pov',
+  HUNT: 'hunt',
+}
+
+/** Thuật ngữ của các ô tham số trên ticket Đặt lệnh. Ô không có ở đây hiện nhãn thường. */
+export const FIELD_TERMS: Partial<Record<StrategyFieldName, string>> = {
+  limit_price: 'lo',
+  trigger_price: 'stop',
+  tp_price: 'take-profit',
+  sl_price: 'stop',
+  trailing_value: 'trailing-stop',
+  slice_qty: 'iceberg',
+  participation_pct: 'participation',
+  max_pct: 'participation',
+  hunt_price: 'hunt',
+}
+
+/** Thuật ngữ của các cột báo cáo hiệu quả (Đợt 2). */
+export const REPORT_COLUMN_TERMS: Partial<Record<ReportSortKey, string>> = {
+  arrivalPrice: 'arrival',
+  vwap: 'vwap',
+  vsArrivalPct: 'slippage',
+  vsVwapPct: 'vwap',
+  participation: 'participation',
+}
 
 const BY_ID = new Map(GLOSSARY.map((entry) => [entry.id, entry]))
 

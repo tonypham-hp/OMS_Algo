@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Term } from '@/components/Term'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import type { OrderDetailData, ParentOrder } from '@/types'
 import {
@@ -10,7 +11,7 @@ import {
   NO_VALUE,
 } from '@/utils/execQuality'
 
-function Stat({ label, children }: { label: string; children: ReactNode }) {
+function Stat({ label, children }: { label: ReactNode; children: ReactNode }) {
   return (
     <div className="min-w-0">
       <dt className="text-muted-foreground text-xs">{label}</dt>
@@ -41,9 +42,9 @@ export function ExecQualityCard({ order, detail }: { order: ParentOrder; detail:
       <CardContent>
         <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3 lg:grid-cols-5">
           <Stat label="Giá BQ">{withUnit(formatQualityPrice(quality.avgPrice))}</Stat>
-          <Stat label="Arrival">{withUnit(formatQualityPrice(quality.arrivalPrice))}</Stat>
-          <Stat label="VWAP">{withUnit(formatQualityPrice(quality.vwap))}</Stat>
-          <Stat label="So arrival">
+          <Stat label={<Term id="arrival">Arrival</Term>}>{withUnit(formatQualityPrice(quality.arrivalPrice))}</Stat>
+          <Stat label={<Term id="vwap">VWAP</Term>}>{withUnit(formatQualityPrice(quality.vwap))}</Stat>
+          <Stat label={<>So <Term id="arrival">arrival</Term></>}>
             <span className={favorableClass(quality.arrivalFavorable)}>
               {formatDiffPct(quality.vsArrivalPct)}
               {/* Ghi chữ thay vì bps: phần tóm tắt phía trên đã ghi bps theo quy ước cũ (dương là giá cao hơn arrival). */}
@@ -52,7 +53,7 @@ export function ExecQualityCard({ order, detail }: { order: ParentOrder; detail:
               )}
             </span>
           </Stat>
-          <Stat label="Tham gia">{formatParticipation(quality.participation)}</Stat>
+          <Stat label={<Term id="participation">Tham gia</Term>}>{formatParticipation(quality.participation)}</Stat>
         </dl>
       </CardContent>
     </Card>

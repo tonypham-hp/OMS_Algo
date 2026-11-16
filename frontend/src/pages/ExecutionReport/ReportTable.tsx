@@ -2,6 +2,8 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Term } from '@/components/Term'
+import { REPORT_COLUMN_TERMS } from '@/config/glossary'
 import { SIDE_LABELS, STRATEGIES } from '@/config/strategies'
 import { cn } from '@/lib/utils'
 import {
@@ -74,24 +76,35 @@ export function ReportTable({ rows, sort, onSort }: ReportTableProps) {
           <TableRow>
             {REPORT_COLUMNS.map((column) => {
               const active = sort.key === column.key
+              const termId = REPORT_COLUMN_TERMS[column.key]
+              const button = (
+                <button
+                  type="button"
+                  onClick={() => onSort(column.key)}
+                  className={cn(
+                    'hover:text-foreground inline-flex items-center gap-1',
+                    column.numeric && 'flex-row-reverse',
+                    active && 'text-foreground',
+                  )}
+                >
+                  {column.label}
+                  <SortIcon active={active} direction={sort.direction} />
+                </button>
+              )
               return (
                 <TableHead
                   key={column.key}
                   aria-sort={active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
                   className={cn(column.numeric && 'text-right')}
                 >
-                  <button
-                    type="button"
-                    onClick={() => onSort(column.key)}
-                    className={cn(
-                      'hover:text-foreground inline-flex items-center gap-1',
-                      column.numeric && 'flex-row-reverse',
-                      active && 'text-foreground',
-                    )}
-                  >
-                    {column.label}
-                    <SortIcon active={active} direction={sort.direction} />
-                  </button>
+                  {/* Nút sắp xếp đã nhận focus, nên thuật ngữ mở theo focus của nút thay vì thêm một điểm Tab. */}
+                  {termId ? (
+                    <Term id={termId} focusable={false}>
+                      {button}
+                    </Term>
+                  ) : (
+                    button
+                  )}
                 </TableHead>
               )
             })}

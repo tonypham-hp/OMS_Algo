@@ -1,4 +1,4 @@
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { BookOpen, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { getNavSections, type NavItem } from '@/config/navigation'
 import { LAYOUT } from '@/config/theme'
@@ -12,6 +12,9 @@ interface SidebarProps {
 }
 
 const ITEM_CLASS = 'flex min-h-9 items-center gap-3 rounded-md px-3 py-1.5 text-sm'
+
+/** Trang tra cứu thuật ngữ: mọi vai trò đều thấy, đặt ở cuối thanh bên. */
+const GLOSSARY_ITEM: NavItem = { label: 'Thuật ngữ', icon: BookOpen, path: '/thuat-ngu' }
 
 function ComingSoonItem({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
   const Icon = item.icon
@@ -102,6 +105,9 @@ export function Sidebar({ role, collapsed, onToggle }: SidebarProps) {
           </div>
         ))}
       </nav>
+      <div className="border-t px-2 py-2">
+        <LinkItem item={GLOSSARY_ITEM} collapsed={collapsed} />
+      </div>
       <button
         type="button"
         onClick={onToggle}
