@@ -166,7 +166,12 @@ export function explainOrder(
 
 /** Câu giải thích ngắn chỉ từ trạng thái và reason_code, khi chưa có lệnh con và nhật ký (Sổ lệnh, Trung tâm lệnh). */
 export function explainOrderBrief(order: ParentOrder, market: ExplainMarket, role: Role, children: ChildOrder[] = [], events: OrderEvent[] = []) {
-  return explainOrder(order, children, events, market, role).short
+  const explanation = explainOrder(order, children, events, market, role)
+  // Danh sách không có lệnh con và nhật ký: chỉ ra nơi xem lý do thay vì nói chung chung "chưa đủ dữ liệu".
+  if (explanation.code === 'NOT_ENOUGH_DATA' && order.status === 'PAUSED_SYSTEM') {
+    return 'Hệ thống đang tạm dừng lệnh này. Mở Chi tiết lệnh để xem lý do.'
+  }
+  return explanation.short
 }
 
 const n = formatNumber

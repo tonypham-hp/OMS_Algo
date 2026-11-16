@@ -35,8 +35,8 @@ export function Tooltip({ content, children, focusable = true, className, conten
     setPosition(null)
   }, [])
 
-  useLayoutEffect(() => {
-    if (!open) return
+  /** Đặt tooltip dưới phần tử, thiếu chỗ thì lật lên trên; luôn nằm trong màn hình. */
+  const place = useCallback(() => {
     const trigger = triggerRef.current?.getBoundingClientRect()
     const tip = tipRef.current?.getBoundingClientRect()
     if (!trigger || !tip) return
@@ -44,8 +44,12 @@ export function Tooltip({ content, children, focusable = true, className, conten
     const top = below + tip.height + EDGE > window.innerHeight ? Math.max(trigger.top - GAP - tip.height, EDGE) : below
     const centered = trigger.left + trigger.width / 2 - tip.width / 2
     const left = Math.min(Math.max(centered, EDGE), window.innerWidth - tip.width - EDGE)
-    setPosition({ top, left })
-  }, [open])
+    setPosition((previous) => (previous?.top === top && previous.left === left ? previous : { top, left }))
+  }, [])
+
+  useLayoutEffect(() => {
+    if (open) place()
+  }, [open, place])
 
   useEffect(() => {
     if (!open) return
@@ -56,14 +60,16 @@ export function Tooltip({ content, children, focusable = true, className, conten
         hide()
       }
     }
-    const onScroll = () => hide()
+    // Tab tới phần tử ngoài màn hình làm trang cuộn: đặt lại vị trí thay vì đóng, để tooltip vẫn đọc được.
     document.addEventListener('keydown', onKey, true)
-    window.addEventListener('scroll', onScroll, true)
+    window.addEventListener('scroll', place, true)
+    window.addEventListener('resize', place)
     return () => {
       document.removeEventListener('keydown', onKey, true)
-      window.removeEventListener('scroll', onScroll, true)
+      window.removeEventListener('scroll', place, true)
+      window.removeEventListener('resize', place)
     }
-  }, [open, hide])
+  }, [open, hide, place])
 
   return (
     <>
