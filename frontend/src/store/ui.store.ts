@@ -32,12 +32,22 @@ interface UiState {
   /** Giá vừa bấm trên sổ lệnh, để ticket điền vào ô giá. `nonce` đổi mỗi lần bấm, kể cả bấm lại cùng giá. */
   pickedPrice: { price: number; nonce: number } | null
   pickPrice: (price: number) => void
+  /** Hộp tìm nhanh (Ctrl+K) đang mở. */
+  paletteOpen: boolean
+  setPaletteOpen: (open: boolean) => void
+  /** Tour hướng dẫn đang chạy (mở lại từ menu tài khoản). */
+  tourOpen: boolean
+  setTourOpen: (open: boolean) => void
 }
 
 export const useUiStore = create<UiState>()((set, get) => ({
   selectedSymbol: 'FPT',
   setSelectedSymbol: (selectedSymbol) => set({ selectedSymbol }),
   pickedPrice: null,
+  paletteOpen: false,
+  setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
+  tourOpen: false,
+  setTourOpen: (tourOpen) => set({ tourOpen }),
   pickPrice: (price) => set({ pickedPrice: { price, nonce: (get().pickedPrice?.nonce ?? 0) + 1 } }),
   sidebarCollapsed: readCollapsed(),
   toggleSidebar: () => {

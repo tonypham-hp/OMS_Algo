@@ -1,4 +1,4 @@
-import { ChevronRight, LogOut } from 'lucide-react'
+import { ChevronRight, LogOut, Search } from 'lucide-react'
 import { Fragment, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
@@ -8,6 +8,8 @@ import { formatWallClock } from '@/lib/format'
 import { useAuthStore } from '@/store/auth.store'
 import { useDemoStore } from '@/store/demo.store'
 import { useMarketStore } from '@/store/market.store'
+import { useUiStore } from '@/store/ui.store'
+import { paletteShortcutLabel } from '@/utils/hotkey'
 import { getBreadcrumb } from '@/utils/breadcrumb'
 import { SessionStatus } from './SessionStatus'
 
@@ -63,6 +65,7 @@ export function TopBar({ actions }: { actions?: ReactNode }) {
       style={{ height: LAYOUT.topBarHeight }}
     >
       <Breadcrumb />
+      <PaletteButton />
       <div className="ml-auto flex shrink-0 items-center gap-3">
         <SessionStatus />
         {/* Đang Demo: chỗ này dành cho nhãn Demo; dữ liệu lúc đó là của kịch bản, không phải giá demo thường. */}
@@ -81,5 +84,24 @@ export function TopBar({ actions }: { actions?: ReactNode }) {
         </Button>
       </div>
     </header>
+  )
+}
+
+/** Nút mở hộp tìm nhanh, cùng tác dụng với Ctrl+K / Cmd+K. */
+function PaletteButton() {
+  const setPaletteOpen = useUiStore((state) => state.setPaletteOpen)
+  const shortcut = paletteShortcutLabel()
+  return (
+    <button
+      type="button"
+      onClick={() => setPaletteOpen(true)}
+      aria-keyshortcuts="Control+K Meta+K"
+      data-demo-id="palette-button"
+      className="border-border-strong text-muted-foreground hover:text-foreground hover:bg-nav-active/60 ml-2 hidden h-8 min-w-0 shrink items-center gap-2 rounded-md border px-2.5 text-sm md:flex"
+    >
+      <Search className="size-4 shrink-0" aria-hidden />
+      <span className="truncate">Tìm lệnh, mã, màn hình…</span>
+      <kbd className="bg-muted ml-auto rounded px-1.5 py-px font-mono text-[11px] whitespace-nowrap">{shortcut}</kbd>
+    </button>
   )
 }

@@ -1,5 +1,6 @@
 import { BookOpen, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { EmptyState } from '@/components/states'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -8,7 +9,9 @@ import { normalizeVi } from '@/utils/text'
 
 /** Trang tra cứu thuật ngữ: ô lọc không dấu, mỗi mục có nghĩa ngắn, giải thích và công thức. */
 export default function Glossary() {
-  const [query, setQuery] = useState('')
+  // Mở từ hộp tìm nhanh: ?q=<thuật ngữ> điền sẵn ô lọc.
+  const [params] = useSearchParams()
+  const [query, setQuery] = useState(() => params.get('q') ?? '')
   const entries = useMemo(() => {
     const needle = normalizeVi(query)
     const sorted = GLOSSARY.toSorted((a, b) => a.term.localeCompare(b.term, 'vi'))
