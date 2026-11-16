@@ -44,6 +44,7 @@ function LinkItem({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
   return (
     <NavLink
       to={item.path!}
+      data-demo-id={`nav-${item.path!.slice(1).replaceAll('/', '-')}`}
       title={collapsed ? item.label : undefined}
       className={({ isActive }) =>
         cn(
@@ -68,6 +69,7 @@ export function Sidebar({ role, collapsed, onToggle }: SidebarProps) {
 
   return (
     <aside
+      data-demo-id="sidebar"
       className="bg-sidebar border-sidebar-border sticky top-0 flex h-svh shrink-0 flex-col border-r transition-[width] duration-200"
       style={{ width }}
     >

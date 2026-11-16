@@ -33,6 +33,7 @@ export function NotificationBell() {
           size="icon-sm"
           variant="ghost"
           className="relative"
+          data-demo-id="notification-bell"
           aria-label={unread > 0 ? `Thông báo, ${unread} chưa đọc` : 'Thông báo'}
         >
           <Bell aria-hidden />

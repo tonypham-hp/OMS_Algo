@@ -1,7 +1,14 @@
-import { ChevronRight, LogOut, Search } from 'lucide-react'
+import { ChevronDown, ChevronRight, CircleHelp, LogOut, Search } from 'lucide-react'
 import { Fragment, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { ROLE_LABELS } from '@/config/permissions'
 import { LAYOUT } from '@/config/theme'
 import { formatWallClock } from '@/lib/format'
@@ -58,6 +65,8 @@ export function TopBar({ actions }: { actions?: ReactNode }) {
   const user = useAuthStore((state) => state.user)
   const logout = useAuthStore((state) => state.logout)
   const demoActive = useDemoStore((state) => state.snapshot !== null)
+  const setTourOpen = useUiStore((state) => state.setTourOpen)
+  const setPaletteOpen = useUiStore((state) => state.setPaletteOpen)
 
   return (
     <header
@@ -72,12 +81,40 @@ export function TopBar({ actions }: { actions?: ReactNode }) {
         {!demoActive && <DemoDataLabel />}
         {actions}
         {user && (
-          <span className="flex flex-col text-right leading-tight whitespace-nowrap">
-            <span className="text-sm font-medium">{user.display_name}</span>
-            <span className="text-muted-foreground text-xs">
-              {user.username} · {ROLE_LABELS[user.role]}
-            </span>
-          </span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label={`Tài khoản ${user.display_name}`}
+                data-demo-id="account-menu"
+                className="hover:bg-nav-active/60 flex items-center gap-1 rounded-md px-2 py-1 text-right leading-tight whitespace-nowrap"
+              >
+                <span className="flex flex-col">
+                  <span className="text-sm font-medium">{user.display_name}</span>
+                  <span className="text-muted-foreground text-xs">
+                    {user.username} · {ROLE_LABELS[user.role]}
+                  </span>
+                </span>
+                <ChevronDown className="text-muted-foreground size-3.5" aria-hidden />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              {/* Tour không chạy khi đang Demo. */}
+              <DropdownMenuItem disabled={demoActive} onSelect={() => setTourOpen(true)}>
+                <CircleHelp aria-hidden />
+                Xem hướng dẫn
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setPaletteOpen(true)}>
+                <Search aria-hidden />
+                Tìm nhanh
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={logout}>
+                <LogOut aria-hidden />
+                Đăng xuất
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
         <Button size="icon-sm" variant="ghost" aria-label="Đăng xuất" title="Đăng xuất" onClick={logout}>
           <LogOut aria-hidden />

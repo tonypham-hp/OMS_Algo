@@ -9,6 +9,7 @@ import { TopBar } from '@/components/layout/TopBar'
 import { LAYOUT } from '@/config/theme'
 import { canUseDemo } from '@/demo/access'
 import { useMarketStream } from '@/hooks/useMarketStream'
+import { TourOverlay } from '@/tour/TourOverlay'
 import { useNotificationSync } from '@/hooks/useNotificationSync'
 import { useAuthStore } from '@/store/auth.store'
 import { useDemoStore } from '@/store/demo.store'
@@ -55,6 +56,7 @@ export function AppLayout() {
         </main>
       </div>
       <CommandPalette />
+      <TourOverlay />
       {canUseDemo(role) && (
         <Suspense fallback={null}>
           <DemoLayer />

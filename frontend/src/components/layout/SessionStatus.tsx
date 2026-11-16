@@ -37,7 +37,7 @@ export function SessionStatus() {
   if (demoActive) return <div className="flex items-center text-sm">{clock}</div>
 
   return (
-    <div className="flex items-center gap-3 text-sm">
+    <div className="flex items-center gap-3 text-sm" data-demo-id="session-status">
       {clock}
       <div className="flex gap-1" role="group" aria-label="Tốc độ giả lập">
         {SPEEDS.map((item) => (
