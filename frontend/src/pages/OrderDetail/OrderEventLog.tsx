@@ -10,10 +10,12 @@ const ALERT_ACTIONS: ReadonlySet<OrderEventAction> = new Set(['CHILD_UNKNOWN', '
 interface OrderEventLogProps {
   events: OrderEvent[]
   childOrders: ChildOrder[]
+  /** Event đang được tô sáng (từ nút "Xem nhật ký" của phần giải thích). */
+  highlightedId?: string | null
 }
 
 /** Nhật ký theo thời gian, mới nhất ở trên để thấy ngay khi engine đang chạy. */
-export function OrderEventLog({ events, childOrders }: OrderEventLogProps) {
+export function OrderEventLog({ events, childOrders, highlightedId = null }: OrderEventLogProps) {
   const cycleOf = new Map(childOrders.map((child) => [child.child_order_id, child.cycle_no]))
 
   return (
@@ -31,7 +33,13 @@ export function OrderEventLog({ events, childOrders }: OrderEventLogProps) {
           {events.toReversed().map((event) => {
             const cycle = event.child_order_id ? cycleOf.get(event.child_order_id) : undefined
             return (
-              <TableRow key={event.event_id}>
+              <TableRow
+                key={event.event_id}
+                id={`event-${event.event_id}`}
+                data-event-id={event.event_id}
+                tabIndex={event.event_id === highlightedId ? -1 : undefined}
+                className={cn(event.event_id === highlightedId && 'bg-primary/15 outline-primary outline-2 -outline-offset-2')}
+              >
                 <TableCell className="tabular-nums">{formatDateTime(event.event_time)}</TableCell>
                 <TableCell>{formatEventActor(event.user_id)}</TableCell>
                 <TableCell className={cn(ALERT_ACTIONS.has(event.action) && 'font-medium text-red-300')}>

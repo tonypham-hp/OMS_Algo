@@ -2,7 +2,10 @@ import { useNavigate } from 'react-router-dom'
 import { OrderStatusBadge } from '@/components/OrderStatusBadge'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { explainOrderBrief } from '@/explain/explain'
+import { getBriefMarket } from '@/explain/useExplainMarket'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/store/auth.store'
 import type { AttentionItem, AttentionKind } from '@/utils/dashboard'
 
 const KIND_STYLES: Record<AttentionKind, { label: string; className: string }> = {
@@ -14,6 +17,7 @@ const KIND_STYLES: Record<AttentionKind, { label: string; className: string }> =
 /** Lệnh cần chú ý; bấm một dòng (hoặc Enter khi đang chọn dòng) để mở chi tiết lệnh. */
 export function AttentionTable({ items }: { items: AttentionItem[] }) {
   const navigate = useNavigate()
+  const role = useAuthStore((state) => state.user?.role ?? 'CUSTOMER')
   return (
     <Table data-demo-id="attention-table">
       <TableHeader>
@@ -45,7 +49,7 @@ export function AttentionTable({ items }: { items: AttentionItem[] }) {
                 {item.issue}
               </TableCell>
               <TableCell>
-                <OrderStatusBadge status={item.order.status} />
+                <OrderStatusBadge status={item.order.status} explain={explainOrderBrief(item.order, getBriefMarket(item.order.symbol), role)} />
               </TableCell>
             </TableRow>
           )

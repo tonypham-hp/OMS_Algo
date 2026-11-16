@@ -10,8 +10,11 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { SIDE_LABELS, STRATEGIES } from '@/config/strategies'
+import { explainOrderBrief } from '@/explain/explain'
+import { getBriefMarket } from '@/explain/useExplainMarket'
 import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/store/auth.store'
 import type { ParentOrder } from '@/types'
 import { OrderActions } from './OrderActions'
 
@@ -29,6 +32,7 @@ interface OrderTableProps {
 
 export function OrderTable({ orders, showAccount, isBusy, onEdit, onCancel, onPause, onResume }: OrderTableProps) {
   const columnCount = showAccount ? 11 : 10
+  const role = useAuthStore((state) => state.user?.role ?? 'CUSTOMER')
 
   return (
     <Table>
@@ -81,7 +85,7 @@ export function OrderTable({ orders, showAccount, isBusy, onEdit, onCancel, onPa
               {order.limit_price === null ? '—' : formatNumber(order.limit_price)}
             </TableCell>
             <TableCell>
-              <OrderStatusBadge status={order.status} />
+              <OrderStatusBadge status={order.status} explain={explainOrderBrief(order, getBriefMarket(order.symbol), role)} />
             </TableCell>
             <TableCell>
               <OrderActions

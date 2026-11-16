@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { OrderStatusBadge } from '@/components/OrderStatusBadge'
 import { SessionLockNotice } from '@/components/SessionLockNotice'
@@ -16,13 +17,24 @@ import { ExecQualityCard } from './ExecQualityCard'
 import { HuntSweepPanel } from './HuntSweepPanel'
 import { OrderBookCard } from './OrderBookCard'
 import { OrderSummary } from './OrderSummary'
-import { PausedOrderBanner } from './PausedOrderBanner'
+import { ExplainCard } from '@/explain/ExplainCard'
 
 export default function OrderDetail() {
   const { id = '' } = useParams()
   const order = useOrder(id)
   const detail = useOrderDetail(id)
   const error = order.error ?? detail.error
+  const [highlightedEventId, setHighlightedEventId] = useState<string | null>(null)
+
+  /** Cuộn tới event trong nhật ký và tô sáng, đưa focus vào dòng đó để người dùng bàn phím đọc tiếp. */
+  const showEvent = (eventId: string) => {
+    setHighlightedEventId(eventId)
+    requestAnimationFrame(() => {
+      const row = document.querySelector<HTMLElement>(`[data-event-id="${CSS.escape(eventId)}"]`)
+      row?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      row?.focus({ preventScroll: true })
+    })
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -48,7 +60,7 @@ export default function OrderDetail() {
           )}
           {order.data && (
             <>
-              {order.data.status === 'PAUSED_SYSTEM' && <PausedOrderBanner order={order.data} />}
+              <ExplainCard order={order.data} detail={detail.data} onShowEvent={showEvent} />
               <SessionLockNotice />
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-3">
@@ -117,7 +129,7 @@ export default function OrderDetail() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ChildOrderTimeline items={detail.data.children} />
+              <ChildOrderTimeline items={detail.data.children} events={detail.data.events} />
             </CardContent>
           </Card>
           <Card>
@@ -127,7 +139,7 @@ export default function OrderDetail() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <OrderEventLog events={detail.data.events} childOrders={detail.data.children} />
+              <OrderEventLog events={detail.data.events} childOrders={detail.data.children} highlightedId={highlightedEventId} />
             </CardContent>
           </Card>
         </>
