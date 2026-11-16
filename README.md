@@ -46,6 +46,22 @@ VWAP, POV, HUNT). OMS tự chia thành lệnh con, gửi xuống Core, theo dõi
   - Bấm thẻ mẫu trên ticket hoặc "Dùng mẫu này" thì form được điền sẵn; bạn vẫn sửa được mọi ô và form vẫn kiểm tra như
     cũ.
   - Báo cáo hiệu quả ghi tên mẫu của lệnh.
+- **Vì sao lệnh này…** (Đợt 5): đầu Chi tiết lệnh có thẻ giải thích bằng tiếng Việt vì sao lệnh đang dừng, bị từ chối,
+  chưa rõ trạng thái, chờ kích hoạt, hết hạn hay đã xong.
+  - Câu sinh theo quy tắc từ dữ liệu của lệnh, không gọi AI. Mọi số trong câu đều có trong dữ liệu; thiếu thì ghi
+    "chưa đủ dữ liệu".
+  - Nút đi kèm: "Sửa giá" (điền sẵn giá trần hoặc sàn hợp lệ), "Xem nhật ký"; vận hành có thêm "Mở lại", "Đối soát ngay".
+  - Bấm một dòng lệnh con để xem giải thích riêng. Ở Sổ lệnh và Trung tâm lệnh, rê chuột vào badge trạng thái để xem câu
+    rút gọn.
+- **Thuật ngữ** (Đợt 5): chữ có gạch chân chấm (VWAP, arrival, bps, giá trần…) mở giải thích khi rê chuột hoặc bấm Tab.
+  - Tooltip có công thức và ví dụ bằng số của lệnh đang xem; Esc đóng.
+  - Trang `/thuat-ngu` (cuối thanh bên) để tra cứu, lọc không dấu.
+- **Tìm nhanh** (Đợt 5): Ctrl+K (Cmd+K trên Mac) hoặc nút tìm trên thanh trên cùng.
+  - Tìm lệnh, mã chứng khoán, màn hình, thao tác (Đặt lệnh mới, Dùng mẫu…, Chạy Demo) và thuật ngữ, gõ không dấu cũng
+    được.
+  - Kết quả theo quyền của vai trò; nhớ 5 mục mở gần nhất.
+- **Hướng dẫn lần đầu** (Đợt 5): tour 5 bước khi mỗi vai trò đăng nhập lần đầu; xem lại ở menu tài khoản
+  "Xem hướng dẫn". Không chạy khi đang Demo.
 - **Chế độ Demo**: app tự chạy 6 kịch bản E2E (Iceberg, Stop → Iceberg, POV, HUNT, Core mất ACK, OMS sập).
   - Mỗi bước có chú thích, tô sáng phần tử liên quan và tự chấm điều kiện kiểm tra.
   - Chạy trên dữ liệu riêng; thoát thì dữ liệu của bạn trở về nguyên vẹn.
@@ -56,7 +72,9 @@ VWAP, POV, HUNT). OMS tự chia thành lệnh con, gửi xuống Core, theo dõi
 [docs/screenshots/dot2/](docs/screenshots/dot2/) (báo cáo hiệu quả, thẻ Hiệu quả ở chi tiết lệnh),
 [docs/screenshots/dot3/](docs/screenshots/dot3/) (Chế độ Demo, ảnh 1440px),
 [docs/screenshots/dot4/](docs/screenshots/dot4/) (Đặt lệnh có dải mẫu và sổ lệnh 3 mức, Chi tiết lệnh HUNT có khung quét
-từng mức, trang Mẫu chiến lược).
+từng mức, trang Mẫu chiến lược),
+[docs/screenshots/dot5/](docs/screenshots/dot5/) (Chi tiết lệnh PAUSED_SYSTEM có thẻ giải thích, tooltip thuật ngữ,
+hộp tìm nhanh Ctrl+K, một bước tour; ảnh 1440px).
 
 ## Cấu trúc thư mục
 
@@ -67,7 +85,9 @@ OMS_Algo/
 │       ├── pages/        # Mỗi màn hình một thư mục
 │       ├── mocks/        # API giả lập (MSW), bộ giả lập giá, engine sinh lệnh con / khớp / bơm lỗi
 │       ├── services/     # Hàm gọi API: nối backend thật chỉ cần đổi ở đây
-│       ├── config/       # Luật HOSE, loại lệnh, tham số hệ thống, màu trạng thái
+│       ├── config/       # Luật HOSE, loại lệnh, tham số hệ thống, màu trạng thái, từ điển thuật ngữ
+│       ├── explain/      # Giải thích lệnh theo quy tắc (hàm thuần) và thẻ giải thích
+│       ├── tour/         # Tour hướng dẫn lần đầu
 │       └── types/        # Kiểu dữ liệu theo ERD
 ├── backend/              # Dịch vụ OMS chính (Python, FastAPI): chưa có code
 ├── simulators/           # Giả lập hệ thống bên ngoài (Core, giá) để test: chưa có code
