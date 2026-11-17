@@ -4,8 +4,11 @@ Hệ thống quản lý lệnh nâng cao (Advanced Order Management System) cho 
 Khách hàng và dealer đặt lệnh thuật toán (Stop, Stop Limit, Take Profit, Trailing Stop, OCO, Bracket, Iceberg, TWAP,
 VWAP, POV, HUNT). OMS tự chia thành lệnh con, gửi xuống Core, theo dõi khớp, xử lý lỗi và đối soát.
 
-> **Trạng thái:** frontend đã xong 5 màn hình, Trung tâm lệnh và khung ứng dụng chung; chạy độc lập bằng dữ liệu giả lập (MSW và bộ giả lập thị trường
-> trong trình duyệt), có ghi chú "Dữ liệu demo" trên header. Backend (FastAPI) và simulators chưa có code.
+> **Trạng thái:** bản demo frontend **v0.1.0** ([CHANGELOG](CHANGELOG.md)): 8 màn hình, Chế độ Demo, kiểm thử Vitest và
+> Playwright ([báo cáo chất lượng](docs/quality-report.md)). Chạy độc lập bằng dữ liệu giả lập (MSW và bộ giả lập thị
+> trường trong trình duyệt), có ghi chú "Dữ liệu demo" trên header. Backend (FastAPI) và simulators chưa có code.
+
+![Trung tâm lệnh, 1440×900](docs/screenshots/v0.1.0/02-trung-tam.png)
 
 ## Tính năng
 
@@ -14,7 +17,7 @@ VWAP, POV, HUNT). OMS tự chia thành lệnh con, gửi xuống Core, theo dõi
 - **Khung ứng dụng** cho mọi trang sau đăng nhập. Thanh bên có menu theo vai trò, thu gọn được còn icon và nhớ lựa chọn
   sau khi tải lại trang. Mục Lịch sử và đối soát đang khóa, ghi "Sắp có".
   Thanh trên có phiên HOSE và giờ giả lập, nút tua x1/x10/x60, breadcrumb, nhãn "Dữ liệu demo · cập nhật", chuông
-  thông báo và tài khoản.
+  thông báo và tài khoản. Màn ≤1280px thì thanh bên tự thu gọn; dưới 1600px thanh trên chỉ giữ tên màn hiện tại.
 - **Trung tâm lệnh** (`/trung-tam`, trang mặc định):
   - 4 chỉ số: lệnh đang chạy (kèm số đang tạm dừng), khối lượng khớp hôm nay trên tổng đã đặt, số lệnh cần chú ý
     (chia theo UNKNOWN / REJECTED / PAUSED_SYSTEM), slippage trung bình so với giá arrival.
@@ -66,9 +69,13 @@ VWAP, POV, HUNT). OMS tự chia thành lệnh con, gửi xuống Core, theo dõi
   - Mỗi bước có chú thích, tô sáng phần tử liên quan và tự chấm điều kiện kiểm tra.
   - Chạy trên dữ liệu riêng; thoát thì dữ liệu của bạn trở về nguyên vẹn.
   - Cách bật ở mục [Chế độ Demo](#chế-độ-demo).
-- **5 màn nghiệp vụ**: xem bảng [Màn hình](#màn-hình). Mọi màn dùng chung các trạng thái đang tải, trống và lỗi.
+- **5 màn nghiệp vụ**: xem bảng [Màn hình](#màn-hình). Mọi màn dùng chung các trạng thái đang tải, trống (có câu hướng
+  dẫn và nút hành động) và lỗi (có nút "Thử lại").
+- **Truy cập bằng bàn phím** (Đợt 6): đặt lệnh trọn vẹn bằng Tab, Enter, Esc; mọi phần tử nhận focus có viền rõ; chữ đạt
+  tương phản tối thiểu 4,5:1.
 
-Ảnh chụp ở 1440px và 1366px: [docs/screenshots/dot1/](docs/screenshots/dot1/) (khung ứng dụng, Trung tâm lệnh),
+Bộ ảnh bản v0.1.0 (1440×900, mọi màn chính): [docs/screenshots/v0.1.0/](docs/screenshots/v0.1.0/), chụp lại bằng
+`npm run screenshots`. Ảnh theo từng đợt: [docs/screenshots/dot1/](docs/screenshots/dot1/) (khung ứng dụng, Trung tâm lệnh),
 [docs/screenshots/dot2/](docs/screenshots/dot2/) (báo cáo hiệu quả, thẻ Hiệu quả ở chi tiết lệnh),
 [docs/screenshots/dot3/](docs/screenshots/dot3/) (Chế độ Demo, ảnh 1440px),
 [docs/screenshots/dot4/](docs/screenshots/dot4/) (Đặt lệnh có dải mẫu và sổ lệnh 3 mức, Chi tiết lệnh HUNT có khung quét
@@ -81,6 +88,7 @@ hộp tìm nhanh Ctrl+K, một bước tour; ảnh 1440px).
 ```text
 OMS_Algo/
 ├── frontend/             # Giao diện web (Vite + React + TypeScript), chạy được với dữ liệu giả lập
+│   ├── e2e/              # Test giao diện Playwright (*.spec.ts) và fixture chung
 │   └── src/
 │       ├── pages/        # Mỗi màn hình một thư mục
 │       ├── mocks/        # API giả lập (MSW), bộ giả lập giá, engine sinh lệnh con / khớp / bơm lỗi
@@ -88,12 +96,15 @@ OMS_Algo/
 │       ├── config/       # Luật HOSE, loại lệnh, tham số hệ thống, màu trạng thái, từ điển thuật ngữ
 │       ├── explain/      # Giải thích lệnh theo quy tắc (hàm thuần) và thẻ giải thích
 │       ├── tour/         # Tour hướng dẫn lần đầu
+│       ├── testing/      # Cờ chỉ dùng khi test e2e (seed, làm lỗi API); không có trong bản build
 │       └── types/        # Kiểu dữ liệu theo ERD
 ├── backend/              # Dịch vụ OMS chính (Python, FastAPI): chưa có code
 ├── simulators/           # Giả lập hệ thống bên ngoài (Core, giá) để test: chưa có code
 ├── docs/
 │   ├── frontend-spec.md  # Đặc tả frontend
 │   ├── backend-gaps.md   # Những gì backend cần bổ sung so với ERD, và tồn đọng kỹ thuật
+│   ├── quality-report.md # Số test, thời gian chạy, kích thước bundle, lỗi đã sửa ở Đợt 6
+│   ├── demo-checklist.md # 10 việc trước buổi demo
 │   ├── test-cases/       # Bộ test case E2E và bảng phủ test
 │   ├── screenshots/      # Ảnh chụp giao diện theo từng đợt
 │   └── adr/              # Architecture Decision Records
@@ -122,8 +133,24 @@ Lệnh khác trong `frontend/`:
 | `npm run lint` | ESLint |
 | `npm run build` | Kiểm tra kiểu (`tsc -b`) và build |
 | `npm run test` | Vitest. Test lệch tài liệu bị bỏ qua mặc định; chạy `VITE_TC_DEVIATIONS=1 npm run test` để xem chúng |
+| `npm run test:e2e` | Playwright, 2 khung 1440×900 và 1366×768 (tự bật `npm run dev` nếu chưa chạy) |
+| `npm run test:e2e:ui` | Playwright ở chế độ giao diện, chạy và xem từng bước |
+| `npm run test:all` | lint → Vitest → build → Playwright; dùng trước khi demo hoặc merge |
+| `npm run screenshots` | Chụp lại bộ ảnh vào `docs/screenshots/v0.1.0/` |
 
 Cấu hình qua biến môi trường: xem `frontend/.env.example` (`VITE_API_BASE_URL`, `VITE_USE_MOCK`, `VITE_DEMO_MODE`).
+
+## Kiểm thử
+
+- **Vitest** (`src/**/*.test.ts`): luật HOSE, engine giả lập, 6 kịch bản Demo chạy headless, định dạng, độ tương phản màu.
+- **Playwright** (`frontend/e2e/`): chạy trên Chrome có sẵn trong máy (không có thì Edge); **không** tải trình duyệt
+  riêng, nên không cần `npx playwright install`. Không có cả hai thì cấu hình dừng và báo rõ.
+  - Đồng hồ cố định (thứ Hai 16/11/2026, 09:10) qua `page.clock`, `Math.random` có seed qua `?e2e=1&seed=…`: kết quả lặp lại
+    giữa các lần chạy.
+  - Selector theo vai trò, nhãn và `data-demo-id`, không dựa vào class CSS.
+  - Lỗi console hoặc request lỗi ở bất kỳ test nào đều làm test đó trượt.
+  - Báo cáo HTML ở `frontend/playwright-report/`, ảnh và trace khi lỗi ở `frontend/test-results/` (đều không commit).
+- Số liệu lần chạy gần nhất: [docs/quality-report.md](docs/quality-report.md).
 
 ## Chế độ Demo
 
@@ -149,7 +176,8 @@ App tự chạy 6 kịch bản E2E trong [TC-E2E.md](docs/test-cases/TC-E2E.md),
 - Kịch bản chạy trên sổ lệnh trống với random có seed cố định, nên lần nào cũng ra cùng kết quả.
 - Thoát Demo thì mọi thứ trở về đúng như lúc trước khi bấm.
 
-Kịch bản trình bày 10 phút: [docs/demo-script.md](docs/demo-script.md).
+Kịch bản trình bày 10 phút: [docs/demo-script.md](docs/demo-script.md). Việc cần làm trước buổi demo:
+[docs/demo-checklist.md](docs/demo-checklist.md).
 
 ## Tài khoản demo
 
@@ -183,3 +211,6 @@ khi cần người duyệt thứ hai.
   [bảng phủ test](docs/test-cases/coverage.md), gồm danh sách chỗ engine giả lập còn lệch tài liệu.
 - [docs/demo-script.md](docs/demo-script.md): kịch bản trình bày Chế độ Demo trong 10 phút.
 - [docs/backend-gaps.md](docs/backend-gaps.md): bảng, trường, API backend cần thêm ngoài ERD; tồn đọng kỹ thuật.
+- [docs/quality-report.md](docs/quality-report.md): kết quả kiểm thử, kích thước bundle, lỗi đã sửa và việc còn tồn của v0.1.0.
+- [docs/demo-checklist.md](docs/demo-checklist.md): checklist 10 mục trước buổi demo.
+- [CHANGELOG.md](CHANGELOG.md): thay đổi theo phiên bản, Đợt 1–6.

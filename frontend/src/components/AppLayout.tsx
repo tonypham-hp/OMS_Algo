@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { DemoTopBar } from '@/components/demo/DemoTopBar'
 import { NotificationBell } from '@/components/layout/NotificationBell'
@@ -8,6 +8,7 @@ import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import { LAYOUT } from '@/config/theme'
 import { canUseDemo } from '@/demo/access'
+import { NARROW_SCREEN_QUERY, useMediaQuery } from '@/hooks/useMediaQuery'
 import { useMarketStream } from '@/hooks/useMarketStream'
 import { TourOverlay } from '@/tour/TourOverlay'
 import { useNotificationSync } from '@/hooks/useNotificationSync'
@@ -27,8 +28,13 @@ export function AppLayout() {
   useNotificationSync()
   usePaletteHotkey()
   const role = useAuthStore((state) => state.user?.role)
-  const collapsed = useUiStore((state) => state.sidebarCollapsed)
-  const toggleSidebar = useUiStore((state) => state.toggleSidebar)
+  const savedCollapsed = useUiStore((state) => state.sidebarCollapsed)
+  const toggleSaved = useUiStore((state) => state.toggleSidebar)
+  // Màn hẹp (≤1280px): luôn thu gọn khi vào; người dùng vẫn mở tạm được, nhưng không ghi đè lựa chọn đã lưu cho màn rộng.
+  const narrow = useMediaQuery(NARROW_SCREEN_QUERY)
+  const [narrowExpanded, setNarrowExpanded] = useState(false)
+  const collapsed = narrow ? !narrowExpanded : savedCollapsed
+  const toggleSidebar = narrow ? () => setNarrowExpanded((value) => !value) : toggleSaved
   const demoActive = useDemoStore((state) => state.snapshot !== null)
   const checksOpen = useDemoStore((state) => state.checksOpen)
 

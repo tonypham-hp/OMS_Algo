@@ -2,6 +2,7 @@ import { BookOpen, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { EmptyState } from '@/components/states'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { GLOSSARY } from '@/config/glossary'
@@ -43,7 +44,16 @@ export default function Glossary() {
         {entries.length}/{GLOSSARY.length} thuật ngữ
       </p>
       {entries.length === 0 ? (
-        <EmptyState icon={BookOpen} title="Không có thuật ngữ nào khớp" />
+        <EmptyState
+          icon={BookOpen}
+          title="Không có thuật ngữ nào khớp"
+          description="Thử từ khóa ngắn hơn, gõ không dấu cũng được (ví dụ: gia tran)."
+          action={
+            <Button variant="outline" size="sm" onClick={() => setQuery('')}>
+              Xóa từ khóa
+            </Button>
+          }
+        />
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {entries.map((entry) => (

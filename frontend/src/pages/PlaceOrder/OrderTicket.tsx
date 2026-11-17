@@ -200,7 +200,9 @@ export function OrderTicket() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Đặt lệnh nâng cao</CardTitle>
+        <CardTitle>
+          <h1>Đặt lệnh nâng cao</h1>
+        </CardTitle>
         <CardDescription>{strategy.description}</CardDescription>
       </CardHeader>
       <CardContent>

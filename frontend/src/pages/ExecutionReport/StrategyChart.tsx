@@ -18,7 +18,7 @@ function getDomain(stats: StrategyBps[]): [number, number] {
 /** bps có lợi trung bình theo chiến lược: trục 0 ở giữa, phải là có lợi, trái là bất lợi. */
 export function StrategyChart({ stats }: { stats: StrategyBps[] }) {
   if (stats.length === 0) {
-    return <EmptyState title="Chưa có lệnh khớp kèm giá arrival để so sánh." />
+    return <EmptyState title="Chưa có lệnh khớp kèm giá arrival để so sánh." description="Thử chọn 5 phiên hoặc gồm cả lệnh đang chạy ở bộ lọc phía trên." />
   }
 
   return (

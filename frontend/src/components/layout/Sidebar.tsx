@@ -22,7 +22,7 @@ function ComingSoonItem({ item, collapsed }: { item: NavItem; collapsed: boolean
     <span
       aria-disabled="true"
       title={`${item.label} (sắp có)`}
-      className={cn(ITEM_CLASS, 'text-muted-foreground/60 cursor-not-allowed', collapsed && 'justify-center px-0')}
+      className={cn(ITEM_CLASS, 'text-muted-foreground/80 cursor-not-allowed', collapsed && 'justify-center px-0')}
     >
       <Icon className="size-4 shrink-0" aria-hidden />
       {collapsed ? (

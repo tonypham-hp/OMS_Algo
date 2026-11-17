@@ -24,7 +24,15 @@ export default function Operations() {
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {overview.isPending && <LoadingState />}
-          {error && <ErrorState message={`Không tải được dữ liệu vận hành: ${error.message}`} />}
+          {error && (
+            <ErrorState
+              message={`Không tải được dữ liệu vận hành: ${error.message}`}
+              onRetry={() => {
+                void overview.refetch()
+                void orders.refetch()
+              }}
+            />
+          )}
           {overview.data && <OpsStatCards overview={overview.data} />}
         </CardContent>
       </Card>

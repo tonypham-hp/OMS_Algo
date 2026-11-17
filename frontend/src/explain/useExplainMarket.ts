@@ -43,3 +43,29 @@ export function getBriefMarket(symbol: string): ExplainMarket {
     max_rejects: null,
   }
 }
+
+/**
+ * Như getBriefMarket nhưng là hook: chỉ vẽ lại khi phiên, tuổi giá hoặc 4 mức giá của đúng mã này đổi,
+ * nên một dòng trong bảng nhiều lệnh không bị vẽ lại theo nhịp giá của mã khác.
+ */
+export function useBriefMarket(symbol: string): ExplainMarket {
+  const session = useMarketStore((state) => state.session)
+  const quoteAge = useMarketStore((state) => state.quote_age_seconds)
+  const ref = useMarketStore((state) => state.quotes.find((item) => item.symbol === symbol)?.ref_price)
+  const last = useMarketStore((state) => state.quotes.find((item) => item.symbol === symbol)?.last_price)
+  const bid = useMarketStore((state) => state.quotes.find((item) => item.symbol === symbol)?.bid_price)
+  const ask = useMarketStore((state) => state.quotes.find((item) => item.symbol === symbol)?.ask_price)
+  return useMemo(
+    () => ({
+      session,
+      quote:
+        ref === undefined || last === undefined || bid === undefined || ask === undefined
+          ? null
+          : { ref_price: ref, last_price: last, bid_price: bid, ask_price: ask },
+      quote_age_seconds: quoteAge,
+      max_delay_seconds: null,
+      max_rejects: null,
+    }),
+    [session, quoteAge, ref, last, bid, ask],
+  )
+}

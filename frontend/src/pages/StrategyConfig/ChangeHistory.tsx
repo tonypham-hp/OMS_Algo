@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { EmptyState, ErrorState, LoadingState } from '@/components/states'
+import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -85,8 +86,28 @@ export function ChangeHistory() {
       </div>
 
       {requests.isPending && <LoadingState />}
-      {requests.error && <ErrorState message={`Không tải được lịch sử: ${requests.error.message}`} />}
-      {requests.data?.length === 0 && <EmptyState title="Chưa có thay đổi nào khớp bộ lọc." />}
+      {requests.error && (
+        <ErrorState message={`Không tải được lịch sử: ${requests.error.message}`} onRetry={() => void requests.refetch()} />
+      )}
+      {requests.data?.length === 0 && (
+        <EmptyState
+          title="Chưa có thay đổi nào khớp bộ lọc."
+          description="Mỗi đề xuất thay đổi tham số và quyết định duyệt sẽ được ghi ở đây."
+          action={
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setParameter(ALL)
+                setUser(ALL)
+                setStatus(ALL)
+              }}
+            >
+              Bỏ lọc
+            </Button>
+          }
+        />
+      )}
       {requests.data && requests.data.length > 0 && (
         <Table>
           <TableHeader>

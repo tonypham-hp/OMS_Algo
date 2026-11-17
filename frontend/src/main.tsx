@@ -1,3 +1,5 @@
+// Cờ test e2e phải nạp trước mọi module khác (thay Math.random trước khi bộ giả lập khởi tạo).
+import './testing/e2eHooks'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'

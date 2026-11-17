@@ -116,7 +116,9 @@ export default function Login() {
               />
             ))}
           </div>
-          {errorMessage && <ErrorState message={errorMessage} />}
+          {errorMessage && (
+            <ErrorState message={errorMessage} onRetry={users.error ? () => void users.refetch() : undefined} />
+          )}
           <Button
             size="lg"
             className="h-11"

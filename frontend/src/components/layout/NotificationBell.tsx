@@ -10,6 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { formatDateTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth.store'
 import { selectItems, useNotificationStore } from '@/store/notification.store'
@@ -62,7 +63,7 @@ export function NotificationBell() {
         </div>
         <DropdownMenuSeparator />
         {items.length === 0 ? (
-          <EmptyState icon={BellOff} title="Chưa có thông báo nào." />
+          <EmptyState icon={BellOff} title="Chưa có thông báo nào." description="Lệnh bị từ chối, tạm dừng hay khớp xong sẽ báo ở đây." />
         ) : (
           <div className="max-h-96 overflow-y-auto">
             {items.map((item) => (
@@ -83,7 +84,7 @@ export function NotificationBell() {
                     {item.message}
                     {!item.read && <span className="sr-only"> (chưa đọc)</span>}
                   </span>
-                  <span className="text-muted-foreground text-xs tabular-nums">{item.time.replace('T', ' ')}</span>
+                  <span className="text-muted-foreground text-xs tabular-nums">{formatDateTime(item.time)}</span>
                 </span>
               </DropdownMenuItem>
             ))}
