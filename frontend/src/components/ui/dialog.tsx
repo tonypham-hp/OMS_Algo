@@ -76,7 +76,7 @@ function DialogContent({
             >
               <XIcon
               />
-              <span className="sr-only">Đóng</span>
+              <span className="sr-only">Đóng hộp thoại</span>
             </Button>
           </DialogPrimitive.Close>
         )}

@@ -24,7 +24,7 @@ test.describe('Đặt lệnh', () => {
     await dialog.getByRole('button', { name: 'Xác nhận đặt lệnh' }).click()
     await expect(dialog.getByRole('heading', { name: 'Đặt lệnh thành công' })).toBeVisible()
     const orderId = (await dialog.getByText(/^PO-\d{8}-\d{4}$/).innerText()).trim()
-    await dialog.getByRole('button', { name: 'Đóng' }).click()
+    await dialog.getByRole('button', { name: 'Đóng', exact: true }).click()
 
     await page.locator('[data-demo-id="nav-so-lenh"]').click()
     const row = demoId(page, `order-row-${orderId}`)

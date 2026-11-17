@@ -146,7 +146,7 @@ export async function placeIceberg(page: Page, options: { qty?: string; slice?: 
   await dialog.getByRole('button', { name: 'Xác nhận đặt lệnh' }).click()
   await expect(dialog.getByRole('heading', { name: 'Đặt lệnh thành công' })).toBeVisible()
   const id = (await dialog.getByText(/^PO-\d{8}-\d{4}$/).innerText()).trim()
-  await dialog.getByRole('button', { name: 'Đóng' }).click()
+  await dialog.getByRole('button', { name: 'Đóng', exact: true }).click()
   await expect(dialog).toHaveCount(0)
   return id
 }
