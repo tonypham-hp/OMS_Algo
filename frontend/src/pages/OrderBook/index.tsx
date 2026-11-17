@@ -1,6 +1,9 @@
+import { ListOrdered, Plus, SearchX } from 'lucide-react'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { SessionLockNotice } from '@/components/SessionLockNotice'
-import { ErrorState, LoadingState } from '@/components/states'
+import { EmptyState, ErrorState, LoadingState } from '@/components/states'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useOrders, usePauseOrder, useResumeOrder } from '@/hooks/useOrders'
 import { usePermission } from '@/hooks/usePermission'
@@ -28,6 +31,35 @@ export default function OrderBook() {
   const showAccount = hasPermission('multi_account') || hasPermission('operations')
   const accounts = showAccount ? [...new Set(allOrders.map((order) => order.account_no))].sort() : []
   const actionError = pauseOrder.error?.message ?? resumeOrder.error?.message
+  const visibleOrders = filterOrders(allOrders, filters)
+  const empty =
+    allOrders.length === 0 ? (
+      <EmptyState
+        icon={ListOrdered}
+        title="Chưa có lệnh nào"
+        description="Lệnh bạn đặt sẽ hiện ở đây, kèm tiến độ khớp và trạng thái từng lệnh."
+        action={
+          hasPermission('place_order') && (
+            <Button size="sm" asChild>
+              <Link to="/dat-lenh">
+                <Plus aria-hidden /> Đặt lệnh mới
+              </Link>
+            </Button>
+          )
+        }
+      />
+    ) : (
+      <EmptyState
+        icon={SearchX}
+        title="Không có lệnh nào khớp bộ lọc"
+        description="Thử bỏ bớt điều kiện lọc theo mã, trạng thái hoặc loại lệnh."
+        action={
+          <Button variant="outline" size="sm" onClick={() => setFilters(EMPTY_FILTERS)}>
+            Bỏ lọc
+          </Button>
+        }
+      />
+    )
 
   return (
     <Card>
@@ -59,9 +91,10 @@ export default function OrderBook() {
 
         {orders.isPending ? (
           <LoadingState />
-        ) : (
+        ) : orders.error && !orders.data ? null : (
           <OrderTable
-            orders={filterOrders(allOrders, filters)}
+            orders={visibleOrders}
+            empty={empty}
             showAccount={showAccount}
             isBusy={pauseOrder.isPending || resumeOrder.isPending}
             onEdit={setEditing}

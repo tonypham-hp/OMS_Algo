@@ -35,7 +35,16 @@ export default function StrategyTemplates() {
         </p>
       </div>
       {templates.length === 0 ? (
-        <EmptyState icon={LayoutTemplate} title="Không có mẫu nào cho vai trò hoặc loại lệnh đang bật" />
+        <EmptyState
+          icon={LayoutTemplate}
+          title="Không có mẫu nào cho vai trò hoặc loại lệnh đang bật"
+          description="Loại lệnh do vận hành bật ở Cấu hình chiến lược. Bạn vẫn đặt được lệnh thủ công."
+          action={
+            <Button variant="outline" size="sm" onClick={() => navigate('/dat-lenh')}>
+              Đặt lệnh mới
+            </Button>
+          }
+        />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" data-demo-id="template-grid">
           {templates.map((template) => {

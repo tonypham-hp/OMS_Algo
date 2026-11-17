@@ -20,7 +20,7 @@ export function OrderProgressChart({ order, detail }: OrderProgressChartProps) {
   const { rows, hasPlan, plannedQty, startingQty, hasFills } = progress
 
   if (!hasPlan && !hasFills) {
-    return <EmptyState title="Chưa có khớp lệnh để vẽ biểu đồ." />
+    return <EmptyState title="Chưa có khớp lệnh để vẽ biểu đồ." description="Biểu đồ KL khớp lũy kế hiện sau lần khớp đầu tiên." />
   }
 
   const min = rows[0].time

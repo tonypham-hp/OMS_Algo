@@ -41,7 +41,16 @@ function DashboardBody({ data }: { data: DashboardData }) {
             {attention.items.length > 0 ? (
               <AttentionTable items={attention.items} />
             ) : (
-              <EmptyState icon={CircleCheck} title="Không có lệnh nào cần chú ý." />
+              <EmptyState
+                icon={CircleCheck}
+                title="Không có lệnh nào cần chú ý."
+                description="Lệnh con chưa rõ, bị từ chối hoặc lệnh bị hệ thống dừng sẽ hiện ở đây."
+                action={
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to="/so-lenh">Xem Sổ lệnh</Link>
+                  </Button>
+                }
+              />
             )}
           </CardContent>
         </Card>
@@ -56,7 +65,15 @@ function DashboardBody({ data }: { data: DashboardData }) {
             {activity.length > 0 ? (
               <RecentActivity items={activity} />
             ) : (
-              <EmptyState title="Chưa có hoạt động nào." />
+              <EmptyState
+                title="Chưa có hoạt động nào."
+                description="Đặt một lệnh để xem lệnh con được sinh, gửi và khớp ở đây."
+                action={
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to="/dat-lenh">Đặt lệnh mới</Link>
+                  </Button>
+                }
+              />
             )}
           </CardContent>
         </Card>

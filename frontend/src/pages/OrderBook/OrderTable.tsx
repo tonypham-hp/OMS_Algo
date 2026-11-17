@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { OrderStatusBadge } from '@/components/OrderStatusBadge'
 import { ProgressBar } from '@/components/ProgressBar'
@@ -28,9 +29,11 @@ interface OrderTableProps {
   onCancel: (order: ParentOrder) => void
   onPause: (order: ParentOrder) => void
   onResume: (order: ParentOrder) => void
+  /** Nội dung khi không có dòng nào (chưa có lệnh, hoặc bộ lọc không ra kết quả). */
+  empty: ReactNode
 }
 
-export function OrderTable({ orders, showAccount, isBusy, onEdit, onCancel, onPause, onResume }: OrderTableProps) {
+export function OrderTable({ orders, showAccount, isBusy, onEdit, onCancel, onPause, onResume, empty }: OrderTableProps) {
   const columnCount = showAccount ? 11 : 10
   const role = useAuthStore((state) => state.user?.role ?? 'CUSTOMER')
 
@@ -54,8 +57,8 @@ export function OrderTable({ orders, showAccount, isBusy, onEdit, onCancel, onPa
       <TableBody>
         {orders.length === 0 && (
           <TableRow>
-            <TableCell colSpan={columnCount} className="text-muted-foreground py-8 text-center">
-              Không có lệnh nào phù hợp.
+            <TableCell colSpan={columnCount} className="whitespace-normal">
+              {empty}
             </TableCell>
           </TableRow>
         )}

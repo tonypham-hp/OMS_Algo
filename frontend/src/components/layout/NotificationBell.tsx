@@ -62,7 +62,7 @@ export function NotificationBell() {
         </div>
         <DropdownMenuSeparator />
         {items.length === 0 ? (
-          <EmptyState icon={BellOff} title="Chưa có thông báo nào." />
+          <EmptyState icon={BellOff} title="Chưa có thông báo nào." description="Lệnh bị từ chối, tạm dừng hay khớp xong sẽ báo ở đây." />
         ) : (
           <div className="max-h-96 overflow-y-auto">
             {items.map((item) => (

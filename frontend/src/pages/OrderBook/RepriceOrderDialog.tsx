@@ -118,7 +118,7 @@ export function RepriceOrderDialog({ order, onClose, suggested }: RepriceOrderDi
             Khối lượng giữ nguyên.
           </DialogDescription>
         </DialogHeader>
-        {priceFields.error && <ErrorState message={priceFields.error.message} />}
+        {priceFields.error && <ErrorState message={priceFields.error.message} onRetry={() => void priceFields.refetch()} />}
         {priceFields.isPending && <LoadingState />}
         {priceFields.data && <RepriceForm order={order} fields={priceFields.data} onClose={onClose} suggested={suggested} />}
       </DialogContent>
