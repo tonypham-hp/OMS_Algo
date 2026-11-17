@@ -38,6 +38,24 @@ for (const role of ['CUSTOMER', 'DEALER', 'OPS'] as Role[]) {
       await page.clock.runFor(2_000)
       await expect(page.getByRole('status').filter({ hasText: /^Đang tải/ })).toHaveCount(0)
 
+      // Nút, liên kết đang hiện đều có tên truy cập (nút chỉ có icon phải có aria-label).
+      const unnamed = await page.evaluate(() =>
+        Array.from(document.querySelectorAll<HTMLElement>('button, a[href], [role="button"], [role="link"]'))
+          .filter((element) => element.offsetParent !== null || element.getClientRects().length > 0)
+          .filter((element) => {
+            const labelledBy = element.getAttribute('aria-labelledby')
+            const name =
+              element.getAttribute('aria-label') ??
+              (labelledBy ? document.getElementById(labelledBy)?.textContent : null) ??
+              element.textContent ??
+              element.getAttribute('title') ??
+              ''
+            return name.trim() === '' && !element.querySelector('img[alt]:not([alt=""])')
+          })
+          .map((element) => element.outerHTML.slice(0, 120)),
+      )
+      expect(unnamed, `${route.path}: nút/link thiếu tên`).toEqual([])
+
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
       expect(overflow, `${route.path} tràn ngang ${overflow}px`).toBeLessThanOrEqual(0)
       expect(problems.console, `${route.path}: lỗi console`).toEqual([])
