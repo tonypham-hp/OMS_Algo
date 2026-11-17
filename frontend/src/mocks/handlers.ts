@@ -22,6 +22,7 @@ import type {
   SystemParameterCode,
   UpdateOrderRequest,
 } from '@/types'
+import { apiGroupOf, getE2eFlags } from '@/testing/e2eHooks'
 import { canSeeOrder } from './access'
 import { DEMO_USERS } from './data'
 import { EngineError } from './engine'
@@ -125,7 +126,22 @@ function handleConfigChange(request: Request, action: (username: string) => unkn
   return response
 }
 
+/** Chỉ khi test e2e: làm chậm hoặc làm lỗi một nhóm API để kiểm LoadingState, ErrorState. Không trả gì thì đi tiếp. */
+const e2eFaultHandlers = (() => {
+  const flags = getE2eFlags()
+  if (!flags || (flags.fail.length === 0 && flags.delay === 0)) return []
+  return [
+    http.all('*/api/*', async ({ request }) => {
+      if (flags.delay > 0) await new Promise((resolve) => setTimeout(resolve, flags.delay))
+      const group = apiGroupOf(request.url)
+      if (group && flags.fail.includes(group)) return errorResponse('Lỗi giả lập khi test', 500)
+      return undefined
+    }),
+  ]
+})()
+
 export const handlers = [
+  ...e2eFaultHandlers,
   http.get('*/api/config/parameters', ({ request }) => handleOps(request, () => configStore.listParameters())),
 
   http.get('*/api/config/requests', ({ request }) => {

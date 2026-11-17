@@ -46,6 +46,11 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# ===== Playwright =====
+playwright-report/
+test-results/
+blob-report/
+
 # ===== Database cục bộ =====
 *.db
 *.sqlite
