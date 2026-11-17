@@ -127,7 +127,7 @@ function handleConfigChange(request: Request, action: (username: string) => unkn
 }
 
 /** Chỉ khi test e2e: làm chậm hoặc làm lỗi một nhóm API để kiểm LoadingState, ErrorState. Không trả gì thì đi tiếp. */
-const e2eFaultHandlers = (() => {
+function createE2eFaultHandlers() {
   const flags = getE2eFlags()
   if (!flags || (flags.fail.length === 0 && flags.delay === 0)) return []
   return [
@@ -138,7 +138,10 @@ const e2eFaultHandlers = (() => {
       return undefined
     }),
   ]
-})()
+}
+
+/** Bản build không có nhánh này: import.meta.env.DEV là hằng false nên bundler bỏ cả hàm. */
+const e2eFaultHandlers = import.meta.env.DEV ? createE2eFaultHandlers() : []
 
 export const handlers = [
   ...e2eFaultHandlers,
