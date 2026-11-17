@@ -45,7 +45,10 @@ test('đặt lệnh Iceberg chỉ bằng bàn phím (Tab, Enter, Esc)', async ({
   await tabTo(page, (item) => item.id === 'strategy_type')
   await page.keyboard.press('Enter')
   await expect(page.getByRole('listbox')).toBeVisible()
+  // Danh sách mở xong thì mục đang chọn nhận focus; chỉ gõ sau đó, rồi chờ mục Iceberg được tô trước khi Enter.
+  await expect(page.getByRole('option', { name: 'Stop Limit', exact: true })).toBeFocused()
   await page.keyboard.type('Iceberg')
+  await expect(page.getByRole('option', { name: 'Iceberg', exact: true })).toBeFocused()
   await page.keyboard.press('Enter')
   await expect(page.getByRole('combobox', { name: /^Loại lệnh/ })).toHaveText('Iceberg')
 
