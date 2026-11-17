@@ -78,3 +78,21 @@ test.describe('Màn hẹp', () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0)
   })
 })
+
+test.describe('Thanh trên', () => {
+  test('tên màn ở breadcrumb không bị cắt trên mọi route', async ({ page }) => {
+    await loginAs(page, 'OPS')
+    const paths = ['/trung-tam', '/dat-lenh', '/mau-chien-luoc', '/so-lenh', '/bao-cao/hieu-qua', '/thuat-ngu', '/van-hanh', '/cau-hinh']
+    await navigate(page, '/so-lenh')
+    const firstRow = page.locator('[data-demo-id^="order-row-"]').first()
+    await expect(firstRow).toBeVisible()
+    paths.push(`/so-lenh/${await firstRow.getAttribute('data-order-id')}`)
+    for (const path of paths) {
+      await navigate(page, path)
+      const last = page.getByRole('navigation', { name: 'Vị trí' }).getByRole('listitem').last()
+      await expect(last).toBeVisible()
+      const clipped = await last.evaluate((element) => element.scrollWidth - element.clientWidth)
+      expect(clipped, `${path}: "${await last.innerText()}" bị cắt ${clipped}px`).toBeLessThanOrEqual(0)
+    }
+  })
+})

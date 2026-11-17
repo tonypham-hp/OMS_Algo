@@ -12,6 +12,7 @@ import {
 import { ROLE_LABELS } from '@/config/permissions'
 import { LAYOUT } from '@/config/theme'
 import { formatWallClock } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth.store'
 import { useDemoStore } from '@/store/demo.store'
 import { useMarketStore } from '@/store/market.store'
@@ -28,10 +29,22 @@ function Breadcrumb() {
       <ol className="flex min-w-0 items-center gap-1 text-sm">
         {crumbs.map((crumb, index) => {
           const isLast = index === crumbs.length - 1
+          // Dưới 1600px thanh trên chật (phiên, nút tua, nhãn dữ liệu, Demo): chỉ giữ tên màn hiện tại để nó không bị cắt;
+          // cấp cha vẫn thấy ở thanh bên (mục đang chọn được tô sáng).
           return (
             <Fragment key={`${crumb.label}-${index}`}>
-              {index > 0 && <ChevronRight className="text-muted-foreground size-3.5 shrink-0" aria-hidden />}
-              <li className={isLast ? 'truncate font-medium' : 'text-muted-foreground whitespace-nowrap'}>
+              {index > 0 && (
+                <ChevronRight
+                  className="text-muted-foreground hidden size-3.5 shrink-0 min-[1600px]:block"
+                  aria-hidden
+                />
+              )}
+              <li
+                className={cn(
+                  isLast ? 'truncate font-medium' : 'text-muted-foreground whitespace-nowrap',
+                  !isLast && 'hidden min-[1600px]:list-item',
+                )}
+              >
                 {crumb.path ? (
                   <Link to={crumb.path} className="hover:text-foreground">
                     {crumb.label}
@@ -54,8 +67,13 @@ function DemoDataLabel() {
   const quoteAge = useMarketStore((state) => state.quote_age_seconds)
   const lastUpdate = receivedAt > 0 ? formatWallClock(receivedAt - quoteAge * 1000) : '--:--:--'
   return (
-    <span className="bg-price-ref/15 text-price-ref rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap">
-      Dữ liệu demo · cập nhật <span className="tabular-nums">{lastUpdate}</span>
+    // Dưới 1600px thanh trên chật: bỏ chữ "cập nhật" để tên màn (breadcrumb) không bị cắt; title vẫn đủ câu.
+    <span
+      className="bg-price-ref/15 text-price-ref rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap"
+      title={`Dữ liệu demo · cập nhật ${lastUpdate}`}
+    >
+      Dữ liệu demo · <span className="hidden min-[1600px]:inline">cập nhật </span>
+      <span className="tabular-nums">{lastUpdate}</span>
     </span>
   )
 }
@@ -130,7 +148,7 @@ function PaletteButton() {
   const shortcut = paletteShortcutLabel()
   const label = `Tìm lệnh, mã, màn hình… ${shortcut}`
   return (
-    // Thanh trên đã chật ở 1366–1440px (phiên, nút tua, nhãn dữ liệu, Demo): chữ chỉ hiện từ 1600px, phím tắt từ 1440px,
+    // Thanh trên đã chật ở 1366–1440px (phiên, nút tua, nhãn dữ liệu, Demo): chữ và phím tắt chỉ hiện từ 1600px,
     // màn hẹp hơn chỉ còn biểu tượng; tên đọc cho trình đọc màn hình và title vẫn đủ câu.
     <button
       type="button"
@@ -145,7 +163,7 @@ function PaletteButton() {
       <span className="hidden whitespace-nowrap min-[1600px]:inline" aria-hidden>
         Tìm lệnh, mã, màn hình…
       </span>
-      <kbd className="bg-muted hidden rounded px-1.5 py-px font-mono text-[11px] whitespace-nowrap min-[1440px]:inline" aria-hidden>
+      <kbd className="bg-muted hidden rounded px-1.5 py-px font-mono text-[11px] whitespace-nowrap min-[1600px]:inline" aria-hidden>
         {shortcut}
       </kbd>
     </button>
