@@ -115,3 +115,49 @@ export const test = base.extend<{ allowHttpErrors: boolean; problems: PageProble
 })
 
 export { expect }
+
+/**
+ * Tua giả lập tới phiên cần thiết: bật tốc độ x60 rồi tua đồng hồ trình duyệt từng đoạn cho tới khi
+ * thanh trạng thái báo đúng phiên, sau đó trả tốc độ về x1 để thao tác không bị lệnh khớp xen vào quá nhanh.
+ */
+export async function runUntilSession(page: Page, label: string, maxRealMs = 600_000) {
+  const status = page.locator('[data-demo-id="session-status"]')
+  await page.getByRole('group', { name: 'Tốc độ giả lập' }).getByRole('button', { name: 'x60', exact: true }).click()
+  for (let elapsed = 0; elapsed < maxRealMs; elapsed += 5_000) {
+    if ((await status.innerText()).includes(label)) break
+    await page.clock.runFor(5_000)
+  }
+  await page.getByRole('group', { name: 'Tốc độ giả lập' }).getByRole('button', { name: 'x1', exact: true }).click()
+  await expect(status).toContainText(label)
+}
+
+/**
+ * Đặt nhanh một lệnh Iceberg mua FPT qua màn Đặt lệnh, trả về mã lệnh cha.
+ * Mặc định giá sàn để lệnh đứng yên (không khớp), giúp kiểm hành động trên lệnh mà không bị khớp xen vào.
+ */
+export async function placeIceberg(page: Page, options: { qty?: string; slice?: string; price?: string } = {}) {
+  await navigate(page, '/dat-lenh')
+  await chooseStrategy(page, 'Iceberg')
+  await page.getByRole('textbox', { name: 'Khối lượng', exact: true }).fill(options.qty ?? '5.000')
+  await page.getByRole('textbox', { name: 'KL mỗi phần' }).fill(options.slice ?? '1.000')
+  await page.getByRole('textbox', { name: 'Giá giới hạn' }).fill(options.price ?? '109.800')
+  await page.getByRole('button', { name: 'Đặt lệnh', exact: true }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByRole('button', { name: 'Xác nhận đặt lệnh' }).click()
+  await expect(dialog.getByRole('heading', { name: 'Đặt lệnh thành công' })).toBeVisible()
+  const id = (await dialog.getByText(/^PO-\d{8}-\d{4}$/).innerText()).trim()
+  await dialog.getByRole('button', { name: 'Đóng' }).click()
+  await expect(dialog).toHaveCount(0)
+  return id
+}
+
+/** Chọn loại lệnh ở màn Đặt lệnh. Chờ form nạp xong (mã mặc định đã hiện), mở lại danh sách nếu nó bị đóng giữa chừng. */
+export async function chooseStrategy(page: Page, label: string) {
+  const combobox = page.getByRole('combobox', { name: /^Loại lệnh/ })
+  await expect(page.getByRole('combobox', { name: 'Mã' })).not.toHaveText('')
+  await expect(async () => {
+    if ((await combobox.getAttribute('aria-expanded')) !== 'true') await combobox.click()
+    await page.getByRole('option', { name: label, exact: true }).click({ timeout: 2_000 })
+    await expect(combobox).toHaveText(label, { timeout: 1_000 })
+  }).toPass({ timeout: 15_000 })
+}
