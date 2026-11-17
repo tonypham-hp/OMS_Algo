@@ -10,6 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { formatDateTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth.store'
 import { selectItems, useNotificationStore } from '@/store/notification.store'
@@ -83,7 +84,7 @@ export function NotificationBell() {
                     {item.message}
                     {!item.read && <span className="sr-only"> (chưa đọc)</span>}
                   </span>
-                  <span className="text-muted-foreground text-xs tabular-nums">{item.time.replace('T', ' ')}</span>
+                  <span className="text-muted-foreground text-xs tabular-nums">{formatDateTime(item.time)}</span>
                 </span>
               </DropdownMenuItem>
             ))}

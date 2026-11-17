@@ -41,7 +41,7 @@ export function FaultInjectionPanel({ orders, overview }: FaultInjectionPanelPro
     {
       code: 'TC-E2E-130',
       title: 'Core từ chối lệnh con tiếp theo',
-      expected: 'Child REJECTED. Từ chối 2 lần liên tiếp thì Parent PAUSED_SYSTEM.',
+      expected: 'Lệnh con REJECTED. Từ chối 2 lần liên tiếp thì lệnh cha PAUSED_SYSTEM.',
       button: 'Bơm lỗi',
       needsOrder: true,
       run: () =>
@@ -53,7 +53,7 @@ export function FaultInjectionPanel({ orders, overview }: FaultInjectionPanelPro
     {
       code: 'TC-E2E-140',
       title: 'Timeout trước khi Core tạo lệnh',
-      expected: 'Child UNKNOWN, khoảng 5 giây sau đối soát: hủy Child, sinh đúng 1 Child mới.',
+      expected: 'Lệnh con UNKNOWN, khoảng 5 giây sau đối soát: hủy lệnh con, sinh đúng 1 lệnh con mới.',
       button: 'Bơm lỗi',
       needsOrder: true,
       run: () =>
@@ -65,7 +65,7 @@ export function FaultInjectionPanel({ orders, overview }: FaultInjectionPanelPro
     {
       code: 'TC-E2E-141',
       title: 'Timeout nhưng Core đã tạo lệnh',
-      expected: 'Child UNKNOWN, khoảng 5 giây sau đối soát: giữ Child, về ACKNOWLEDGED, không sinh Child mới.',
+      expected: 'Lệnh con UNKNOWN, khoảng 5 giây sau đối soát: giữ lệnh con, về ACKNOWLEDGED, không sinh lệnh con mới.',
       button: 'Bơm lỗi',
       needsOrder: true,
       run: () =>

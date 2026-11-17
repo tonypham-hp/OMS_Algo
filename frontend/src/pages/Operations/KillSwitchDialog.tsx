@@ -35,7 +35,7 @@ export function KillSwitchDialog({ request, scopeLabel, affectedCount, onClose }
         {step === 1 ? (
           <>
             <ul className="list-inside list-disc text-sm">
-              <li>Hủy ngay mọi lệnh con chưa khớp, kể cả trong ATO, ATC. Child chưa rõ trạng thái giữ nguyên chờ đối soát.</li>
+              <li>Hủy ngay mọi lệnh con chưa khớp, kể cả trong ATO, ATC. Lệnh con chưa rõ trạng thái giữ nguyên chờ đối soát.</li>
               <li>Không đặt được lệnh mới trong phạm vi này cho tới khi gỡ kill switch.</li>
               <li>Gỡ kill switch không làm lệnh tự chạy lại: vận hành phải mở lại từng lệnh và ghi lý do.</li>
             </ul>

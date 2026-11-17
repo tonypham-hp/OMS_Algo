@@ -21,8 +21,8 @@ export function OpsStatCards({ overview }: { overview: OpsOverview }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="grid gap-3 sm:grid-cols-3">
-        <Stat label="Child UNKNOWN" value={formatNumber(overview.child_unknown)} isAlert={overview.child_unknown > 0} />
-        <Stat label="Child REJECTED" value={formatNumber(overview.child_rejected)} isAlert={overview.child_rejected > 0} />
+        <Stat label="Lệnh con UNKNOWN" value={formatNumber(overview.child_unknown)} isAlert={overview.child_unknown > 0} />
+        <Stat label="Lệnh con REJECTED" value={formatNumber(overview.child_rejected)} isAlert={overview.child_rejected > 0} />
         <Stat
           label="Độ trễ dữ liệu giá"
           value={`${formatNumber(overview.quote_age_seconds)} giây`}

@@ -8,7 +8,7 @@ export default function StrategyConfig() {
     <Card>
       <CardHeader>
         <CardTitle>
-          <h1>Cấu hình strategy</h1>
+          <h1>Cấu hình chiến lược</h1>
         </CardTitle>
         <CardDescription>
           Tham số hệ thống mà engine đang dùng. Mỗi thay đổi cần một người vận hành khác duyệt mới có hiệu lực, và chỉ áp
