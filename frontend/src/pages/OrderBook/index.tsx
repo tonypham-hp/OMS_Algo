@@ -1,5 +1,5 @@
 import { ListOrdered, Plus, SearchX } from 'lucide-react'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { SessionLockNotice } from '@/components/SessionLockNotice'
 import { EmptyState, ErrorState, LoadingState } from '@/components/states'
@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useOrders, usePauseOrder, useResumeOrder } from '@/hooks/useOrders'
 import { usePermission } from '@/hooks/usePermission'
+import { useShallow } from 'zustand/react/shallow'
 import { useMarketStore } from '@/store/market.store'
 import type { ParentOrder } from '@/types'
 import { isRepriceRequired } from '@/utils/orderActions'
@@ -22,7 +23,13 @@ export default function OrderBook() {
   const pauseOrder = usePauseOrder()
   const resumeOrder = useResumeOrder()
   const hasPermission = usePermission()
-  const quotes = useMarketStore((state) => state.quotes)
+  // Chỉ cần danh sách mã cho bộ lọc: không theo dõi cả bảng giá, để nhịp giá không vẽ lại toàn bộ Sổ lệnh.
+  const symbols = useMarketStore(useShallow((state) => state.quotes.map((quote) => quote.symbol)))
+  const { mutate: pause } = pauseOrder
+  const { mutate: resume } = resumeOrder
+  // Hàm ổn định giữa các lần vẽ để các dòng (memo) không bị vẽ lại vô ích.
+  const onPause = useCallback((order: ParentOrder) => pause(order.parent_order_id), [pause])
+  const onResume = useCallback((order: ParentOrder) => resume(order.parent_order_id), [resume])
   const [filters, setFilters] = useState(EMPTY_FILTERS)
   const [editing, setEditing] = useState<ParentOrder | null>(null)
   const [cancelling, setCancelling] = useState<ParentOrder | null>(null)
@@ -72,7 +79,7 @@ export default function OrderBook() {
         <OrderFilters
           filters={filters}
           onChange={setFilters}
-          symbols={quotes.map((quote) => quote.symbol)}
+          symbols={symbols}
           accounts={accounts}
         />
 
@@ -99,8 +106,8 @@ export default function OrderBook() {
             isBusy={pauseOrder.isPending || resumeOrder.isPending}
             onEdit={setEditing}
             onCancel={setCancelling}
-            onPause={(order) => pauseOrder.mutate(order.parent_order_id)}
-            onResume={(order) => resumeOrder.mutate(order.parent_order_id)}
+            onPause={onPause}
+            onResume={onResume}
           />
         )}
 

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { memo, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { OrderStatusBadge } from '@/components/OrderStatusBadge'
 import { ProgressBar } from '@/components/ProgressBar'
@@ -12,14 +12,73 @@ import {
 } from '@/components/ui/table'
 import { SIDE_LABELS, STRATEGIES } from '@/config/strategies'
 import { explainOrderBrief } from '@/explain/explain'
-import { getBriefMarket } from '@/explain/useExplainMarket'
+import { useBriefMarket } from '@/explain/useExplainMarket'
 import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth.store'
-import type { ParentOrder } from '@/types'
+import type { ParentOrder, Role } from '@/types'
 import { OrderActions } from './OrderActions'
 
 const NUMBER_CELL = 'text-right tabular-nums'
+
+interface OrderRowProps {
+  order: ParentOrder
+  showAccount: boolean
+  isBusy: boolean
+  role: Role
+  onEdit: (order: ParentOrder) => void
+  onCancel: (order: ParentOrder) => void
+  onPause: (order: ParentOrder) => void
+  onResume: (order: ParentOrder) => void
+}
+
+/**
+ * Một dòng của Sổ lệnh. memo + chỉ theo dõi giá của đúng mã của dòng: nhịp giá của mã khác không vẽ lại dòng này,
+ * còn lời giải thích trạng thái (phụ thuộc phiên và giá) vẫn cập nhật khi giá của mã đó đổi.
+ */
+const OrderRow = memo(function OrderRow({ order, showAccount, isBusy, role, onEdit, onCancel, onPause, onResume }: OrderRowProps) {
+  const market = useBriefMarket(order.symbol)
+  return (
+    <TableRow data-order-id={order.parent_order_id} data-demo-id={`order-row-${order.parent_order_id}`}>
+      <TableCell>
+        <Link to={`/so-lenh/${order.parent_order_id}`} className="font-mono text-xs hover:underline">
+          {order.parent_order_id}
+        </Link>
+      </TableCell>
+      {showAccount && <TableCell className="tabular-nums">{order.account_no}</TableCell>}
+      <TableCell className="font-semibold">{order.symbol}</TableCell>
+      <TableCell className={cn('font-medium', order.side === 'BUY' ? 'text-price-up' : 'text-price-down')}>
+        {SIDE_LABELS[order.side]}
+      </TableCell>
+      <TableCell>{STRATEGIES[order.strategy_type].label}</TableCell>
+      <TableCell className={NUMBER_CELL}>{formatNumber(order.total_qty)}</TableCell>
+      <TableCell className={NUMBER_CELL}>{formatNumber(order.executed_qty)}</TableCell>
+      <TableCell>
+        <ProgressBar
+          value={order.executed_qty}
+          max={order.total_qty}
+          label={`Tiến độ khớp lệnh ${order.parent_order_id}`}
+        />
+      </TableCell>
+      <TableCell className={NUMBER_CELL}>
+        {order.limit_price === null ? '—' : formatNumber(order.limit_price)}
+      </TableCell>
+      <TableCell>
+        <OrderStatusBadge status={order.status} explain={explainOrderBrief(order, market, role)} />
+      </TableCell>
+      <TableCell>
+        <OrderActions
+          order={order}
+          isBusy={isBusy}
+          onEdit={onEdit}
+          onCancel={onCancel}
+          onPause={onPause}
+          onResume={onResume}
+        />
+      </TableCell>
+    </TableRow>
+  )
+})
 
 interface OrderTableProps {
   orders: ParentOrder[]
@@ -63,44 +122,17 @@ export function OrderTable({ orders, showAccount, isBusy, onEdit, onCancel, onPa
           </TableRow>
         )}
         {orders.map((order) => (
-          <TableRow key={order.parent_order_id} data-order-id={order.parent_order_id} data-demo-id={`order-row-${order.parent_order_id}`}>
-            <TableCell>
-              <Link to={`/so-lenh/${order.parent_order_id}`} className="font-mono text-xs hover:underline">
-                {order.parent_order_id}
-              </Link>
-            </TableCell>
-            {showAccount && <TableCell className="tabular-nums">{order.account_no}</TableCell>}
-            <TableCell className="font-semibold">{order.symbol}</TableCell>
-            <TableCell className={cn('font-medium', order.side === 'BUY' ? 'text-price-up' : 'text-price-down')}>
-              {SIDE_LABELS[order.side]}
-            </TableCell>
-            <TableCell>{STRATEGIES[order.strategy_type].label}</TableCell>
-            <TableCell className={NUMBER_CELL}>{formatNumber(order.total_qty)}</TableCell>
-            <TableCell className={NUMBER_CELL}>{formatNumber(order.executed_qty)}</TableCell>
-            <TableCell>
-              <ProgressBar
-                value={order.executed_qty}
-                max={order.total_qty}
-                label={`Tiến độ khớp lệnh ${order.parent_order_id}`}
-              />
-            </TableCell>
-            <TableCell className={NUMBER_CELL}>
-              {order.limit_price === null ? '—' : formatNumber(order.limit_price)}
-            </TableCell>
-            <TableCell>
-              <OrderStatusBadge status={order.status} explain={explainOrderBrief(order, getBriefMarket(order.symbol), role)} />
-            </TableCell>
-            <TableCell>
-              <OrderActions
-                order={order}
-                isBusy={isBusy}
-                onEdit={onEdit}
-                onCancel={onCancel}
-                onPause={onPause}
-                onResume={onResume}
-              />
-            </TableCell>
-          </TableRow>
+          <OrderRow
+            key={order.parent_order_id}
+            order={order}
+            showAccount={showAccount}
+            isBusy={isBusy}
+            role={role}
+            onEdit={onEdit}
+            onCancel={onCancel}
+            onPause={onPause}
+            onResume={onResume}
+          />
         ))}
       </TableBody>
     </Table>
