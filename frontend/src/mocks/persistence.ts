@@ -6,7 +6,8 @@ import type { ConfigState } from './systemConfig'
 // Đổi số phiên bản khi cấu trúc dữ liệu đổi, để dữ liệu cũ bị bỏ qua thay vì làm hỏng app.
 export const SIM_STATE_KEY = 'oms-sim-state-v1'
 // 7: lệnh mẫu có thêm lệnh đã hoàn tất ở các phiên trước, cho báo cáo hiệu quả thực hiện.
-const SIM_STATE_VERSION = 7
+// 8: lệnh mẫu của 5 phiên gần nhất cho màn Lịch sử và đối soát; engine có thêm sổ phía Core.
+const SIM_STATE_VERSION = 8
 
 export interface SavedSimState {
   version: number
