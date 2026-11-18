@@ -2,6 +2,7 @@ import { toDateString } from '@/lib/format'
 import type {
   ChildOrder,
   ChildOrderStatus,
+  EventReasonCode,
   Execution,
   MarketSnapshot,
   MarketTrade,
@@ -16,7 +17,7 @@ import type {
   StrategyType,
 } from '@/types'
 import { getTickSize } from '@/utils/hose'
-import type { SeedData } from './engine'
+import type { CoreOverride, SeedData } from './engine'
 
 interface SeedChild {
   price: number
@@ -25,6 +26,17 @@ interface SeedChild {
   status: ChildOrderStatus
   /** Giờ gửi và khớp (HH:MM:SS). Không có thì dùng giờ tạo lệnh. */
   at?: string
+  /** Lệnh có `past`: lệnh con thuộc phiên thứ mấy kể từ phiên bắt đầu (0 là phiên đầu). */
+  session?: number
+  /**
+   * Lệnh con từng mất ACK rồi được đối soát: KEPT là Core đã có lệnh (giữ lệnh con, khớp sau đó),
+   * CANCELLED là Core không có lệnh (hủy, không có core_order_id).
+   */
+  unknown?: 'KEPT' | 'CANCELLED'
+  /** Có một báo khớp trùng exchange_match_id của lần khớp này, đã bị bỏ qua. */
+  duplicate?: boolean
+  /** Sổ phía Core ghi khác OMS (dữ liệu đối soát mẫu). */
+  core?: Omit<CoreOverride, 'child_order_id'>
 }
 
 /**
@@ -42,6 +54,26 @@ interface SeedHistory {
   path: number[]
   /** Tổng KL thị trường của người khác trong khoảng, để tỷ lệ tham gia hợp lý. */
   marketVolume: number
+}
+
+/**
+ * Lệnh đã kết thúc (hoặc chạy nhiều phiên) ở các phiên trước, cho màn Lịch sử và đối soát.
+ * Khác `history`: không sinh băng tick và có thể chạy qua nhiều phiên.
+ */
+interface SeedPast {
+  /** Phiên bắt đầu, tính bằng số phiên trước hôm nay. */
+  daysAgo: number
+  start: string
+  /** Giờ kết thúc ở phiên cuối. */
+  end: string
+  /** Số phiên đã chạy (GTD, MULTI_SESSION). Mỗi lần sang phiên sau có một event CARRY_OVER. Mặc định 1. */
+  sessions?: number
+  /** Mã lý do của event kết thúc (hết hạn). Lệnh CANCELLED dùng USER_CANCEL. */
+  endReason?: EventReasonCode
+  /** Người hủy lệnh (lệnh CANCELLED). */
+  endUser?: string
+  /** Dữ liệu đối soát mẫu: executed_qty ghi trên lệnh cha khác tổng khớp (một Execution bị mất). */
+  executedQty?: number
 }
 
 interface SeedOrder {
@@ -62,6 +94,7 @@ interface SeedOrder {
   pauseReason?: string
   arrival_price: number
   history?: SeedHistory
+  past?: SeedPast
 }
 
 const A1 = '058C123456'
@@ -309,13 +342,128 @@ const SEED_ORDERS: SeedOrder[] = [
     arrival_price: 23_700,
     history: { daysAgo: 2, start: '13:30:00', end: '14:00:00', path: [23_700, 23_650, 23_700, 23_650], marketVolume: 40_000 },
   },
+  // ===== Các phiên trước, cho màn Lịch sử và đối soát (Đợt 7). Không có lệnh COMPLETED để báo cáo hiệu quả không đổi. =====
+  {
+    // Dealer hủy giữa chừng. Lệnh con thứ hai mất ACK, đối soát ra Core không có lệnh.
+    account_no: A1,
+    symbol: 'SSI',
+    side: 'BUY',
+    strategy_type: 'ICEBERG',
+    total_qty: 4_000,
+    limit_price: 26_000,
+    status: 'CANCELLED',
+    persistence_mode: 'DAY',
+    createdYesterday: false,
+    params: [['slice_qty', '1000', 'INTEGER']],
+    children: [
+      filled('09:40:00', 26_000, 1_000),
+      { price: 26_000, quantity: 1_000, filled: 0, status: 'CANCELLED', at: '09:50:00', unknown: 'CANCELLED' },
+      { price: 26_000, quantity: 1_000, filled: 0, status: 'CANCELLED', at: '10:00:00' },
+    ],
+    arrival_price: 26_100,
+    past: { daysAgo: 3, start: '09:35:00', end: '10:05:00', endUser: 'dealer' },
+  },
+  {
+    // Hết ngày còn một lệnh con chưa khớp: OMS ghi hết hạn, Core ghi đã hủy (mẫu STATUS_MISMATCH).
+    account_no: A2,
+    symbol: 'VCB',
+    side: 'SELL',
+    strategy_type: 'TWAP',
+    total_qty: 3_000,
+    limit_price: 61_000,
+    status: 'EXPIRED',
+    persistence_mode: 'DAY',
+    createdYesterday: false,
+    params: [
+      ['start_time', '09:45', 'TIME'],
+      ['end_time', '14:30', 'TIME'],
+      ['interval_min', '30', 'INTEGER'],
+    ],
+    children: [
+      filled('10:00:00', 61_000, 1_000),
+      filled('10:30:00', 61_100, 1_000),
+      { price: 61_000, quantity: 1_000, filled: 0, status: 'EXPIRED', at: '14:20:00', core: { status: 'CANCELLED' } },
+    ],
+    arrival_price: 61_200,
+    past: { daysAgo: 4, start: '09:45:00', end: '15:00:00', endReason: 'DAY_END' },
+  },
+  {
+    // GTD chạy 2 phiên rồi tới valid_to. Lệnh con phiên 2 lệch KL với Core (mẫu QTY_MISMATCH).
+    account_no: A3,
+    symbol: 'VNM',
+    side: 'BUY',
+    strategy_type: 'POV',
+    total_qty: 5_000,
+    limit_price: 64_000,
+    status: 'EXPIRED',
+    persistence_mode: 'GTD',
+    createdYesterday: false,
+    params: [
+      ['participation_pct', '10', 'INTEGER'],
+      ['max_pct', '20', 'INTEGER'],
+    ],
+    children: [
+      { ...filled('10:30:00', 63_800, 1_500), session: 0 },
+      { price: 63_900, quantity: 1_500, filled: 1_000, status: 'EXPIRED', at: '10:15:00', session: 1, core: { filled_qty: 1_200 } },
+    ],
+    arrival_price: 63_700,
+    past: { daysAgo: 3, start: '10:00:00', end: '15:00:00', sessions: 2, endReason: 'VALID_TO_REACHED' },
+  },
+  {
+    // Nhiều phiên, khách hủy ở phiên 2. Có một báo khớp trùng bị bỏ qua và một lệnh con mất ACK nhưng Core đã có lệnh.
+    account_no: A1,
+    symbol: 'MWG',
+    side: 'SELL',
+    strategy_type: 'VWAP',
+    total_qty: 4_000,
+    limit_price: 62_000,
+    status: 'CANCELLED',
+    persistence_mode: 'MULTI_SESSION',
+    createdYesterday: false,
+    params: [
+      ['start_time', '09:30', 'TIME'],
+      ['end_time', '14:30', 'TIME'],
+    ],
+    children: [
+      { ...filled('10:00:00', 62_300, 1_000), session: 0, duplicate: true },
+      { ...filled('10:20:00', 62_200, 1_000), session: 1, unknown: 'KEPT' },
+      { price: 62_200, quantity: 1_000, filled: 0, status: 'CANCELLED', at: '11:00:00', session: 1 },
+    ],
+    arrival_price: 62_400,
+    past: { daysAgo: 2, start: '09:30:00', end: '11:10:00', sessions: 2, endUser: 'khachhang' },
+  },
+  {
+    // executed_qty ghi 1.500 nhưng chỉ có 1.000 CP khớp (mẫu PARENT_SUM_MISMATCH).
+    account_no: A2,
+    symbol: 'ACB',
+    side: 'BUY',
+    strategy_type: 'ICEBERG',
+    total_qty: 2_000,
+    limit_price: 25_000,
+    status: 'EXPIRED',
+    persistence_mode: 'DAY',
+    createdYesterday: false,
+    params: [['slice_qty', '500', 'INTEGER']],
+    children: [
+      filled('10:00:00', 25_000, 500),
+      filled('10:10:00', 24_950, 500),
+      { price: 25_000, quantity: 500, filled: 0, status: 'EXPIRED', at: '14:00:00' },
+    ],
+    arrival_price: 24_900,
+    past: { daysAgo: 1, start: '09:55:00', end: '15:00:00', endReason: 'DAY_END', executedQty: 1_500 },
+  },
 ]
+
+/** Vị trí lệnh mẫu cố ý có executed_qty khác tổng khớp, để màn Đối soát có dòng PARENT_SUM_MISMATCH. */
+export const PARENT_SUM_SAMPLE_INDEX = SEED_ORDERS.findIndex((seed) => seed.past?.executedQty !== undefined)
+
+const isFinished = (status: ParentOrderStatus) => status === 'COMPLETED' || status === 'CANCELLED' || status === 'EXPIRED'
 
 /** Khoảng cách giữa hai tick thị trường mẫu, giây. */
 const SEED_TICK_SECONDS = 20
 
 /** Ngày giao dịch cách `now` n phiên, bỏ thứ Bảy và Chủ nhật. */
-function tradingDaysAgo(now: Date, days: number): string {
+export function tradingDaysAgo(now: Date, days: number): string {
   const date = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   let left = days
   while (left > 0) {
@@ -373,7 +521,8 @@ function createHistoryTape(symbol: string, date: string, history: SeedHistory, s
 /** Sinh dữ liệu mẫu theo ngày truyền vào. Giờ tạo mỗi lệnh lệch nhau 1 phút để sắp xếp có thứ tự rõ ràng. */
 export function createSeedData(now: Date): SeedData {
   const today = toDateString(now)
-  const yesterday = toDateString(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1))
+  // Phiên giao dịch liền trước (bỏ thứ Bảy, Chủ nhật), để lệnh nhiều phiên không có "phiên" vào ngày nghỉ.
+  const yesterday = tradingDaysAgo(now, 1)
   const nextWeek = toDateString(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7))
 
   const orders: ParentOrder[] = []
@@ -385,6 +534,7 @@ export function createSeedData(now: Date): SeedData {
   const events: OrderEvent[] = []
   const notifications: Notification[] = []
   const tape: MarketTrade[] = []
+  const coreOverrides: CoreOverride[] = []
 
   const addEvent = (event: Omit<OrderEvent, 'event_id' | 'user_id' | 'channel'>, userId = 'SYSTEM') => {
     events.push({
@@ -397,12 +547,27 @@ export function createSeedData(now: Date): SeedData {
 
   SEED_ORDERS.forEach((seed, index) => {
     const history = seed.history
-    const date = history ? tradingDaysAgo(now, history.daysAgo) : seed.createdYesterday ? yesterday : today
+    const past = seed.past
+    const date = history
+      ? tradingDaysAgo(now, history.daysAgo)
+      : past
+        ? tradingDaysAgo(now, past.daysAgo)
+        : seed.createdYesterday
+          ? yesterday
+          : today
+    /** Ngày của phiên thứ `session` kể từ phiên bắt đầu (chỉ lệnh `past` chạy nhiều phiên). */
+    const sessionDate = (session = 0) => (past ? tradingDaysAgo(now, past.daysAgo - session) : date)
+    const sessionCount = past?.sessions ?? 1
+    const lastDate = sessionDate(sessionCount - 1)
     const id = `PO-${date.replaceAll('-', '')}-${String(index + 1).padStart(4, '0')}`
-    const createdAt = history ? `${date}T${history.start}` : `${date}T09:${String(index + 1).padStart(2, '0')}:00`
-    const finishedAt = history ? `${date}T${history.end}` : createdAt
+    const createdAt = history
+      ? `${date}T${history.start}`
+      : past
+        ? `${date}T${past.start}`
+        : `${date}T09:${String(index + 1).padStart(2, '0')}:00`
+    const finishedAt = history ? `${date}T${history.end}` : past ? `${lastDate}T${past.end}` : createdAt
     const multiDay = seed.persistence_mode !== 'DAY'
-    const executed = (seed.children ?? []).reduce((sum, child) => sum + child.filled, 0)
+    const executed = past?.executedQty ?? (seed.children ?? []).reduce((sum, child) => sum + child.filled, 0)
 
     orders.push({
       parent_order_id: id,
@@ -417,7 +582,8 @@ export function createSeedData(now: Date): SeedData {
       status: seed.status,
       reason_code: null,
       valid_from: createdAt,
-      valid_to: multiDay ? nextWeek : date,
+      // GTD đã hết hạn vì tới valid_to: valid_to là phiên cuối.
+      valid_to: multiDay ? (past?.endReason === 'VALID_TO_REACHED' ? lastDate : nextWeek) : date,
       persistence_mode: seed.persistence_mode,
       version: 1,
       created_at: createdAt,
@@ -449,7 +615,12 @@ export function createSeedData(now: Date): SeedData {
 
     seed.children?.forEach((child, childIndex) => {
       const childId = `${id}-CH${String(childIndex + 1).padStart(3, '0')}`
-      const childAt = child.at ? `${date}T${child.at}` : createdAt
+      const childDate = sessionDate(child.session ?? 0)
+      const childAt = child.at ? `${childDate}T${child.at}` : createdAt
+      const later = (seconds: number) => (child.at ? `${childDate}T${toClock(toSeconds(child.at) + seconds)}` : childAt)
+      // Lệnh con mất ACK được giữ lại thì khớp sau khi đối soát xong.
+      const fillAt = child.unknown === 'KEPT' ? later(10) : childAt
+      if (child.core) coreOverrides.push({ child_order_id: childId, ...child.core })
       children.push({
         child_order_id: childId,
         parent_order_id: id,
@@ -462,21 +633,38 @@ export function createSeedData(now: Date): SeedData {
         status: child.status,
         client_order_id: `CL-${childId}`,
         idempotency_key: `IDEM-${childId}`,
-        core_order_id: child.status === 'UNKNOWN' ? null : `CORE-SEED-${index + 1}${childIndex + 1}`,
+        core_order_id:
+          child.status === 'UNKNOWN' || child.unknown === 'CANCELLED' ? null : `CORE-SEED-${index + 1}${childIndex + 1}`,
         created_at: childAt,
         sent_at: childAt,
       })
       addEvent({ parent_order_id: id, child_order_id: childId, action: 'CHILD_CREATE', old_value: null, new_value: 'CREATED', event_time: childAt })
-      addEvent({
-        parent_order_id: id,
-        child_order_id: childId,
-        action: 'CHILD_SEND',
-        old_value: 'CREATED',
-        new_value: child.status,
-        event_time: childAt,
-        // Lệnh con mẫu UNKNOWN: mất ACK từ Core, để phần giải thích lệnh có mã lý do.
-        ...(child.status === 'UNKNOWN' ? { reason_code: 'ACK_TIMEOUT' as const } : {}),
-      })
+      if (child.unknown) {
+        // Gửi, mất ACK, rồi đối soát ra trạng thái thật (như timeOutChild → recoverChild của engine).
+        const kept = child.unknown === 'KEPT'
+        addEvent({ parent_order_id: id, child_order_id: childId, action: 'CHILD_SEND', old_value: 'CREATED', new_value: 'SENDING', event_time: childAt })
+        addEvent({ parent_order_id: id, child_order_id: childId, action: 'CHILD_UNKNOWN', old_value: 'SENDING', new_value: 'UNKNOWN', event_time: later(3), reason_code: 'ACK_TIMEOUT' })
+        addEvent({
+          parent_order_id: id,
+          child_order_id: childId,
+          action: 'RECOVERY',
+          old_value: 'UNKNOWN',
+          new_value: kept ? 'ACKNOWLEDGED' : 'CANCELLED',
+          event_time: later(8),
+          reason_code: kept ? 'RECONCILED_KEPT' : 'RECONCILED_CANCELLED',
+        })
+      } else {
+        addEvent({
+          parent_order_id: id,
+          child_order_id: childId,
+          action: 'CHILD_SEND',
+          old_value: 'CREATED',
+          new_value: child.status,
+          event_time: childAt,
+          // Lệnh con mẫu UNKNOWN: mất ACK từ Core, để phần giải thích lệnh có mã lý do.
+          ...(child.status === 'UNKNOWN' ? { reason_code: 'ACK_TIMEOUT' as const } : {}),
+        })
+      }
       if (child.filled > 0) {
         const matchId = `M-SEED-${index + 1}${childIndex + 1}`
         executions.push({
@@ -486,12 +674,29 @@ export function createSeedData(now: Date): SeedData {
           exchange_match_id: matchId,
           price: child.price,
           qty: child.filled,
-          match_time: childAt,
+          match_time: fillAt,
         })
         // Lần khớp của lệnh cũng là một phần KL khớp toàn thị trường.
-        tape.push({ symbol: seed.symbol, time: childAt, price: child.price, qty: child.filled })
-        addEvent({ parent_order_id: id, child_order_id: childId, action: 'FILL', old_value: null, new_value: child.status, event_time: childAt, fill_detail: { qty: child.filled, price: child.price, exchange_match_id: matchId } })
+        tape.push({ symbol: seed.symbol, time: fillAt, price: child.price, qty: child.filled })
+        addEvent({ parent_order_id: id, child_order_id: childId, action: 'FILL', old_value: null, new_value: child.status, event_time: fillAt, fill_detail: { qty: child.filled, price: child.price, exchange_match_id: matchId } })
+        if (child.duplicate) {
+          // Sàn gửi lại đúng báo khớp này: engine bỏ qua, KL không đổi (như applyExecution).
+          addEvent({ parent_order_id: id, child_order_id: childId, action: 'DECISION', old_value: `DUPLICATE_FILL:${matchId}`, new_value: 'IGNORED', event_time: later(5) })
+        }
       }
+    })
+
+    // Lệnh nhiều phiên: mỗi lần hết phiên mà chưa xong thì mang phần còn lại sang phiên sau (như closeDay của engine).
+    const carryDates = past
+      ? Array.from({ length: sessionCount - 1 }, (_, session) => sessionDate(session))
+      : multiDay && seed.createdYesterday && !isFinished(seed.status)
+        ? [yesterday]
+        : []
+    carryDates.forEach((day, session) => {
+      const filledSoFar = (seed.children ?? [])
+        .filter((child) => !past || (child.session ?? 0) <= session)
+        .reduce((sum, child) => sum + child.filled, 0)
+      addEvent({ parent_order_id: id, child_order_id: null, action: 'DECISION', old_value: `SESSION:${day}`, new_value: `CARRY_OVER:${seed.total_qty - filledSoFar}`, event_time: `${day}T15:00:00` })
     })
 
     if (history) tape.push(...createHistoryTape(seed.symbol, date, history, index + 1))
@@ -505,10 +710,17 @@ export function createSeedData(now: Date): SeedData {
       })
     }
 
-    if (seed.status !== 'ACTIVE') {
+    if (past) {
+      const before = executed > 0 ? 'PARTIALLY_EXECUTED' : 'ACTIVE'
+      if (seed.status === 'CANCELLED') {
+        addEvent({ parent_order_id: id, child_order_id: null, action: 'CANCEL', old_value: before, new_value: 'CANCELLED', event_time: finishedAt, reason_code: 'USER_CANCEL' }, past.endUser ?? 'SYSTEM')
+      } else {
+        addEvent({ parent_order_id: id, child_order_id: null, action: 'DECISION', old_value: before, new_value: seed.status, event_time: finishedAt, ...(past.endReason ? { reason_code: past.endReason } : {}) })
+      }
+    } else if (seed.status !== 'ACTIVE') {
       addEvent({ parent_order_id: id, child_order_id: null, action: 'DECISION', old_value: 'ACTIVE', new_value: seed.status, event_time: finishedAt })
     }
   })
 
-  return { orders, parameters, conditions, children, executions, snapshots, events, notifications, tape }
+  return { orders, parameters, conditions, children, executions, snapshots, events, notifications, tape, coreOverrides }
 }

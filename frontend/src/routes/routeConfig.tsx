@@ -14,6 +14,7 @@ const StrategyTemplates = lazy(() => import('@/pages/StrategyTemplates'))
 const OrderBook = lazy(() => import('@/pages/OrderBook'))
 const OrderDetail = lazy(() => import('@/pages/OrderDetail'))
 const ExecutionReport = lazy(() => import('@/pages/ExecutionReport'))
+const History = lazy(() => import('@/pages/History'))
 const Operations = lazy(() => import('@/pages/Operations'))
 const StrategyConfig = lazy(() => import('@/pages/StrategyConfig'))
 const Glossary = lazy(() => import('@/pages/Glossary'))
@@ -43,6 +44,7 @@ export const routes: RouteObject[] = [
         children: [
           { path: '/trung-tam', element: page(OrderCenter) },
           { path: '/bao-cao/hieu-qua', element: page(ExecutionReport) },
+          { path: '/bao-cao/lich-su', element: page(History) },
           { path: '/thuat-ngu', element: page(Glossary) },
           {
             element: <PermissionRoute permission="place_order" />,

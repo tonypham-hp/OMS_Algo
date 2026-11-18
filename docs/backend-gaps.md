@@ -297,3 +297,21 @@ Yêu cầu chung:
   ngưỡng trong câu giải thích thì cần API công khai ngưỡng đó, hoặc ghi ngưỡng vào event lúc tạm dừng.
 - Dữ liệu cũ chưa có `reason_code`: frontend suy ra từ trạng thái lệnh con (ví dụ lệnh con UNKNOWN).
   Không suy ra được thì ghi "chưa đủ dữ liệu".
+
+## 13. Lịch sử nhiều phiên và đối soát với Core (Đợt 7)
+
+Màn Lịch sử và đối soát cần dữ liệu mà ERD hiện không có. Engine giả lập của frontend tự giữ các phần này.
+
+| Cần có | Vì sao | Gợi ý |
+|---|---|---|
+| **API đọc trạng thái lệnh phía Core** theo lệnh con: trạng thái, KL khớp Core ghi nhận, `core_order_id`, thời điểm cập nhật | So OMS với Core (STATUS_MISMATCH, QTY_MISMATCH) và tra Core cho lệnh con UNKNOWN. Hiện chỉ có `core_order_id` trên ChildOrder | `GET /core/orders?child_order_id=…` hoặc bảng snapshot Core cập nhật theo báo cáo cuối ngày. Kiểu `CoreLedgerEntry` ở `src/types/recon.ts` |
+| **API lịch sử nhiều phiên**: lệnh cha đã kết thúc và lệnh nhiều phiên còn chạy theo khoảng ngày, kèm lệnh con, khớp, arrival và toàn bộ OrderEvent | Tab Lịch sử lệnh và Nhật ký kiểm toán. Trung tâm lệnh chỉ trả 200 event gần nhất | `GET /history?from&to`, phân trang phía server khi dữ liệu lớn. Kiểu `HistoryData` |
+| Event mang sang phiên sau | Đếm "Số phiên đã chạy" | Ghi `DECISION` `old_value = SESSION:<ngày>`, `new_value = CARRY_OVER:<KL còn lại>` lúc hết phiên cho GTD, MULTI_SESSION, như engine giả lập |
+| Che người thực hiện cho khách hàng | Khách hàng không được thấy `user_id` của dealer, vận hành | Server trả `user_id = KHAC` (hoặc bỏ trường) cho khách hàng; frontend hiện "Người dùng khác" |
+| **Quyết định xử lý chênh lệch** có maker-checker | "Đánh dấu đã xử lý", duyệt, từ chối; bắt buộc ghi chú | Hiện ghi OrderEvent `DECISION` `old_value = RECON:<mã dòng>`, `new_value = RESOLVE_REQUESTED / RESOLVED / RESOLVE_REJECTED`, `reason` = ghi chú. Backend nên có bảng riêng (dòng chênh lệch, người tạo, người duyệt, thời điểm) và chặn người tạo tự duyệt |
+| Lần đối soát gần nhất | "Đối soát ngay" hiện thời điểm và người chạy | Hiện giữ trong bộ nhớ của mock; backend lưu bảng lịch sử chạy đối soát |
+| Quyền mới | `reconciliation` (DEALER, OPS), `reconcile_resolve` (OPS) | Kiểm ở API, không chỉ ẩn nút |
+
+Mã dòng chênh lệch phải ổn định giữa các lần đối soát (`<loại>:<lệnh con hoặc lệnh cha>`, dòng theo event dùng
+`event_id`), để quyết định đã ghi vẫn gắn đúng dòng. `OVERFILL` phải luôn bằng 0: nếu backend phát hiện thì cần cảnh báo
+ngay cho vận hành, không chỉ hiện trên màn.

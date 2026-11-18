@@ -162,8 +162,48 @@ export const GLOSSARY: GlossaryEntry[] = [
   {
     id: 'reconciliation',
     term: 'Đối soát',
-    short: 'Tra lại Core để biết trạng thái thật của lệnh con đang UNKNOWN.',
-    detail: 'Core đã nhận thì giữ nguyên lệnh con; Core chưa nhận thì hủy để giải phóng KL và sinh lại. Vận hành có thể đối soát ngay thay vì chờ tự động.',
+    short: 'So sổ lệnh của OMS với sổ phía Core theo từng lệnh con: trạng thái, KL khớp; tra lại Core khi lệnh con UNKNOWN.',
+    detail:
+      'Với lệnh con UNKNOWN: Core đã nhận thì giữ nguyên lệnh con; Core chưa nhận thì hủy để giải phóng KL và sinh lại. Màn Lịch sử và đối soát liệt kê mọi chỗ OMS và Core ghi khác nhau, mỗi dòng một loại chênh lệch.',
+  },
+  {
+    id: 'status-mismatch',
+    term: 'STATUS_MISMATCH',
+    short: 'Trạng thái lệnh con ở OMS khác trạng thái Core ghi nhận.',
+    detail: 'Ví dụ OMS ghi hết hạn nhưng Core ghi đã hủy, hoặc OMS đang chờ khớp mà Core không có lệnh. Cần kiểm tra với Core rồi đánh dấu đã xử lý.',
+  },
+  {
+    id: 'qty-mismatch',
+    term: 'QTY_MISMATCH',
+    short: 'KL khớp của lệnh con ở OMS khác KL khớp Core ghi nhận.',
+    detail: 'Thường do một báo khớp chưa về OMS. Đối chiếu từng lần khớp (exchange_match_id) với Core.',
+    formula: 'Chênh lệch = filled_qty (Core) − filled_qty (OMS)',
+  },
+  {
+    id: 'dup-fill-ignored',
+    term: 'DUP_FILL_IGNORED',
+    short: 'Sàn gửi lại một báo khớp đã nhận (trùng exchange_match_id); OMS bỏ qua, KL không đổi.',
+    detail: 'OMS nhận mỗi mã khớp đúng một lần, nên báo khớp trùng không làm tăng KL. Dòng này chỉ để kiểm toán, hệ thống đã tự xử lý.',
+  },
+  {
+    id: 'parent-sum-mismatch',
+    term: 'PARENT_SUM_MISMATCH',
+    short: 'KL đã khớp ghi trên lệnh cha khác tổng các lần khớp (Execution) của lệnh đó.',
+    detail: 'Lệnh cha phải luôn bằng tổng Execution của lệnh vào. Lệch nghĩa là thiếu hoặc thừa một bản ghi khớp.',
+    formula: 'executed_qty = Σ qty của Execution (lệnh vào)',
+  },
+  {
+    id: 'overfill',
+    term: 'OVERFILL',
+    short: 'Tổng KL khớp vượt KL đặt của lệnh cha. Lỗi nghiêm trọng, phải luôn bằng 0.',
+    detail: 'OMS chặn trần mọi lệnh con và cắt KL khớp vượt phần còn lại, nên OVERFILL chỉ xuất hiện khi có lỗi hệ thống. Có dòng này phải báo ngay.',
+    formula: 'Σ KL khớp ≤ total_qty',
+  },
+  {
+    id: 'audit-log',
+    term: 'Nhật ký kiểm toán',
+    short: 'Danh sách mọi sự kiện của lệnh (OrderEvent): ai làm gì, lúc nào, giá trị cũ và mới, lý do.',
+    detail: 'Chỉ đọc. Mỗi lần đổi trạng thái lệnh cha, lệnh con, mỗi lần khớp và mỗi quyết định của hệ thống đều có một dòng. Khách hàng chỉ thấy lệnh của mình.',
   },
   {
     id: 'ato',

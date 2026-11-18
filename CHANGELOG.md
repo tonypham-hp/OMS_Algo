@@ -4,6 +4,26 @@ Ghi các thay đổi đáng chú ý của frontend OMS Algo theo từng đợt p
 [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/), đánh số phiên bản theo [SemVer](https://semver.org/lang/vi/).
 Bản 0.x là bản demo chạy với dữ liệu giả lập, chưa có backend.
 
+## [0.1.1] – 2026-11-18 · Đợt 7: Lịch sử và đối soát
+
+### Thêm
+- Màn `/bao-cao/lich-su` (mục "Lịch sử và đối soát" trên thanh bên đã mở khóa, mọi vai trò), 3 tab nhớ trên URL:
+  - **Lịch sử lệnh**: lệnh đã kết thúc và lệnh nhiều phiên đang chạy theo ngày; lọc Hôm nay / 5 phiên / tùy chọn, mã,
+    chiến lược, chiều, trạng thái, tài khoản; sắp xếp, 50 dòng mỗi trang, dòng tổng, xuất CSV đúng bộ lọc.
+  - **Nhật ký kiểm toán**: mọi OrderEvent, chỉ đọc, lọc theo hành động, người, mã lệnh, thời gian, tìm không dấu, xuất CSV.
+    Khách hàng thấy "Người dùng khác" thay cho user_id của người khác.
+  - **Đối soát** (DEALER, OPS): so OMS với Core theo từng lệnh con (STATUS_MISMATCH, QTY_MISMATCH, UNKNOWN_OPEN,
+    UNKNOWN_RESOLVED, DUP_FILL_IGNORED, PARENT_SUM_MISMATCH, OVERFILL), 4 thẻ, "Đối soát ngay"; vận hành đánh dấu đã xử lý
+    có ghi chú và duyệt theo maker-checker.
+- Engine giả lập có sổ phía Core; lệnh mẫu đủ 5 phiên gần nhất, có sẵn ít nhất một chênh lệch mỗi loại (trừ OVERFILL).
+- Trung tâm lệnh: liên kết "Xem đối soát" khi có chênh lệch đang mở. Ctrl+K: "Mở nhật ký kiểm toán", "Đối soát ngay".
+- Thuật ngữ: STATUS_MISMATCH, QTY_MISMATCH, DUP_FILL_IGNORED, PARENT_SUM_MISMATCH, OVERFILL, Nhật ký kiểm toán.
+- Test: `reconcile` (mỗi loại, khớp hoàn toàn = 0, khớp trùng bỏ qua đúng 1 lần, OVERFILL = 0 với 6 kịch bản Demo),
+  lịch sử, nhật ký, phân quyền; Playwright `lich-su.spec`. Ảnh [docs/screenshots/dot7/](docs/screenshots/dot7/).
+
+### Sửa
+- Lệnh mẫu "hôm qua" lấy phiên giao dịch liền trước thay vì ngày lịch (trước đây mở app thứ Hai thì có phiên Chủ nhật).
+
 ## [0.1.0] – 2026-11-17 · Đợt 6: Chất lượng và hoàn thiện
 
 Không thêm tính năng nghiệp vụ. Chi tiết số liệu ở [docs/quality-report.md](docs/quality-report.md).

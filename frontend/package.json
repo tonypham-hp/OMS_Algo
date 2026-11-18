@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,7 +12,8 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:all": "npm run lint && npm run test && npm run build && npm run test:e2e",
-    "screenshots": "playwright test e2e/screenshots.spec.ts --project=desktop-1440"
+    "screenshots": "playwright test e2e/screenshots.spec.ts --project=desktop-1440",
+    "screenshots:dot7": "playwright test e2e/screenshots-dot7.spec.ts --project=desktop-1440"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",

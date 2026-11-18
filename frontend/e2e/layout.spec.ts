@@ -23,16 +23,20 @@ test.describe('Bố cục 1366/1440', () => {
 
   test('bảng rộng cuộn trong khung riêng, trang không tràn ngang', async ({ page }) => {
     await loginAs(page, 'OPS')
-    for (const path of ['/so-lenh', '/bao-cao/hieu-qua', '/cau-hinh']) {
+    for (const path of ['/so-lenh', '/bao-cao/hieu-qua', '/bao-cao/lich-su', '/bao-cao/lich-su?tab=nhat-ky', '/bao-cao/lich-su?tab=doi-soat', '/cau-hinh']) {
       await navigate(page, path)
+      // Chờ màn mới tải xong: ngay sau điều hướng, bảng của màn trước có thể còn trong DOM rồi bị gỡ.
+      await expect(page.getByRole('status').filter({ hasText: /^Đang tải/ })).toHaveCount(0)
       const table = page.getByRole('table').first()
       await expect(table).toBeVisible()
-      const container = await table.evaluate((element) => {
-        const box = element.parentElement!
-        return { overflowX: getComputedStyle(box).overflowX, fits: box.getBoundingClientRect().right <= window.innerWidth }
-      })
-      expect(container.overflowX, path).toBe('auto')
-      expect(container.fits, path).toBe(true)
+      await expect(async () => {
+        const container = await table.evaluate((element) => {
+          const box = element.parentElement!
+          return { overflowX: getComputedStyle(box).overflowX, fits: box.getBoundingClientRect().right <= window.innerWidth }
+        })
+        expect(container.overflowX, path).toBe('auto')
+        expect(container.fits, path).toBe(true)
+      }).toPass({ timeout: 5_000 })
       expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth), path).toBeLessThanOrEqual(0)
     }
   })
@@ -82,7 +86,7 @@ test.describe('Màn hẹp', () => {
 test.describe('Thanh trên', () => {
   test('tên màn ở breadcrumb không bị cắt trên mọi route', async ({ page }) => {
     await loginAs(page, 'OPS')
-    const paths = ['/trung-tam', '/dat-lenh', '/mau-chien-luoc', '/so-lenh', '/bao-cao/hieu-qua', '/thuat-ngu', '/van-hanh', '/cau-hinh']
+    const paths = ['/trung-tam', '/dat-lenh', '/mau-chien-luoc', '/so-lenh', '/bao-cao/hieu-qua', '/bao-cao/lich-su', '/thuat-ngu', '/van-hanh', '/cau-hinh']
     await navigate(page, '/so-lenh')
     const firstRow = page.locator('[data-demo-id^="order-row-"]').first()
     await expect(firstRow).toBeVisible()

@@ -8,6 +8,8 @@ import type {
   ChildOrder,
   ChildOrderStatus,
   ChildOrderType,
+  CoreLedgerEntry,
+  CoreOrderStatus,
   CoreRejectCode,
   CreateOrderRequest,
   EventReasonCode,
@@ -108,6 +110,15 @@ export interface SeedData {
   notifications: Notification[]
   /** Tick khớp thị trường mẫu cho báo cáo hiệu quả. Engine không dùng, runtime nạp vào băng tick. */
   tape?: MarketTrade[]
+  /** Chỗ sổ phía Core ghi khác OMS (dữ liệu đối soát mẫu). Phần còn lại của sổ Core dựng từ lệnh con. */
+  coreOverrides?: CoreOverride[]
+}
+
+/** Sổ phía Core ghi khác OMS ở một lệnh con. */
+export interface CoreOverride {
+  child_order_id: string
+  status?: CoreOrderStatus
+  filled_qty?: number
 }
 
 /** Nơi engine đọc tham số hệ thống. Đọc lại ở mỗi quyết định, nên giá trị vừa duyệt có hiệu lực ngay nhịp sau. */
@@ -197,6 +208,38 @@ export interface EngineState {
   eventSequence: number
   matchSequence: number
   coreSequence: number
+  /** Sổ phía Core. Tùy chọn để bản lưu cũ vẫn đọc được: thiếu thì dựng lại từ lệnh con. */
+  coreLedger?: CoreLedgerEntry[]
+}
+
+/** Trạng thái OMS mà Core cũng ghi y như vậy khi lệnh con đổi trạng thái. */
+const CORE_MIRRORED_STATUSES: ReadonlySet<ChildOrderStatus> = new Set(['PARTIAL_FILLED', 'FILLED', 'CANCELLED', 'EXPIRED'])
+
+/** Trạng thái Core suy ra từ lệnh con OMS. Lệnh con chưa có ACK nhưng Core đã có mã thì Core coi là đã nhận. */
+function toCoreStatus(status: ChildOrderStatus): CoreOrderStatus {
+  return CORE_MIRRORED_STATUSES.has(status) ? (status as CoreOrderStatus) : 'ACKNOWLEDGED'
+}
+
+/**
+ * Dựng sổ phía Core từ lệnh con: mỗi lệnh con có core_order_id là một lệnh Core đang giữ, cùng trạng thái và KL khớp.
+ * Lệnh con bị Core từ chối không có trong sổ.
+ */
+export function buildCoreLedger(children: ChildOrder[], overrides: CoreOverride[] = []): CoreLedgerEntry[] {
+  const entries = children
+    .filter((child) => child.core_order_id !== null && child.status !== 'REJECTED')
+    .map((child) => ({
+      child_order_id: child.child_order_id,
+      parent_order_id: child.parent_order_id,
+      core_order_id: child.core_order_id,
+      status: toCoreStatus(child.status),
+      filled_qty: child.filled_qty,
+      updated_at: child.sent_at ?? child.created_at,
+    }))
+  for (const override of overrides) {
+    const entry = entries.find((item) => item.child_order_id === override.child_order_id)
+    if (entry) Object.assign(entry, { ...override })
+  }
+  return entries
 }
 
 export function isChildLive(status: ChildOrderStatus): boolean {
@@ -230,6 +273,8 @@ export function createOrderEngine(options: EngineOptions = {}) {
   const snapshots = new Map<string, MarketSnapshot>()
   const runtimes = new Map<string, ParentRuntime>()
   const seenMatchIds = new Set<string>()
+  /** Sổ phía Core theo child_order_id: trạng thái và KL khớp mà Core ghi nhận, để đối soát với OMS. */
+  const coreLedger = new Map<string, CoreLedgerEntry>()
   let pendingFaults: PendingFault[] = []
   let pendingAcks: PendingAck[] = []
   let pendingRecoveries: PendingRecovery[] = []
@@ -371,7 +416,30 @@ export function createOrderEngine(options: EngineOptions = {}) {
   ) {
     const previous = child.status
     child.status = next
+    // Core thấy cùng kết cục (khớp, hủy, hết hạn) với lệnh con mà Core đang giữ.
+    const entry = coreLedger.get(child.child_order_id)
+    if (entry && CORE_MIRRORED_STATUSES.has(next)) {
+      entry.status = next as CoreOrderStatus
+      entry.updated_at = nowIso()
+    }
     logEvent(child.parent_order_id, child.child_order_id, action, previous, next, userId, extra)
+  }
+
+  /** Core đã nhận lệnh con. Đã có trong sổ (Core nhận trước khi OMS có ACK) thì chỉ ghi thêm mã lệnh Core. */
+  function recordCoreOrder(child: ChildOrder) {
+    const entry = coreLedger.get(child.child_order_id)
+    if (entry) {
+      entry.core_order_id = child.core_order_id
+      return
+    }
+    coreLedger.set(child.child_order_id, {
+      child_order_id: child.child_order_id,
+      parent_order_id: child.parent_order_id,
+      core_order_id: child.core_order_id,
+      status: child.filled_qty > 0 ? 'PARTIAL_FILLED' : 'ACKNOWLEDGED',
+      filled_qty: child.filled_qty,
+      updated_at: nowIso(),
+    })
   }
 
   function notify(parentOrderId: string, type: NotificationType, message: string) {
@@ -518,6 +586,9 @@ export function createOrderEngine(options: EngineOptions = {}) {
       match_time: now,
     })
     child.filled_qty += qty
+    // Core ghi nhận lần khớp này đúng một lần: báo khớp trùng đã bị loại ở trên.
+    const coreEntry = coreLedger.get(child.child_order_id)
+    if (coreEntry) coreEntry.filled_qty += qty
     setChildStatus(child, child.filled_qty >= child.quantity ? 'FILLED' : 'PARTIAL_FILLED', 'FILL', undefined, {
       fill_detail: { qty, price: report.price, exchange_match_id: report.exchange_match_id },
     })
@@ -545,6 +616,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
   function acknowledgeChild(parent: ParentOrder, child: ChildOrder, action: OrderEventAction, userId?: string, extra?: EventExtra) {
     coreSequence += 1
     child.core_order_id = `CORE-${String(coreSequence).padStart(6, '0')}`
+    recordCoreOrder(child)
     runtimeOf(parent).rejectStreak = 0
     setChildStatus(child, 'ACKNOWLEDGED', action, userId, extra)
   }
@@ -572,6 +644,8 @@ export function createOrderEngine(options: EngineOptions = {}) {
   /** Đã gửi nhưng chưa có ACK: chờ đúng ACK_TIMEOUT_SECONDS nhịp (giây thật) rồi mới coi là mất phản hồi. */
   function awaitAck(child: ChildOrder, coreReceived: boolean) {
     setChildStatus(child, 'SENDING', 'CHILD_SEND')
+    // Timeout sau khi Core tạo lệnh: Core đã có lệnh dù OMS chưa nhận được ACK.
+    if (coreReceived) recordCoreOrder(child)
     pendingAcks.push({
       child_order_id: child.child_order_id,
       ticksLeft: config.getValue('ACK_TIMEOUT_SECONDS'),
@@ -1453,6 +1527,25 @@ export function createOrderEngine(options: EngineOptions = {}) {
   }
 
   /** Vận hành mở lại lệnh PAUSED_SYSTEM: bắt buộc có lý do, ghi RESUME kèm người thao tác và lý do. */
+  /**
+   * Ghi quyết định xử lý một dòng chênh lệch đối soát vào nhật ký của lệnh: OrderEvent DECISION
+   * với old_value `RECON:<mã dòng>`, new_value là bước xử lý, `reason` là ghi chú. Không đổi trạng thái lệnh.
+   */
+  function logReconDecision(input: {
+    parent_order_id: string
+    child_order_id: string | null
+    row_id: string
+    step: 'RESOLVE_REQUESTED' | 'RESOLVED' | 'RESOLVE_REJECTED'
+    note: string
+    user_id: string
+  }) {
+    requireParent(input.parent_order_id)
+    logEvent(input.parent_order_id, input.child_order_id, 'DECISION', `RECON:${input.row_id}`, input.step, input.user_id, {
+      reason: input.note,
+    })
+    return events[events.length - 1]
+  }
+
   function reopenOrder(parentOrderId: string, reason: string, userId: string) {
     const parent = requireParent(parentOrderId)
     if (parent.status !== 'PAUSED_SYSTEM') throw new EngineError('Chỉ mở lại được lệnh đang bị hệ thống tạm dừng')
@@ -1622,6 +1715,8 @@ export function createOrderEngine(options: EngineOptions = {}) {
     runtimes.clear()
     seenMatchIds.clear()
     executions.forEach((execution) => seenMatchIds.add(execution.exchange_match_id))
+    coreLedger.clear()
+    buildCoreLedger(children, seed.coreOverrides).forEach((entry) => coreLedger.set(entry.child_order_id, entry))
     notifications = seed.notifications.map((notification) => ({ ...notification }))
     pendingFaults = []
     pendingAcks = []
@@ -1657,6 +1752,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
       eventSequence,
       matchSequence,
       coreSequence,
+      coreLedger: [...coreLedger.values()],
     }
   }
 
@@ -1686,6 +1782,8 @@ export function createOrderEngine(options: EngineOptions = {}) {
     eventSequence = state.eventSequence
     matchSequence = state.matchSequence
     coreSequence = state.coreSequence
+    coreLedger.clear()
+    ;(state.coreLedger ?? buildCoreLedger(children)).forEach((entry) => coreLedger.set(entry.child_order_id, entry))
   }
 
   return {
@@ -1708,6 +1806,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
     reconcileUnknownChild,
     reconcileChildNow,
     reopenOrder,
+    logReconDecision,
     injectRejectNext,
     injectTimeout,
     injectDuplicateFill,
@@ -1735,6 +1834,8 @@ export function createOrderEngine(options: EngineOptions = {}) {
     listChildren: () => children,
     listExecutions: () => executions,
     listEvents: () => events,
+    /** Sổ phía Core, để đối soát. */
+    listCoreLedger: () => [...coreLedger.values()],
     getParameters: (parentOrderId: string) => parameters.get(parentOrderId) ?? [],
     getWorkingQty: (parentOrderId: string) => workingOf(requireParent(parentOrderId)),
     getAllowedQty: (parentOrderId: string) => allowedOf(requireParent(parentOrderId)),

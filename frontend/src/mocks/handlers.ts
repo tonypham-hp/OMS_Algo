@@ -26,6 +26,7 @@ import { apiGroupOf, getE2eFlags } from '@/testing/e2eHooks'
 import { canSeeOrder } from './access'
 import { DEMO_USERS } from './data'
 import { EngineError } from './engine'
+import { buildHistory, createReconApi, parseRange, type ReconDecisionBody } from './historyApi'
 import { buildExecutionReport, getOrderMarketStats, type ReportSource } from './report'
 import { configStore, marketTape, orderEngine, persistConfig } from './runtime'
 import { marketSimulator } from './simulator'
@@ -38,6 +39,9 @@ function getUser(request: Request): DemoUser | undefined {
 
 /** Số event gần nhất trả về cho Trung tâm lệnh và chuông thông báo. */
 const DASHBOARD_EVENT_LIMIT = 200
+
+/** Đối soát trên engine dùng chung, theo đồng hồ giả lập. */
+const reconApi = createReconApi(orderEngine, () => simNow(), () => marketSimulator.getState().trading_date)
 
 function buildDashboard(user: DemoUser): DashboardData {
   const orders = orderEngine.listOrders().filter((order) => canSeeOrder(user, order))
@@ -62,6 +66,7 @@ function buildDashboard(user: DemoUser): DashboardData {
       .listEvents()
       .filter((event) => visible.has(event.parent_order_id))
       .slice(-DASHBOARD_EVENT_LIMIT),
+    open_recon_count: reconApi.openCount(user),
   }
 }
 
@@ -100,6 +105,18 @@ function handleOrderAction(
       return errorResponse('Không tìm thấy lệnh', 404)
     }
     return HttpResponse.json(action(user.username))
+  } catch (error) {
+    if (error instanceof EngineError) return errorResponse(error.message, error.status)
+    throw error
+  }
+}
+
+/** Khung chung của API lịch sử và đối soát: đổi lỗi nghiệp vụ (kể cả thiếu quyền) thành phản hồi HTTP. */
+function handleUser(request: Request, action: (user: DemoUser) => unknown) {
+  const user = getUser(request)
+  if (!user) return errorResponse('Chưa đăng nhập', 401)
+  try {
+    return HttpResponse.json(action(user) as JsonBodyType)
   } catch (error) {
     if (error instanceof EngineError) return errorResponse(error.message, error.status)
     throw error
@@ -251,6 +268,27 @@ export const handlers = [
     const user = getUser(request)
     if (!user) return errorResponse('Chưa đăng nhập', 401)
     return HttpResponse.json(buildExecutionReport(user, reportSource()))
+  }),
+
+  http.get('*/api/history', ({ request }) =>
+    handleUser(request, (user) => buildHistory(orderEngine, user, marketSimulator.getState().trading_date)),
+  ),
+
+  http.get('*/api/reconciliation', ({ request }) => {
+    const params = new URL(request.url).searchParams
+    const range = parseRange(params.get('from'), params.get('to'), marketSimulator.getState().trading_date)
+    return handleUser(request, (user) => reconApi.get(user, range))
+  }),
+
+  http.post('*/api/reconciliation/run', async ({ request }) => {
+    const body = (await request.json()) as { from?: string; to?: string }
+    const range = parseRange(body.from, body.to, marketSimulator.getState().trading_date)
+    return handleUser(request, (user) => reconApi.run(user, range))
+  }),
+
+  http.post('*/api/reconciliation/decisions', async ({ request }) => {
+    const body = (await request.json()) as ReconDecisionBody
+    return handleUser(request, (user) => reconApi.decide(user, body))
   }),
 
   http.get('*/api/orders', ({ request }) => {

@@ -16,7 +16,7 @@ import {
   isConditionHit,
   type OrderEngine,
 } from './engine'
-import { createSeedData } from './seedOrders'
+import { createSeedData, PARENT_SUM_SAMPLE_INDEX } from './seedOrders'
 import { createMarketSimulator } from './simulator'
 
 function seededRandom(seed: number) {
@@ -1638,15 +1638,20 @@ describe('nhật ký OrderEvent', () => {
 describe('lệnh mẫu', () => {
   const seed = createSeedData(new Date(2026, 10, 6))
 
-  it('có 6–13 lệnh, nhiều trạng thái khác nhau, nhiều tài khoản', () => {
+  it('có 6–20 lệnh, nhiều trạng thái khác nhau, nhiều tài khoản', () => {
     expect(seed.orders.length).toBeGreaterThanOrEqual(6)
-    expect(seed.orders.length).toBeLessThanOrEqual(13)
+    expect(seed.orders.length).toBeLessThanOrEqual(20)
     expect(new Set(seed.orders.map((order) => order.status)).size).toBeGreaterThanOrEqual(6)
     expect(new Set(seed.orders.map((order) => order.account_no)).size).toBe(3)
   })
 
-  it('không vi phạm luật lõi', () => {
-    for (const order of seed.orders) {
+  it('không vi phạm luật lõi (trừ lệnh mẫu PARENT_SUM_MISMATCH cố ý lệch)', () => {
+    const sample = seed.orders[PARENT_SUM_SAMPLE_INDEX]
+    const sampleFilled = seed.executions
+      .filter((item) => item.parent_order_id === sample.parent_order_id)
+      .reduce((sum, item) => sum + item.qty, 0)
+    expect(sample.executed_qty).toBeGreaterThan(sampleFilled)
+    for (const order of seed.orders.filter((item) => item !== sample)) {
       const children = seed.children.filter((child) => child.parent_order_id === order.parent_order_id)
       const filled = children.reduce((sum, child) => sum + child.filled_qty, 0)
       const fromExecutions = seed.executions

@@ -58,6 +58,11 @@ const STATUS_KEYWORDS: Partial<Record<ParentOrderStatus, string[]>> = {
   PARTIALLY_EXECUTED: ['đang chạy'],
 }
 
+/** Từ khóa thêm cho màn có tên dài, để gõ một phần ý nghĩa vẫn ra. */
+const SCREEN_KEYWORDS: Record<string, string[]> = {
+  '/bao-cao/lich-su': ['lịch sử', 'đối soát', 'kiểm toán', 'nhật ký', 'audit', 'core'],
+}
+
 export interface SearchIndexInput {
   user: DemoUser
   orders: ParentOrder[]
@@ -128,7 +133,7 @@ export function buildSearchIndex({ user, orders, symbols, templates, canDemo }: 
         group: 'SCREEN',
         title: item.label,
         subtitle: section.title ?? undefined,
-        keywords: [item.label, section.title ?? '', item.path],
+        keywords: [item.label, section.title ?? '', item.path, ...(SCREEN_KEYWORDS[item.path] ?? [])],
         target: { kind: 'navigate', path: item.path },
       })
     }
@@ -160,6 +165,34 @@ export function buildSearchIndex({ user, orders, symbols, templates, canDemo }: 
         target: { kind: 'navigate', path: `/dat-lenh?mau=${template.id}` },
       })
     }
+  }
+  items.push({
+    id: 'action:audit-log',
+    group: 'ACTION',
+    title: 'Mở nhật ký kiểm toán',
+    subtitle: 'Mọi sự kiện của lệnh, chỉ đọc',
+    keywords: ['nhật ký', 'kiểm toán', 'audit', 'sự kiện', 'event'],
+    target: { kind: 'navigate', path: '/bao-cao/lich-su?tab=nhat-ky' },
+  })
+  if (permissions.includes('reconciliation')) {
+    items.push(
+      {
+        id: 'action:reconcile-now',
+        group: 'ACTION',
+        title: 'Đối soát ngay',
+        subtitle: 'So OMS với Core, tra Core cho lệnh con UNKNOWN',
+        keywords: ['đối soát', 'reconcile', 'core', 'unknown'],
+        target: { kind: 'navigate', path: '/bao-cao/lich-su?tab=doi-soat&run=1' },
+      },
+      {
+        id: 'action:recon-open',
+        group: 'ACTION',
+        title: 'Xem chênh lệch đang mở',
+        subtitle: 'Tab Đối soát',
+        keywords: ['chênh lệch', 'đối soát', 'mismatch'],
+        target: { kind: 'navigate', path: '/bao-cao/lich-su?tab=doi-soat' },
+      },
+    )
   }
   if (canDemo) {
     items.push({

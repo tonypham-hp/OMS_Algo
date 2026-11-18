@@ -7,6 +7,10 @@ const ROUTES: ReadonlyArray<{ path: string; title: RegExp; roles: Role[] }> = [
   { path: '/mau-chien-luoc', title: /Mẫu chiến lược/, roles: ['CUSTOMER', 'DEALER', 'OPS'] },
   { path: '/so-lenh', title: /Sổ lệnh/, roles: ['CUSTOMER', 'DEALER', 'OPS'] },
   { path: '/bao-cao/hieu-qua', title: /Hiệu quả thực hiện/, roles: ['CUSTOMER', 'DEALER', 'OPS'] },
+  { path: '/bao-cao/lich-su', title: /Lịch sử và đối soát/, roles: ['CUSTOMER', 'DEALER', 'OPS'] },
+  { path: '/bao-cao/lich-su?tab=nhat-ky', title: /Lịch sử và đối soát/, roles: ['CUSTOMER', 'DEALER', 'OPS'] },
+  // Khách hàng không có tab Đối soát: ở lại màn, về tab Lịch sử lệnh (không phải 403).
+  { path: '/bao-cao/lich-su?tab=doi-soat', title: /Lịch sử và đối soát/, roles: ['CUSTOMER', 'DEALER', 'OPS'] },
   { path: '/thuat-ngu', title: /Thuật ngữ/, roles: ['CUSTOMER', 'DEALER', 'OPS'] },
   { path: '/van-hanh', title: /Màn vận hành/, roles: ['OPS'] },
   { path: '/cau-hinh', title: /Cấu hình chiến lược/, roles: ['OPS'] },
@@ -28,7 +32,7 @@ for (const role of ['CUSTOMER', 'DEALER', 'OPS'] as Role[]) {
     for (const route of routes) {
       await page.goto(route.path)
       if (route.roles.includes(role)) {
-        await expect(page, route.path).toHaveURL(new RegExp(`${route.path}$`))
+        await expect(page, route.path).toHaveURL(new RegExp(`${route.path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`))
         await expect(page.getByRole('heading', { level: 1 }), route.path).toHaveText(route.title)
       } else {
         await expect(page, route.path).toHaveURL(/\/403$/)

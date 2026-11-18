@@ -5,6 +5,8 @@ const SCREENS: ReadonlyArray<{ path: string; fail: string[]; message: RegExp; ro
   { path: '/trung-tam', fail: ['dashboard'], message: /Không tải được dữ liệu/, role: 'CUSTOMER' },
   { path: '/so-lenh', fail: ['orders'], message: /Không tải được sổ lệnh/, role: 'CUSTOMER' },
   { path: '/bao-cao/hieu-qua', fail: ['reports'], message: /Không tải được báo cáo/, role: 'CUSTOMER' },
+  { path: '/bao-cao/lich-su', fail: ['history'], message: /Không tải được lịch sử/, role: 'CUSTOMER' },
+  { path: '/bao-cao/lich-su?tab=doi-soat', fail: ['reconciliation'], message: /Không tải được đối soát/, role: 'DEALER' },
   { path: '/van-hanh', fail: ['ops'], message: /Không tải được dữ liệu vận hành/, role: 'OPS' },
   { path: '/cau-hinh', fail: ['config'], message: /Không tải được (tham số|lịch sử)/, role: 'OPS' },
 ]

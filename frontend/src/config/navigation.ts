@@ -45,7 +45,7 @@ export const NAV_SECTIONS: ReadonlyArray<NavSection> = [
     title: 'Báo cáo',
     items: [
       { label: 'Hiệu quả thực hiện', icon: ChartLine, path: '/bao-cao/hieu-qua' },
-      { label: 'Lịch sử và đối soát', icon: History, comingSoon: true },
+      { label: 'Lịch sử và đối soát', icon: History, path: '/bao-cao/lich-su' },
     ],
   },
   {
