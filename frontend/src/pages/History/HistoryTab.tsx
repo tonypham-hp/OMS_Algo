@@ -7,7 +7,7 @@ import { OrderStatusBadge } from '@/components/OrderStatusBadge'
 import { EmptyState } from '@/components/states'
 import { Term } from '@/components/Term'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableFooter, TableHeader, TableRow } from '@/components/ui/table'
 import { SIDE_LABELS, STRATEGIES } from '@/config/strategies'
 import { usePermission } from '@/hooks/usePermission'
@@ -45,7 +45,12 @@ function renderCell(row: HistoryRow, key: HistorySortKey): ReactNode {
   const { order } = row
   switch (key) {
     case 'date':
-      return row.firstDate === row.date ? formatDate(row.date) : `${formatDate(row.firstDate)} – ${formatDate(row.date)}`
+      return (
+        <span className="flex flex-col">
+          <span>{formatDate(row.date)}</span>
+          {row.firstDate !== row.date && <span className="text-muted-foreground text-xs">từ {formatDate(row.firstDate)}</span>}
+        </span>
+      )
     case 'parent_order_id':
       return order.parent_order_id
     case 'symbol':
@@ -124,9 +129,6 @@ export function HistoryTab({ data }: { data: HistoryData }) {
             Bỏ lọc
           </Button>
         </div>
-        <Button variant="outline" disabled={rows.length === 0} onClick={() => downloadCsv(getHistoryFilename(range), buildHistoryCsv(rows))}>
-          <Download aria-hidden /> Xuất CSV
-        </Button>
       </div>
 
       <Card className="min-w-0">
@@ -137,6 +139,11 @@ export function HistoryTab({ data }: { data: HistoryData }) {
           <CardDescription>
             Lệnh đã hoàn tất, đã hủy, hết hạn, và lệnh <Term id="persistence-mode">nhiều phiên</Term> còn chạy. Bấm một dòng để mở chi tiết lệnh.
           </CardDescription>
+          <CardAction>
+            <Button variant="outline" disabled={rows.length === 0} onClick={() => downloadCsv(getHistoryFilename(range), buildHistoryCsv(rows))}>
+              <Download aria-hidden /> Xuất CSV
+            </Button>
+          </CardAction>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           {rows.length === 0 ? (
@@ -194,7 +201,7 @@ export function HistoryTab({ data }: { data: HistoryData }) {
                         }}
                       >
                         {HISTORY_COLUMNS.map((column) => (
-                          <TableCell key={column.key} className={cn(column.numeric && NUMBER, column.key === 'parent_order_id' && 'font-medium tabular-nums', column.key === 'date' && 'tabular-nums whitespace-nowrap')}>
+                          <TableCell key={column.key} className={cn(column.numeric && NUMBER, column.key === 'parent_order_id' && 'font-medium tabular-nums', column.key === 'date' && 'tabular-nums')}>
                             {renderCell(row, column.key)}
                           </TableCell>
                         ))}

@@ -2,6 +2,7 @@ import { useSearchParams } from 'react-router-dom'
 import { ErrorState, LoadingState } from '@/components/states'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useHistory } from '@/hooks/useHistory'
+import { AuditTab } from './AuditTab'
 import { HistoryTab } from './HistoryTab'
 import { HISTORY_TABS, resolveTab } from './tabs'
 
@@ -12,7 +13,7 @@ function HistoryData({ children }: { children: (data: NonNullable<ReturnType<typ
   return <>{children(history.data)}</>
 }
 
-/** Lịch sử và đối soát: lịch sử lệnh nhiều phiên. Tab đang mở nhớ trên URL (?tab=). */
+/** Lịch sử và đối soát: lịch sử lệnh nhiều phiên, nhật ký kiểm toán. Tab đang mở nhớ trên URL (?tab=). */
 export default function History() {
   const [params, setParams] = useSearchParams()
   const tab = resolveTab(params.get('tab'), false)
@@ -26,9 +27,13 @@ export default function History() {
       <Tabs value={tab} onValueChange={(value) => setParams({ tab: value }, { replace: true })}>
         <TabsList>
           <TabsTrigger value={HISTORY_TABS.history}>Lịch sử lệnh</TabsTrigger>
+          <TabsTrigger value={HISTORY_TABS.audit}>Nhật ký kiểm toán</TabsTrigger>
         </TabsList>
         <TabsContent value={HISTORY_TABS.history} className="pt-2">
           <HistoryData>{(data) => <HistoryTab data={data} />}</HistoryData>
+        </TabsContent>
+        <TabsContent value={HISTORY_TABS.audit} className="pt-2">
+          <HistoryData>{(data) => <AuditTab data={data} />}</HistoryData>
         </TabsContent>
       </Tabs>
     </div>
