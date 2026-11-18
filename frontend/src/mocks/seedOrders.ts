@@ -17,7 +17,7 @@ import type {
   StrategyType,
 } from '@/types'
 import { getTickSize } from '@/utils/hose'
-import type { SeedData } from './engine'
+import type { CoreOverride, SeedData } from './engine'
 
 interface SeedChild {
   price: number
@@ -35,6 +35,8 @@ interface SeedChild {
   unknown?: 'KEPT' | 'CANCELLED'
   /** Có một báo khớp trùng exchange_match_id của lần khớp này, đã bị bỏ qua. */
   duplicate?: boolean
+  /** Sổ phía Core ghi khác OMS (dữ liệu đối soát mẫu). */
+  core?: Omit<CoreOverride, 'child_order_id'>
 }
 
 /**
@@ -380,7 +382,7 @@ const SEED_ORDERS: SeedOrder[] = [
     children: [
       filled('10:00:00', 61_000, 1_000),
       filled('10:30:00', 61_100, 1_000),
-      { price: 61_000, quantity: 1_000, filled: 0, status: 'EXPIRED', at: '14:20:00' },
+      { price: 61_000, quantity: 1_000, filled: 0, status: 'EXPIRED', at: '14:20:00', core: { status: 'CANCELLED' } },
     ],
     arrival_price: 61_200,
     past: { daysAgo: 4, start: '09:45:00', end: '15:00:00', endReason: 'DAY_END' },
@@ -402,7 +404,7 @@ const SEED_ORDERS: SeedOrder[] = [
     ],
     children: [
       { ...filled('10:30:00', 63_800, 1_500), session: 0 },
-      { price: 63_900, quantity: 1_500, filled: 1_000, status: 'EXPIRED', at: '10:15:00', session: 1 },
+      { price: 63_900, quantity: 1_500, filled: 1_000, status: 'EXPIRED', at: '10:15:00', session: 1, core: { filled_qty: 1_200 } },
     ],
     arrival_price: 63_700,
     past: { daysAgo: 3, start: '10:00:00', end: '15:00:00', sessions: 2, endReason: 'VALID_TO_REACHED' },
@@ -531,6 +533,7 @@ export function createSeedData(now: Date): SeedData {
   const events: OrderEvent[] = []
   const notifications: Notification[] = []
   const tape: MarketTrade[] = []
+  const coreOverrides: CoreOverride[] = []
 
   const addEvent = (event: Omit<OrderEvent, 'event_id' | 'user_id' | 'channel'>, userId = 'SYSTEM') => {
     events.push({
@@ -616,6 +619,7 @@ export function createSeedData(now: Date): SeedData {
       const later = (seconds: number) => (child.at ? `${childDate}T${toClock(toSeconds(child.at) + seconds)}` : childAt)
       // Lệnh con mất ACK được giữ lại thì khớp sau khi đối soát xong.
       const fillAt = child.unknown === 'KEPT' ? later(10) : childAt
+      if (child.core) coreOverrides.push({ child_order_id: childId, ...child.core })
       children.push({
         child_order_id: childId,
         parent_order_id: id,
@@ -717,5 +721,5 @@ export function createSeedData(now: Date): SeedData {
     }
   })
 
-  return { orders, parameters, conditions, children, executions, snapshots, events, notifications, tape }
+  return { orders, parameters, conditions, children, executions, snapshots, events, notifications, tape, coreOverrides }
 }
