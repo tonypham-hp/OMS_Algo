@@ -37,14 +37,13 @@ describe('Sidebar', () => {
     expect(markup).toContain('href="/cau-hinh"')
   })
 
-  it('mục Sắp có không có href, bị khóa và có nhãn nhỏ', () => {
-    const markup = render('OPS')
-    for (const label of ['Lịch sử và đối soát']) {
-      const tag = itemTag(markup, label)
-      expect(tag).toContain('aria-disabled="true"')
-      expect(tag).not.toContain('href')
+  it('Lịch sử và đối soát đã mở khóa ở cả 3 vai trò: là liên kết, không còn nhãn Sắp có', () => {
+    for (const role of ['CUSTOMER', 'DEALER', 'OPS'] as const) {
+      const markup = render(role)
+      expect(markup).toContain('href="/bao-cao/lich-su"')
+      expect(itemTag(markup, 'Lịch sử và đối soát')).not.toContain('aria-disabled')
+      expect(markup).not.toContain('>Sắp có<')
     }
-    expect(markup.match(/>Sắp có</g)).toHaveLength(1)
   })
 
   it('Mẫu chiến lược đã mở khóa: là liên kết tới /mau-chien-luoc', () => {

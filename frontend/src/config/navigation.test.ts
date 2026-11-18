@@ -18,10 +18,18 @@ describe('getNavSections', () => {
     ])
   })
 
-  it('mục Sắp có không có đường dẫn', () => {
-    const comingSoon = getNavSections('OPS').flatMap((section) => section.items.filter((item) => item.comingSoon))
-    expect(comingSoon.map((item) => item.label)).toEqual(['Lịch sử và đối soát'])
-    expect(comingSoon.every((item) => item.path === undefined)).toBe(true)
+  it('không còn mục Sắp có ở vai trò nào', () => {
+    for (const role of ['CUSTOMER', 'DEALER', 'OPS'] as const) {
+      expect(getNavSections(role).flatMap((section) => section.items.filter((item) => item.comingSoon))).toEqual([])
+    }
+  })
+
+  it('Lịch sử và đối soát đã mở: /bao-cao/lich-su, mọi vai trò đều thấy', () => {
+    for (const role of ['CUSTOMER', 'DEALER', 'OPS'] as const) {
+      const item = getNavSections(role).flatMap((section) => section.items).find((entry) => entry.label === 'Lịch sử và đối soát')
+      expect(item?.path).toBe('/bao-cao/lich-su')
+      expect(item?.permission).toBeUndefined()
+    }
   })
 
   it('Mẫu chiến lược đã mở: có đường dẫn /mau-chien-luoc, cần quyền đặt lệnh', () => {
@@ -32,7 +40,14 @@ describe('getNavSections', () => {
   })
 
   it('thẻ đăng nhập ghi các màn mở được, không tính mục Sắp có', () => {
-    expect(getAccessibleLabels('CUSTOMER')).toEqual(['Trung tâm lệnh', 'Đặt lệnh', 'Sổ lệnh', 'Mẫu chiến lược', 'Hiệu quả thực hiện'])
+    expect(getAccessibleLabels('CUSTOMER')).toEqual([
+      'Trung tâm lệnh',
+      'Đặt lệnh',
+      'Sổ lệnh',
+      'Mẫu chiến lược',
+      'Hiệu quả thực hiện',
+      'Lịch sử và đối soát',
+    ])
     expect(getAccessibleLabels('OPS')).toContain('Cấu hình chiến lược')
   })
 })

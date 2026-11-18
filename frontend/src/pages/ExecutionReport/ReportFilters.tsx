@@ -1,63 +1,18 @@
 import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { FilterSelect } from '@/components/FilterSelect'
+import { toOptions } from '@/components/filterOptions'
 import { SIDE_LABELS, STRATEGIES } from '@/config/strategies'
 import type { Side, StrategyType } from '@/types'
 import {
-  ALL,
   DEFAULT_REPORT_FILTERS,
   REPORT_PERIOD_LABELS,
   REPORT_STATUS_LABELS,
   type ReportFilters as ReportFilterValues,
 } from '@/utils/execQuality'
 
-interface Option {
-  value: string
-  label: string
-}
-
-const toOptions = <T extends string>(labels: Record<T, string>): Option[] =>
-  (Object.keys(labels) as T[]).map((value) => ({ value, label: labels[value] }))
-
 const PERIOD_OPTIONS = toOptions(REPORT_PERIOD_LABELS)
 const STATUS_OPTIONS = toOptions(REPORT_STATUS_LABELS)
 const SIDE_OPTIONS = (Object.keys(SIDE_LABELS) as Side[]).map((side) => ({ value: side as string, label: SIDE_LABELS[side] }))
-
-function FilterSelect({
-  id,
-  label,
-  value,
-  options,
-  onChange,
-  withAll = true,
-}: {
-  id: string
-  label: string
-  value: string
-  options: Option[]
-  onChange: (value: string) => void
-  /** Có mục "Tất cả" ở đầu danh sách. */
-  withAll?: boolean
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger id={id} className="w-40">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {withAll && <SelectItem value={ALL}>Tất cả</SelectItem>}
-          {options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  )
-}
 
 interface ReportFiltersProps {
   filters: ReportFilterValues
