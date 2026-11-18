@@ -1,0 +1,27 @@
+import type { EventReasonCode } from '@/types'
+
+/** Câu giải thích rút gọn của từng mã lý do, cho nhật ký kiểm toán. Câu đầy đủ theo ngữ cảnh lệnh nằm ở `REASONS`. */
+export const REASON_TEXT: Record<EventReasonCode, string> = {
+  PRICE_OUT_OF_BAND: 'Giá của lệnh nằm ngoài biên độ ngày.',
+  CHILD_REJECTED_REPEAT: 'Core từ chối lệnh con nhiều lần liên tiếp.',
+  MARKET_DATA_STALE: 'Dữ liệu giá thị trường bị trễ.',
+  MARKET_DATA_RESUMED: 'Đã có giá mới, lệnh tự chạy lại.',
+  KILL_SWITCH: 'Vận hành kích hoạt dừng khẩn cấp.',
+  USER_PAUSE: 'Người dùng tạm dừng lệnh.',
+  USER_RESUME: 'Người dùng cho lệnh chạy tiếp.',
+  USER_CANCEL: 'Người dùng hủy lệnh.',
+  USER_REPRICE: 'Người dùng sửa giá cho lệnh bị dừng vì ngoài biên độ.',
+  OPS_REOPEN: 'Vận hành mở lại lệnh bị hệ thống tạm dừng.',
+  DAY_END: 'Hết ngày giao dịch, lệnh trong ngày hết hạn.',
+  VALID_TO_REACHED: 'Đã tới ngày hết hiệu lực của lệnh.',
+  WINDOW_END: 'Hết khung giờ của chiến lược.',
+  HUNT_MAX_WAIT: 'Hết thời gian chờ săn giá.',
+  HUNT_NO_LEVEL: 'Hết mức giá trong giới hạn, phần còn lại bị hủy.',
+  CORE_REJECT: 'Core từ chối lệnh con.',
+  ACK_TIMEOUT: 'Không nhận được xác nhận từ Core, lệnh con chờ đối soát.',
+  RECONCILED_KEPT: 'Đối soát: Core có lệnh, giữ lệnh con, không gửi lại.',
+  RECONCILED_CANCELLED: 'Đối soát: Core không giữ lệnh, đã hủy để giải phóng KL.',
+  POV_THROTTLED: 'Đã chạm tỷ lệ tham gia tối đa, chờ thị trường khớp thêm.',
+  HUNT_WAITING_LEVEL: 'Chưa có mức giá trong giới hạn để quét.',
+  COMPLETED: 'Đã khớp đủ khối lượng.',
+}

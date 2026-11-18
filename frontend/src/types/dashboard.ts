@@ -17,4 +17,6 @@ export interface DashboardData {
   pause_reasons: Record<string, string>
   /** Theo thứ tự xảy ra (cũ → mới), tối đa DASHBOARD_EVENT_LIMIT event gần nhất. */
   events: OrderEvent[]
+  /** Ngoài ERD: số chênh lệch đối soát đang mở trong 5 phiên (0 với khách hàng), cho liên kết "Xem đối soát". */
+  open_recon_count?: number
 }
