@@ -26,7 +26,7 @@ import {
 } from '@/utils/audit'
 import { downloadCsv } from '@/utils/csv'
 import { paginate } from '@/utils/history'
-import { DateRangeFilter, Pagination } from './shared'
+import { ChildId, DateRangeFilter, Pagination } from './shared'
 
 const ACTION_OPTIONS = AUDIT_ACTIONS.map((action) => ({ value: action, label: `${action} · ${EVENT_ACTION_LABELS[action]}` }))
 
@@ -114,7 +114,7 @@ export function AuditTab({ data }: { data: HistoryData }) {
                           {event.parent_order_id}
                         </Link>
                       </TableCell>
-                      <TableCell className="text-muted-foreground max-w-32 text-xs break-all whitespace-normal tabular-nums">{event.child_order_id ?? '—'}</TableCell>
+                      <TableCell className="text-muted-foreground"><ChildId id={event.child_order_id} /></TableCell>
                       <TableCell>
                         <span className="flex flex-col">
                           <span>{EVENT_ACTION_LABELS[event.action]}</span>

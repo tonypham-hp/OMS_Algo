@@ -128,3 +128,14 @@ export function Pagination<T>({ page, onPage, label }: { page: Page<T>; onPage: 
   )
 }
 
+
+/** Mã lệnh con trong bảng đã có cột lệnh cha: chỉ hiện phần đuôi (CH003), mã đầy đủ ở tooltip và cho trình đọc màn hình. */
+export function ChildId({ id }: { id: string | null }) {
+  if (!id) return <span aria-label="Không có lệnh con">—</span>
+  const suffix = id.split('-').at(-1) ?? id
+  return (
+    <span title={id} aria-label={id} className="tabular-nums">
+      {suffix}
+    </span>
+  )
+}

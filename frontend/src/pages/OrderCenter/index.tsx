@@ -2,7 +2,7 @@ import { CircleCheck, Plus } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { EmptyState, ErrorState, LoadingState } from '@/components/states'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useDashboard } from '@/hooks/useDashboard'
 import { usePermission } from '@/hooks/usePermission'
 import { formatDate } from '@/lib/format'
@@ -19,6 +19,8 @@ import { KpiCards } from './KpiCards'
 import { RecentActivity } from './RecentActivity'
 
 function DashboardBody({ data }: { data: DashboardData }) {
+  const canReconcile = usePermission()('reconciliation')
+  const openRecon = canReconcile ? (data.open_recon_count ?? 0) : 0
   const attention = getAttention(data.orders, data.children, data.pause_reasons)
   const activity = getRecentActivity(data.events, 10, data.trading_date)
   return (
@@ -36,6 +38,15 @@ function DashboardBody({ data }: { data: DashboardData }) {
               <h2>Lệnh cần chú ý</h2>
             </CardTitle>
             <CardDescription>Lệnh con chưa rõ hoặc bị từ chối, lệnh bị hệ thống tạm dừng.</CardDescription>
+            {openRecon > 0 && (
+              <CardAction>
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="/bao-cao/lich-su?tab=doi-soat" data-demo-id="attention-recon-link">
+                    Xem đối soát ({openRecon} đang mở)
+                  </Link>
+                </Button>
+              </CardAction>
+            )}
           </CardHeader>
           <CardContent>
             {attention.items.length > 0 ? (
