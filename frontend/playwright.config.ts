@@ -33,8 +33,8 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 10_000 },
   reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
-  // Ảnh chụp cho tài liệu chỉ chạy khi gọi riêng (npm run screenshots), không nằm trong test:e2e.
-  testIgnore: process.env.npm_lifecycle_event === 'screenshots' ? [] : ['**/screenshots.spec.ts'],
+  // Ảnh chụp cho tài liệu chỉ chạy khi gọi riêng (npm run screenshots, npm run screenshots:dot7), không nằm trong test:e2e.
+  testIgnore: process.env.npm_lifecycle_event?.startsWith('screenshots') ? ['**/_*.spec.ts'] : ['**/screenshots*.spec.ts', '**/_*.spec.ts'],
   use: {
     baseURL,
     channel,
