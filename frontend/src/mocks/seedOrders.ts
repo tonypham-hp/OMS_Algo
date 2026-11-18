@@ -521,7 +521,8 @@ function createHistoryTape(symbol: string, date: string, history: SeedHistory, s
 /** Sinh dữ liệu mẫu theo ngày truyền vào. Giờ tạo mỗi lệnh lệch nhau 1 phút để sắp xếp có thứ tự rõ ràng. */
 export function createSeedData(now: Date): SeedData {
   const today = toDateString(now)
-  const yesterday = toDateString(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1))
+  // Phiên giao dịch liền trước (bỏ thứ Bảy, Chủ nhật), để lệnh nhiều phiên không có "phiên" vào ngày nghỉ.
+  const yesterday = tradingDaysAgo(now, 1)
   const nextWeek = toDateString(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7))
 
   const orders: ParentOrder[] = []
