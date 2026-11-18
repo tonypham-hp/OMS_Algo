@@ -4,7 +4,7 @@ Hệ thống quản lý lệnh nâng cao (Advanced Order Management System) cho 
 Khách hàng và dealer đặt lệnh thuật toán (Stop, Stop Limit, Take Profit, Trailing Stop, OCO, Bracket, Iceberg, TWAP,
 VWAP, POV, HUNT). OMS tự chia thành lệnh con, gửi xuống Core, theo dõi khớp, xử lý lỗi và đối soát.
 
-> **Trạng thái:** bản demo frontend **v0.1.0** ([CHANGELOG](CHANGELOG.md)): 8 màn hình, Chế độ Demo, kiểm thử Vitest và
+> **Trạng thái:** bản demo frontend **v0.1.1** ([CHANGELOG](CHANGELOG.md)): 9 màn hình, Chế độ Demo, kiểm thử Vitest và
 > Playwright ([báo cáo chất lượng](docs/quality-report.md)). Chạy độc lập bằng dữ liệu giả lập (MSW và bộ giả lập thị
 > trường trong trình duyệt), có ghi chú "Dữ liệu demo" trên header. Backend (FastAPI) và simulators chưa có code.
 
@@ -15,7 +15,7 @@ VWAP, POV, HUNT). OMS tự chia thành lệnh con, gửi xuống Core, theo dõi
 - **Giới thiệu và đăng nhập** (`/`, `/login`): một màn hai cột. Bên trái giới thiệu sản phẩm, bên phải chọn tài khoản
   demo. Đã đăng nhập thì vào thẳng Trung tâm lệnh.
 - **Khung ứng dụng** cho mọi trang sau đăng nhập. Thanh bên có menu theo vai trò, thu gọn được còn icon và nhớ lựa chọn
-  sau khi tải lại trang. Mục Lịch sử và đối soát đang khóa, ghi "Sắp có".
+  sau khi tải lại trang.
   Thanh trên có phiên HOSE và giờ giả lập, nút tua x1/x10/x60, breadcrumb, nhãn "Dữ liệu demo · cập nhật", chuông
   thông báo và tài khoản. Màn ≤1280px thì thanh bên tự thu gọn; dưới 1600px thanh trên chỉ giữ tên màn hiện tại.
 - **Trung tâm lệnh** (`/trung-tam`, trang mặc định):
@@ -36,6 +36,13 @@ VWAP, POV, HUNT). OMS tự chia thành lệnh con, gửi xuống Core, theo dõi
   - Nút "Xuất Excel" tải file CSV mở được bằng Excel tiếng Việt.
   - Chi tiết lệnh có thẻ "Hiệu quả" dùng cùng công thức.
   - Công thức: [docs/frontend-spec.md](docs/frontend-spec.md), mục 12.
+- **Lịch sử và đối soát** (Đợt 7, `/bao-cao/lich-su`): 3 tab, tab đang mở nằm trên URL.
+  - Lịch sử lệnh: lệnh đã kết thúc và lệnh nhiều phiên đang chạy của 5 phiên gần nhất (hoặc khoảng tự chọn), số phiên đã
+    chạy, dòng tổng, xuất CSV.
+  - Nhật ký kiểm toán: mọi sự kiện của lệnh, chỉ đọc, tìm không dấu; khách hàng không thấy tên người khác.
+  - Đối soát (dealer, vận hành): so OMS với Core theo từng lệnh con, 7 loại chênh lệch, "Đối soát ngay"; vận hành đánh
+    dấu đã xử lý có ghi chú, người thứ hai duyệt. Bơm lỗi ở màn Vận hành thì chênh lệch hiện ngay ở đây.
+  - Chi tiết: [docs/frontend-spec.md](docs/frontend-spec.md), mục 21.
 - **Sổ lệnh 3 mức** (Đợt 4): 3 mức mua, 3 mức bán theo đúng luật HOSE.
   - Có ở màn Đặt lệnh (bấm một mức để điền giá vào lệnh) và ở Chi tiết lệnh.
   - Ô đổi giá trị nháy màu; KL lệnh của bạn vừa lấy hiện số âm màu vàng.
@@ -81,7 +88,8 @@ Bộ ảnh bản v0.1.0 (1440×900, mọi màn chính): [docs/screenshots/v0.1.0
 [docs/screenshots/dot4/](docs/screenshots/dot4/) (Đặt lệnh có dải mẫu và sổ lệnh 3 mức, Chi tiết lệnh HUNT có khung quét
 từng mức, trang Mẫu chiến lược),
 [docs/screenshots/dot5/](docs/screenshots/dot5/) (Chi tiết lệnh PAUSED_SYSTEM có thẻ giải thích, tooltip thuật ngữ,
-hộp tìm nhanh Ctrl+K, một bước tour; ảnh 1440px).
+hộp tìm nhanh Ctrl+K, một bước tour; ảnh 1440px),
+[docs/screenshots/dot7/](docs/screenshots/dot7/) (3 tab Lịch sử và đối soát, tài khoản vanhanh, 1440×900).
 
 ## Cấu trúc thư mục
 
@@ -137,6 +145,7 @@ Lệnh khác trong `frontend/`:
 | `npm run test:e2e:ui` | Playwright ở chế độ giao diện, chạy và xem từng bước |
 | `npm run test:all` | lint → Vitest → build → Playwright; dùng trước khi demo hoặc merge |
 | `npm run screenshots` | Chụp lại bộ ảnh vào `docs/screenshots/v0.1.0/` |
+| `npm run screenshots:dot7` | Chụp lại 3 ảnh màn Lịch sử và đối soát vào `docs/screenshots/dot7/` |
 
 Cấu hình qua biến môi trường: xem `frontend/.env.example` (`VITE_API_BASE_URL`, `VITE_USE_MOCK`, `VITE_DEMO_MODE`).
 
@@ -186,10 +195,10 @@ khi cần người duyệt thứ hai.
 
 | Tài khoản | Vai trò | Được dùng |
 |---|---|---|
-| `khachhang` | Khách hàng | Trung tâm lệnh, Màn 1, 2, 3 với tài khoản của mình |
-| `dealer` | Dealer | Trung tâm lệnh, Màn 1, 2, 3, xem lệnh của nhiều tài khoản |
+| `khachhang` | Khách hàng | Trung tâm lệnh, Màn 1, 2, 3 với tài khoản của mình; Lịch sử và nhật ký (không có tab Đối soát) |
+| `dealer` | Dealer | Trung tâm lệnh, Màn 1, 2, 3, xem lệnh của nhiều tài khoản; xem Đối soát, chạy "Đối soát ngay" |
 | `vanhanh` | Vận hành | Trung tâm lệnh và cả 5 màn |
-| `vanhanh2` | Vận hành | Trung tâm lệnh và cả 5 màn. Người thứ hai để demo maker-checker ở Màn 5: một người tạo yêu cầu, người kia duyệt |
+| `vanhanh2` | Vận hành | Trung tâm lệnh và cả 5 màn. Người thứ hai để demo maker-checker ở Màn 5: một người tạo yêu cầu, người kia duyệt; cũng duyệt "Đánh dấu đã xử lý" ở tab Đối soát |
 
 ## Màn hình
 
@@ -203,6 +212,7 @@ khi cần người duyệt thứ hai.
 | 5 | `/cau-hinh` | Cấu hình chiến lược | Tham số hệ thống, đổi theo maker-checker, lịch sử thay đổi |
 | 6 | `/bao-cao/hieu-qua` | Hiệu quả thực hiện | So giá BQ với arrival và VWAP, tỷ lệ tham gia, biểu đồ theo chiến lược, tên mẫu đã dùng, xuất CSV |
 | 7 | `/mau-chien-luoc` | Mẫu chiến lược | Lưới thẻ mẫu, tham số mặc định, "Phù hợp khi…", "Dùng mẫu này" mở Đặt lệnh đã điền sẵn |
+| 8 | `/bao-cao/lich-su` | Lịch sử và đối soát | Lịch sử lệnh nhiều phiên, nhật ký kiểm toán, đối soát OMS với Core (`?tab=lich-su\|nhat-ky\|doi-soat`) |
 
 ## Tài liệu
 
@@ -213,4 +223,4 @@ khi cần người duyệt thứ hai.
 - [docs/backend-gaps.md](docs/backend-gaps.md): bảng, trường, API backend cần thêm ngoài ERD; tồn đọng kỹ thuật.
 - [docs/quality-report.md](docs/quality-report.md): kết quả kiểm thử, kích thước bundle, lỗi đã sửa và việc còn tồn của v0.1.0.
 - [docs/demo-checklist.md](docs/demo-checklist.md): checklist 10 mục trước buổi demo.
-- [CHANGELOG.md](CHANGELOG.md): thay đổi theo phiên bản, Đợt 1–6.
+- [CHANGELOG.md](CHANGELOG.md): thay đổi theo phiên bản, Đợt 1–7.

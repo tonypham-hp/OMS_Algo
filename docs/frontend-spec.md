@@ -69,7 +69,8 @@ Làm theo thứ tự 1 → 2 → 3 → 4 → 5, mỗi màn xong mới sang màn 
 - Thanh bên rộng 232px, thu gọn còn icon (nhớ trong localStorage).
   - Nhóm menu: Trung tâm lệnh · GIAO DỊCH: Đặt lệnh, Sổ lệnh, Mẫu chiến lược · BÁO CÁO: Hiệu quả thực hiện,
     Lịch sử và đối soát · VẬN HÀNH (chỉ OPS): Giám sát hệ thống (màn 4), Cấu hình chiến lược (màn 5).
-  - Mẫu chiến lược, Lịch sử và đối soát chưa làm: bị khóa, ghi "Sắp có", không điều hướng.
+  - Mẫu chiến lược mở từ Đợt 4, Lịch sử và đối soát mở từ Đợt 7 (mục 21): không còn mục "Sắp có". Cơ chế khóa
+    (`comingSoon`) vẫn giữ cho màn sau này.
   - Hiệu quả thực hiện mở cho mọi vai trò (Đợt 2).
 - Thanh trên cao 56px: chấm màu + tên phiên HOSE + giờ giả lập, nút tua x1/x10/x60, breadcrumb,
   nhãn "Dữ liệu demo · cập nhật hh:mm:ss", chuông thông báo, tài khoản, đăng xuất.
@@ -563,3 +564,74 @@ hiện khi lệnh đang PAUSED_SYSTEM.
   - localStorage bị chặn thì không tự hiện, để không lặp lại ở mỗi lần đăng nhập.
 - Không tự chạy khi đang Demo, và đóng nếu Demo bắt đầu. Xem lại từ menu tài khoản: "Xem hướng dẫn".
 - Logic ở `src/tour/tourState.ts` (hàm thuần, có test).
+
+## 21. Lịch sử và đối soát (Đợt 7)
+
+Màn `/bao-cao/lich-su` (lazy), nhóm Báo cáo trên thanh bên, mọi vai trò. Ba tab, tab đang mở nằm trên URL
+(`?tab=lich-su|nhat-ky|doi-soat`). Tab Đối soát chỉ có với quyền `reconciliation` (DEALER, OPS); khách hàng gõ
+`?tab=doi-soat` thì về tab Lịch sử lệnh.
+
+### Dữ liệu
+
+- `GET /api/history`: lệnh, lệnh con, khớp, arrival và **toàn bộ** event của các lệnh người dùng được xem (`canSeeOrder`).
+  Với khách hàng, `user_id` không phải của chính họ (trừ `SYSTEM`, `seed`) đổi thành `KHAC`, hiện "Người dùng khác"
+  (`maskAuditEvents`, `src/utils/audit.ts`).
+- Lệnh mẫu có đủ 5 phiên gần nhất (`src/mocks/seedOrders.ts`, mục `past`): hủy, hết hạn DAY_END, GTD hết hạn sau 2
+  phiên, MULTI_SESSION hủy ở phiên 2; lệnh nhiều phiên có event `DECISION SESSION:<ngày> → CARRY_OVER:<KL còn lại>`
+  (như `closeDay` của engine). Lệnh "hôm qua" là phiên giao dịch liền trước, không phải ngày lịch.
+- **Sổ phía Core** trong engine (`CoreLedgerEntry`, `src/types/recon.ts`): mỗi lệnh con Core đang giữ, kèm trạng thái
+  và KL khớp Core ghi nhận. Ghi ở ACK, timeout sau khi Core tạo lệnh (Core có lệnh dù OMS chưa có ACK), khớp (đúng
+  một lần, báo khớp trùng không cộng), hủy, hết hạn. Lưu cùng trạng thái engine; bản lưu cũ thì dựng lại từ lệnh con.
+
+### Tab Lịch sử lệnh (`src/utils/history.ts`)
+
+- Dòng: lệnh COMPLETED, CANCELLED, EXPIRED và lệnh GTD/MULTI_SESSION còn chạy. Cột Ngày (ngày kết thúc, lệnh còn chạy là
+  hôm nay, dòng phụ "từ <ngày bắt đầu>"), Mã lệnh, Mã CK, Chiều, Chiến lược, Mẫu, KL đặt, KL khớp, Giá BQ, So arrival,
+  Trạng thái cuối, Số phiên (= 1 + số event CARRY_OVER).
+- Lọc khoảng ngày Hôm nay / 5 phiên / Tùy chọn (`src/utils/dateRange.ts`). Lệnh nhiều phiên thuộc khoảng nếu
+  [ngày bắt đầu, ngày kết thúc] giao với khoảng. Lọc thêm mã CK, chiến lược, chiều, trạng thái (có "Đang chạy nhiều
+  phiên"), tài khoản (DEALER, OPS).
+- Sắp xếp theo mọi cột; 50 dòng mỗi trang; bấm dòng hoặc Enter mở `/so-lenh/:id`.
+- Dòng tổng theo bộ lọc (mọi trang): số lệnh, tổng KL đặt, tổng KL khớp, tỷ lệ hoàn tất = COMPLETED / lệnh đã kết thúc.
+- Xuất CSV (UTF-8 BOM, `;`) đúng các dòng đã lọc và sắp xếp, thêm cột Tài khoản.
+
+### Tab Nhật ký kiểm toán (`src/utils/audit.ts`)
+
+- Mọi OrderEvent, mới nhất trước: Thời gian, Mã lệnh cha, Mã lệnh con, Hành động (nhãn + mã), Người thực hiện · Kênh
+  (HỆ THỐNG khi `SYSTEM`), Giá trị cũ → mới (`formatEventChange`), `reason_code` kèm câu rút gọn
+  (`src/explain/reasonText.ts`).
+- Lọc khoảng ngày, hành động (13 loại), người thực hiện, mã lệnh (cha hoặc con, khớp một phần); tìm không dấu trên mọi
+  cột. Chỉ đọc. 50 dòng mỗi trang; xuất CSV.
+
+### Tab Đối soát (`src/utils/reconcile.ts`, hàm thuần)
+
+`reconcile(input)` so từng lệnh con tạo trong khoảng (cộng mọi lệnh con chưa kết thúc) với sổ phía Core, cộng kiểm
+tra trên lệnh cha. Mỗi dòng một loại:
+
+| Loại | Khi nào | Trạng thái |
+|---|---|---|
+| `STATUS_MISMATCH` | Trạng thái OMS khác Core; hoặc OMS có lệnh trên sàn mà Core không có. OMS đang chờ hủy mà Core còn sống là bình thường | Mở |
+| `QTY_MISMATCH` | `filled_qty` OMS khác KL khớp Core ghi nhận | Mở |
+| `UNKNOWN_OPEN` | Lệnh con UNKNOWN quá `UNKNOWN_OPEN_AFTER_SECONDS` (2 giây giả lập, `src/config/reconcile.ts`) | Mở |
+| `UNKNOWN_RESOLVED` | UNKNOWN rồi RECOVERY `RECONCILED_KEPT` ("Core có lệnh") hoặc `RECONCILED_CANCELLED` ("Core không có lệnh" / "Core có lệnh, đã hủy") | Đã xử lý (hệ thống) |
+| `DUP_FILL_IGNORED` | Mỗi event `DUPLICATE_FILL:<mã khớp>` → IGNORED | Đã xử lý (hệ thống) |
+| `PARENT_SUM_MISMATCH` | `executed_qty` lệnh cha khác tổng Execution của lệnh vào | Mở |
+| `OVERFILL` | Tổng khớp (OMS hoặc Core) vượt `total_qty`. Phải luôn bằng 0; có thì tô đỏ, "Lỗi nghiêm trọng" | Mở |
+
+- 4 thẻ: Lệnh con đã so, Khớp đúng, Chênh lệch đang mở (Mở + Chờ duyệt; viền đỏ khi > 0), Đã xử lý.
+- "Đối soát ngay" (DEALER, OPS): tra Core cho mọi lệnh con UNKNOWN (`reconcileChildNow`, kết cục theo Core), rồi so lại;
+  hiện lần chạy gần nhất và người chạy. Màn tự làm mới mỗi giây, nên lỗi vừa bơm ở màn Vận hành hiện ngay.
+- OPS "Đánh dấu đã xử lý": bắt buộc ghi chú, ghi OrderEvent `DECISION` với `old_value = RECON:<mã dòng>`,
+  `new_value = RESOLVE_REQUESTED`. Maker-checker như màn Cấu hình: một người vận hành khác Duyệt (`RESOLVED`) hoặc
+  Từ chối có lý do (`RESOLVE_REJECTED`, về Mở). Người đánh dấu không tự duyệt. DEALER chỉ xem.
+- API giả lập: `GET /api/reconciliation?from&to`, `POST /api/reconciliation/run`, `POST /api/reconciliation/decisions`
+  (`src/mocks/historyApi.ts`). CUSTOMER nhận 403; DEALER gửi quyết định nhận 403.
+
+### Liên kết
+
+- Trung tâm lệnh: thẻ "Lệnh cần chú ý" có "Xem đối soát (n đang mở)" khi DEALER/OPS có chênh lệch đang mở trong 5 phiên
+  (`open_recon_count` của dashboard).
+- Ctrl+K: màn "Lịch sử và đối soát" (từ khóa đối soát, kiểm toán, nhật ký); "Mở nhật ký kiểm toán"; "Đối soát ngay" và
+  "Xem chênh lệch đang mở" chỉ với quyền `reconciliation` (`?tab=doi-soat&run=1` chạy một lần).
+- Thuật ngữ mới: Đối soát (mở rộng), STATUS_MISMATCH, QTY_MISMATCH, DUP_FILL_IGNORED, PARENT_SUM_MISMATCH, OVERFILL,
+  Nhật ký kiểm toán.
