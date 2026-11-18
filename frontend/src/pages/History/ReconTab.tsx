@@ -1,5 +1,5 @@
 import { CircleCheck, RefreshCw, SearchX, TriangleAlert } from 'lucide-react'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { FilterSelect } from '@/components/FilterSelect'
 import { toOptions } from '@/components/filterOptions'
@@ -109,17 +109,20 @@ export function ReconTab({ tradingDate }: { tradingDate: string }) {
   const recon = useReconciliation(range)
   const run = useRunReconciliation()
 
-  // Mở từ Ctrl+K "Đối soát ngay" (?run=1): chạy một lần rồi bỏ cờ khỏi URL.
-  const autoRun = useRef(params.get('run') === '1')
+  // Ctrl+K "Đối soát ngay" (?run=1), kể cả khi tab đang mở sẵn: chạy một lần rồi bỏ cờ khỏi URL.
+  const runRequested = params.get('run') === '1'
+  const { mutate: runNow } = run
   useEffect(() => {
-    if (!autoRun.current) return
-    autoRun.current = false
-    run.mutate(range)
-    setParams((current) => {
-      current.delete('run')
-      return current
-    }, { replace: true })
-  }, [range, run, setParams])
+    if (!runRequested) return
+    runNow(range)
+    setParams(
+      (current) => {
+        current.delete('run')
+        return current
+      },
+      { replace: true },
+    )
+  }, [runRequested, range, runNow, setParams])
 
   const resetPage = <T,>(setter: (value: T) => void) => (value: T) => {
     setter(value)
