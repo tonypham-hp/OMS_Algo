@@ -1,10 +1,17 @@
 import { z } from 'zod'
-import { MARKET_CLOSE_SECONDS, MARKET_OPEN_SECONDS } from '@/config/hose'
 import { STRATEGIES, type StrategyField, type StrategyFieldName } from '@/config/strategies'
 import { DEFAULT_ORDER_RULES } from '@/config/systemParams'
 import { formatNumber } from '@/lib/format'
 import type { CreateOrderRequest, OrderRules, StrategyParameter, SymbolQuote } from '@/types'
-import { getTickSize, parseTimeToSeconds, validatePrice, validateQuantity } from '@/utils/hose'
+import { formatClock } from '@/lib/format'
+import { expirySeconds, marketOpenSeconds } from '@/rules/session'
+import { ruleMessage } from '@/explain/reasons'
+import { buildRuleContext, type RuleContext } from '@/rules/context'
+import { defaultRules } from '@/rules/registry'
+import type { AccountInfo, LotKind, OrderType } from '@/rules/types'
+import { blocking, checkPrice, checkQty, validateOrder } from '@/rules/validate'
+import type { SessionCode } from '@/types'
+import { getTickSize, parseTimeToSeconds, rulesForQuote } from '@/utils/hose'
 
 // Mọi trường đều để optional ở đây để luôn chạy hết phần kiểm tra bên dưới
 // và báo được tất cả lỗi cùng lúc, thay vì dừng ở trường thiếu đầu tiên.
@@ -24,8 +31,10 @@ const orderFormShape = z.object({
     'VWAP',
     'POV',
     'HUNT',
+    'LIMIT',
   ]),
   total_qty: z.number().optional(),
+  lot_type: z.enum(['ROUND', 'ODD']).optional(),
   persistence_mode: z.enum(['DAY', 'GTD', 'MULTI_SESSION']),
   valid_to: z.string().optional(),
   limit_price: z.number().optional(),
@@ -53,6 +62,10 @@ export interface OrderValidationContext {
   today: string
   /** Luật đặt lệnh của cấu hình hệ thống. Không truyền thì dùng giá trị mặc định. */
   orderRules?: OrderRules
+  /** Tài khoản có phải nhà đầu tư nước ngoài không (room ngoại). Không truyền: coi là trong nước. */
+  getAccount?: (accountNo: string) => AccountInfo
+  /** Phiên hiện tại của bảng giao dịch của mã. Không truyền thì bỏ qua luật phiên. */
+  getSession?: (symbol: string) => SessionCode
 }
 
 export interface OrderFieldError {
@@ -64,24 +77,29 @@ function isMissing(value: unknown) {
   return value === undefined || value === null || value === ''
 }
 
+/** Câu lỗi đầu tiên của bộ kiểm tra theo gói luật, hoặc null. */
+const firstMessage = (violations: ReturnType<typeof checkPrice>) => (violations[0] ? ruleMessage(violations[0]) : null)
+
 function validateField(
   field: StrategyField,
   value: number | string,
   totalQty: number | undefined,
   quote: SymbolQuote,
+  rule: RuleContext,
 ): string | null {
   switch (field.kind) {
     case 'price':
-      return validatePrice(value as number, quote.ref_price)
+      return firstMessage(checkPrice(value as number, rule.rules, rule.symbol))
     case 'money': {
       const money = value as number
-      const tick = getTickSize(quote.ref_price)
+      const { rules, secType } = rulesForQuote(quote)
+      const tick = getTickSize(quote.ref_price, secType, rules)
       if (money <= 0) return `${field.label} phải lớn hơn 0`
       if (money % tick !== 0) return `${field.label} phải là bội số của bước giá ${formatNumber(tick)}đ`
       return null
     }
     case 'qty': {
-      const error = validateQuantity(value as number)
+      const error = firstMessage(checkQty(value as number, 'ROUND', rule.rules))
       if (error) return error
       if (totalQty !== undefined && (value as number) > totalQty) {
         return `${field.label} không được lớn hơn khối lượng đặt`
@@ -101,8 +119,11 @@ function validateField(
     case 'time': {
       const seconds = parseTimeToSeconds(value as string)
       if (seconds === null) return 'Giờ không hợp lệ'
-      if (seconds < MARKET_OPEN_SECONDS || seconds > MARKET_CLOSE_SECONDS) {
-        return 'Giờ phải nằm trong khoảng 09:00 đến 14:45'
+      const { rules } = rulesForQuote(quote)
+      const open = marketOpenSeconds(rules)
+      const close = expirySeconds(rules)
+      if (seconds < open || seconds > close) {
+        return `Giờ phải nằm trong khoảng ${formatClock(open).slice(0, 5)} đến ${formatClock(close).slice(0, 5)}`
       }
       return null
     }
@@ -199,10 +220,13 @@ export function validateOrderValues(
 
   if (!values.account_no) errors.push({ field: 'account_no', message: 'Vui lòng chọn tài khoản' })
 
+  const quote = context.getQuote(values.symbol)
+  const rule = quote ? buildRuleContext(quote, context.today) : null
+  const lot = getLot(values)
   if (values.total_qty === undefined) {
     errors.push({ field: 'total_qty', message: 'Vui lòng nhập khối lượng' })
   } else {
-    const qtyError = validateQuantity(values.total_qty)
+    const qtyError = firstMessage(checkQty(values.total_qty, lot, rule?.rules ?? defaultRules()))
     if (qtyError) errors.push({ field: 'total_qty', message: qtyError })
   }
 
@@ -214,8 +238,7 @@ export function validateOrderValues(
     }
   }
 
-  const quote = context.getQuote(values.symbol)
-  if (!quote) {
+  if (!quote || !rule) {
     errors.push({ field: 'symbol', message: 'Mã chứng khoán không hợp lệ' })
     return errors
   }
@@ -231,7 +254,7 @@ export function validateOrderValues(
       fieldErrors.push({ field: field.name, message: `Vui lòng nhập ${field.label.toLowerCase()}` })
       continue
     }
-    const message = validateField(field, value as number | string, values.total_qty, quote)
+    const message = validateField(field, value as number | string, values.total_qty, quote, rule)
     if (message) fieldErrors.push({ field: field.name, message })
   }
   errors.push(...fieldErrors)
@@ -246,7 +269,65 @@ export function validateOrderValues(
   const crossErrors = validateCrossFields(onlyValidFields(values, invalid), quote)
   errors.push(...crossErrors)
 
+  // Lô lẻ chỉ đặt lệnh LO thường (LIMIT), không đặt lệnh thuật toán.
+  if (lot === 'ODD' && values.strategy_type !== 'LIMIT' && !errors.some((error) => error.field === 'strategy_type')) {
+    errors.push({ field: 'strategy_type', message: ruleMessage({ code: 'ODD_LOT_LO_ONLY', params: { orderType: STRATEGIES[values.strategy_type].label } }) })
+  }
+
+  // Phần còn lại của ma trận luật: mã ngừng giao dịch, loại lệnh theo phiên, lô lẻ, room ngoại.
+  // Giá và KL đã kiểm theo từng ô ở trên nên bỏ qua ở đây để không báo trùng.
+  for (const violation of blocking(validateOrder(toOrderInput(values, lot), rule.rules, getSessionOf(context, values.symbol), rule.symbol, getAccountOf(context, values.account_no)))) {
+    if (FIELD_CHECKED.has(violation.code)) continue
+    const field: keyof OrderFormValues = violation.field === 'symbol' ? 'symbol' : violation.field === 'qty' ? 'total_qty' : 'strategy_type'
+    if (invalid.has(field) || errors.some((error) => error.field === field)) continue
+    errors.push({ field, message: ruleMessage(violation) })
+  }
+
   return errors
+}
+
+/** Mã lỗi đã được kiểm theo từng ô (giá, KL). */
+const FIELD_CHECKED = new Set([
+  'PRICE_REQUIRED',
+  'PRICE_NOT_ALLOWED',
+  'PRICE_INVALID',
+  'PRICE_OUT_OF_BAND',
+  'PRICE_TICK',
+  'PRICE_BELOW_MIN',
+  'QTY_INVALID',
+  'LOT_ROUND_MULTIPLE',
+  'LOT_ODD_RANGE',
+  'MAX_QTY',
+])
+
+/** Loại lô của lệnh: lô chẵn mặc định, lô lẻ (1–99 CP, chỉ LO) khi chọn ở phiếu lệnh. */
+export function getLot(values: OrderFormValues): LotKind {
+  return values.lot_type ?? 'ROUND'
+}
+
+/**
+ * Loại lệnh con đầu tiên mà chiến lược gửi lên sàn, và có gửi ngay khi đặt hay không.
+ * LIMIT gửi ngay một lệnh LO nên chịu luật phiên đầy đủ; lệnh thuật toán chỉ nhận cảnh báo.
+ */
+export function strategyOrderType(values: OrderFormValues): { orderType: OrderType; immediate: boolean } {
+  if (values.strategy_type === 'LIMIT') return { orderType: 'LO', immediate: true }
+  return { orderType: STRATEGIES[values.strategy_type].usesMtl ? 'MTL' : 'LO', immediate: false }
+}
+
+function toOrderInput(values: OrderFormValues, lot: LotKind) {
+  const { orderType, immediate } = strategyOrderType(values)
+  // Giá, KL đã kiểm theo từng ô; ở đây chỉ cần giá có mặt đúng loại lệnh để không sinh lỗi giả.
+  const price = orderType === 'LO' ? (values.limit_price ?? 1) : null
+  return { side: values.side, orderType, price, qty: values.total_qty ?? 0, lot, immediate }
+}
+
+function getSessionOf(context: OrderValidationContext, symbol: string): SessionCode {
+  // Không biết phiên (form không truyền, test): coi như phiên liên tục, không sinh lỗi phiên.
+  return context.getSession?.(symbol) ?? 'CONTINUOUS'
+}
+
+function getAccountOf(context: OrderValidationContext, accountNo: string): AccountInfo {
+  return context.getAccount?.(accountNo) ?? { isForeign: false }
 }
 
 /**
@@ -324,6 +405,7 @@ export function toCreateOrderRequest(
     valid_to: values.persistence_mode === 'DAY' ? null : (values.valid_to ?? null),
     parameters,
     ...(options.templateId ? { template_id: options.templateId } : {}),
+    ...(values.lot_type === 'ODD' ? { lot_type: 'ODD' as const } : {}),
   }
 }
 
@@ -338,6 +420,7 @@ export function fromCreateOrderRequest(request: CreateOrderRequest): OrderFormVa
     persistence_mode: request.persistence_mode,
     valid_to: request.valid_to ?? undefined,
     limit_price: request.limit_price ?? undefined,
+    ...(request.lot_type ? { lot_type: request.lot_type } : {}),
   }
   for (const parameter of request.parameters) {
     const name = parameter.parameter_code as StrategyFieldName

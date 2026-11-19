@@ -48,7 +48,7 @@ function buildSummary(values: OrderFormValues): Array<[string, string]> {
     ['Mã', values.symbol],
     ['Chiều', SIDE_LABELS[values.side]],
     ['Loại lệnh', strategy.label],
-    ['Khối lượng', `${formatNumber(values.total_qty ?? 0)} CP`],
+    ['Khối lượng', `${formatNumber(values.total_qty ?? 0)} CP${values.lot_type === 'ODD' ? ' (lô lẻ)' : ''}`],
     ...strategy.fields.map((field): [string, string] => [field.label, formatStrategyFieldValue(field, values[field.name])]),
     ['Hiệu lực', validity],
   ]

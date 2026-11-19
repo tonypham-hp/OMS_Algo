@@ -41,6 +41,10 @@ export interface PlaceOrderParams {
   limit_price: number | null
   /** Tham số chiến lược. Chuỗi dạng hh:mm là TIME, còn lại là INTEGER. */
   parameters: Record<string, number | string>
+  /** Lô lẻ (1–99 CP, chỉ LO). */
+  lot_type?: 'ROUND' | 'ODD'
+  /** Lệnh này phải bị từ chối: lưu câu lỗi vào ctx.lastError thay vì dừng kịch bản. */
+  expectError?: boolean
 }
 
 export type DemoAction =
@@ -74,6 +78,10 @@ export type DemoAction =
   | { type: 'restore' }
   /** Đối soát với Core sau khi bật lại: nhận các báo khớp bị lỡ. */
   | { type: 'replayMissedFills' }
+  /** Đổi ngày mô phỏng (YYYY-MM-DD): chốt ngày cũ, bảng giá dựng theo luật của ngày mới. */
+  | { type: 'setDate'; params: { date: string } }
+  /** Sửa lệnh (một lần một trường theo KRX). expectError: phải bị từ chối, lưu câu lỗi vào ctx.lastError. */
+  | { type: 'amend'; params: { order: string; total_qty?: number; limit_price?: number; expectError?: boolean } }
 
 /** Dữ liệu riêng của một lần chạy kịch bản. */
 export interface DemoContext {
@@ -89,6 +97,8 @@ export interface DemoContext {
   missedReports: ExecutionReport[]
   /** Đếm để sinh mã khớp duy nhất cho báo khớp do kịch bản tạo. */
   matchSequence: number
+  /** Câu lỗi của thao tác gần nhất được chờ là bị từ chối (expectError). */
+  lastError?: string | null
 }
 
 /** Dữ liệu đưa vào check: đọc thẳng từ engine sau khi bước chạy xong. */

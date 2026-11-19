@@ -43,7 +43,12 @@ import type {
   UpdateOrderRequest,
 } from '@/types'
 import { formatDate, formatNumber } from '@/lib/format'
-import { isAuctionSession, parseTimeToSeconds, validatePrice } from '@/utils/hose'
+import { ruleMessage } from '@/explain/reasons'
+import { buildRuleContext, symbolInfoFromQuote } from '@/rules/context'
+import { mtlRemainderPrice } from '@/rules/price'
+import type { AmendKind } from '@/rules/types'
+import { checkForeignRoom, checkPrice, classifyAmend, losesPriority } from '@/rules/validate'
+import { isAuctionSession, isMatchingOver, parseTimeToSeconds, rulesForQuote } from '@/utils/hose'
 import {
   getAllowedActions,
   getReopenBlock,
@@ -53,6 +58,7 @@ import {
 } from '@/utils/orderActions'
 import { getTwapTarget, getVwapTarget } from '@/utils/schedule'
 import { countLevelsInLimit, planHuntSweep } from '@/utils/huntSweep'
+import { isForeignAccount } from './data'
 import { type BookSide, getBookLevels, oppositeBookSide } from './depth'
 
 /** Một lần lệnh của OMS lấy thanh khoản ở một mức của sổ lệnh; runtime trừ KL này khỏi sổ lệnh của bộ giả lập. */
@@ -84,11 +90,14 @@ const TERMINAL_CHILD_STATUSES: ReadonlySet<ChildOrderStatus> = new Set([
 /** Lỗi nghiệp vụ. `status` là mã HTTP mà API giả lập sẽ trả về. */
 export class EngineError extends Error {
   status: number
+  /** Lỗi theo từng trường (kiểm tra lệnh theo gói luật), có mã lý do nếu có. */
+  errors?: Array<{ field: string; message: string; code?: string }>
 
-  constructor(message: string, status = 409) {
+  constructor(message: string, status = 409, errors?: EngineError['errors']) {
     super(message)
     this.name = 'EngineError'
     this.status = status
+    this.errors = errors
   }
 }
 
@@ -137,6 +146,11 @@ interface EngineOptions {
   random?: () => number
   /** Không truyền thì dùng giá trị mặc định của tham số hệ thống. */
   config?: EngineConfig
+  /**
+   * Kiểm lệnh mới theo gói luật giao dịch (src/rules/validate.ts) ngay trong engine, như backend thật.
+   * App và Demo bật; test đơn vị của engine để tắt (chỉ kiểm luật cấu hình) để dựng được lệnh giá ngoài biên.
+   */
+  enforceRules?: boolean
 }
 
 /** Dữ liệu engine tự nhớ cho từng lệnh cha, không thuộc ERD. */
@@ -166,7 +180,7 @@ interface ParentRuntime {
 }
 
 /** Thông tin thêm của một event, ngoài các trường ERD. */
-type EventExtra = Pick<OrderEvent, 'fill_detail' | 'reason' | 'sweep_plan' | 'template_id' | 'reason_code' | 'reject_code'>
+type EventExtra = Pick<OrderEvent, 'fill_detail' | 'reason' | 'sweep_plan' | 'template_id' | 'reason_code' | 'reject_code' | 'amend_kind'>
 
 /** Nguyên nhân lệnh cha hết hạn. */
 type ExpireReasonCode = Extract<EventReasonCode, 'DAY_END' | 'VALID_TO_REACHED' | 'WINDOW_END' | 'HUNT_MAX_WAIT' | 'HUNT_NO_LEVEL'>
@@ -204,6 +218,10 @@ export interface EngineState {
   closedDate: string | null
   currentDate: string | null
   previousSession: SessionCode | null
+  /** Phiên của nhịp trước theo từng mã (mã HNX, UPCoM có lịch phiên riêng). Tùy chọn cho bản lưu cũ. */
+  previousSessions?: Record<string, SessionCode>
+  /** Bảng đã xử lý đóng cửa, dạng "ngày|bảng". Tùy chọn cho bản lưu cũ. */
+  closedBoards?: string[]
   orderSequence: number
   eventSequence: number
   matchSequence: number
@@ -261,6 +279,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
   /** Đổi được bằng setRandom: Chế độ Demo chạy với seed cố định để kết quả lặp lại được. */
   let random = options.random ?? Math.random
   const config = options.config ?? DEFAULT_CONFIG
+  const enforceRules = options.enforceRules ?? false
   const getToday = () => market?.trading_date ?? toDateString(new Date())
 
   let parents: ParentOrder[] = []
@@ -285,10 +304,18 @@ export function createOrderEngine(options: EngineOptions = {}) {
   /** Ngày và phiên của nhịp trước, để nhận ra lúc sang ngày mới và lúc hết phiên khớp định kỳ. */
   let currentDate: string | null = null
   let previousSession: SessionCode | null = null
+  let previousSessions = new Map<string, SessionCode>()
+  const closedBoards = new Set<string>()
   let orderSequence = 0
   let eventSequence = 0
   let matchSequence = 0
   let coreSequence = 0
+  /**
+   * Room ngoại lệnh mua của nhà đầu tư nước ngoài vừa giữ (âm) hoặc trả lại (dương), chờ runtime ghi vào bộ giả lập.
+   * `roomInFlight`: phần đã chuyển cho bộ giả lập nhưng engine chưa thấy trong nhịp giá mới.
+   */
+  let roomChanges: Array<{ symbol: string; delta: number }> = []
+  const roomInFlight = new Map<string, number>()
   /** KL lệnh của OMS đã lấy ở sổ lệnh, chờ runtime trừ khỏi bộ giả lập. */
   let depthTakes: DepthTake[] = []
   /** KL đã lấy ở từng mức trong nhịp hiện tại, để nhiều lệnh con cùng mức không lấy quá KL đang có. */
@@ -306,6 +333,65 @@ export function createOrderEngine(options: EngineOptions = {}) {
 
   function getQuote(symbol: string): SymbolQuote | undefined {
     return market?.quotes.find((quote) => quote.symbol === symbol)
+  }
+
+  /** Room ngoại còn lại theo engine: room của bảng giá trừ phần đã giữ mà bảng giá chưa phản ánh. */
+  function pendingRoom(symbol: string) {
+    const pending = roomChanges.filter((change) => change.symbol === symbol).reduce((sum, change) => sum + change.delta, 0)
+    return pending + (roomInFlight.get(symbol) ?? 0)
+  }
+
+  function roomQuote(symbol: string): SymbolQuote | undefined {
+    const quote = getQuote(symbol)
+    if (!quote || quote.foreign_room === undefined) return quote
+    return { ...quote, foreign_room: Math.max(0, quote.foreign_room + pendingRoom(symbol)) }
+  }
+
+  /** Lệnh mua của nhà đầu tư nước ngoài trên mã có giới hạn room. */
+  function needsRoom(parent: ParentOrder) {
+    return parent.side === 'BUY' && isForeignAccount(parent.account_no) && getQuote(parent.symbol)?.foreign_room !== undefined
+  }
+
+  /** Lệnh đang giữ room (đặt qua engine). Lệnh mẫu nạp sẵn không giữ room nên cũng không trả lại. */
+  function holdsRoom(parent: ParentOrder) {
+    return parent.foreign_room_held === true
+  }
+
+  /** Giữ (delta âm) hoặc trả lại (dương) room ngoại cho lệnh mua của nhà đầu tư nước ngoài. */
+  function changeRoom(parent: ParentOrder, delta: number) {
+    if (delta !== 0 && holdsRoom(parent)) roomChanges.push({ symbol: parent.symbol, delta })
+  }
+
+  /**
+   * Phiên của một mã: theo bảng giao dịch của mã (HOSE, HNX, UPCoM có lịch phiên khác nhau).
+   * Mã ngừng giao dịch coi như đóng cửa. Trạng thái không có phiên theo bảng (dữ liệu cũ, test) thì theo phiên chung.
+   */
+  function sessionOf(symbol: string, state: MarketState | null = market): SessionCode {
+    if (!state) return 'CLOSED'
+    const quote = state.quotes.find((item) => item.symbol === symbol)
+    if (quote?.board === null) return 'CLOSED'
+    return state.board_sessions?.[quote?.board ?? 'STO'] ?? state.session
+  }
+
+  /** Gói luật đang áp cho mã: theo bảng giao dịch của mã trong ngày. */
+  function rulesOfSymbol(symbol: string) {
+    return rulesForQuote(getQuote(symbol), getToday()).rules
+  }
+
+  /** Ngữ cảnh kiểm tra lệnh theo thị trường engine đang thấy (room ngoại tính cả phần vừa giữ). */
+  function validationContext() {
+    return {
+      getQuote: roomQuote,
+      today: getToday(),
+      orderRules: config.getOrderRules(),
+      getAccount: (accountNo: string) => ({ isForeign: isForeignAccount(accountNo) }),
+      getSession: (symbol: string) => sessionOf(symbol),
+    }
+  }
+
+  function boardKey(symbol: string, state: MarketState) {
+    const quote = state.quotes.find((item) => item.symbol === symbol)
+    return `${state.trading_date}|${quote?.board ?? 'STO'}`
   }
 
   function requireParent(parentOrderId: string) {
@@ -405,6 +491,8 @@ export function createOrderEngine(options: EngineOptions = {}) {
     parent.status = next
     parent.updated_at = nowIso()
     logEvent(parent.parent_order_id, null, action, previous, next, userId, extra)
+    // Lệnh mua của nhà đầu tư nước ngoài kết thúc: phần chưa khớp trả lại room.
+    if (isTerminalStatus(next) && !isTerminalStatus(previous)) changeRoom(parent, parent.total_qty - parent.executed_qty)
   }
 
   function setChildStatus(
@@ -468,7 +556,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
   ): string | undefined {
     if (quantity <= 0) return undefined
     // MTL không hợp lệ trong ATO, ATC: lệnh không có giá ở hai phiên này là lệnh ATO, ATC.
-    const session = market?.session
+    const session = sessionOf(parent.symbol)
     const finalType = orderType === 'MTL' && session && isAuctionSession(session) ? (session as ChildOrderType) : orderType
     const runtime = runtimeOf(parent)
     runtime.cycleNo += 1
@@ -488,6 +576,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
       core_order_id: null,
       created_at: nowIso(),
       sent_at: null,
+      priority_at: nowIso(),
     })
     logEvent(parent.parent_order_id, childId, 'CHILD_CREATE', null, 'CREATED')
     return childId
@@ -521,6 +610,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
       setChildStatus(child, 'EXPIRED', isAwaitingCore(child) ? 'RECOVERY' : 'DECISION', undefined, { reason_code: reasonCode })
     }
     cancelConditions(parent, null)
+    parent.expire_reason = reasonCode
     setParentStatus(parent, 'EXPIRED', 'DECISION', undefined, { reason_code: reasonCode })
   }
 
@@ -784,7 +874,29 @@ export function createOrderEngine(options: EngineOptions = {}) {
       }
       if (!isMarketable(child, quote.last_price)) continue
       fillChild(child, quote.last_price, (1 + Math.floor(random() * MAX_FILL_LOTS_PER_TICK)) * LOT)
+      if (child.order_type === 'MTL' && child.status === 'PARTIAL_FILLED') convertMtlRemainder(parent, child, quote)
     }
+  }
+
+  /**
+   * KRX: MTL khớp một phần thì phần còn lại chuyển thành LO tại giá khớp gần nhất + 1 bước giá (mua) / − 1 bước (bán),
+   * kẹp trong trần – sàn. Pack nào để mtlRemainder = CANCEL thì hủy phần còn lại.
+   */
+  function convertMtlRemainder(parent: ParentOrder, child: ChildOrder, quote: SymbolQuote) {
+    const { rules, secType } = rulesForQuote(quote, getToday())
+    if (rules.mtlRemainder === 'CANCEL') {
+      setChildStatus(child, 'CANCELLED', 'CANCEL')
+      return
+    }
+    const price = mtlRemainderPrice(quote.last_price, child.side, secType, rules, {
+      ceiling: quote.ceiling_price,
+      floor: Math.max(quote.floor_price, rules.minPrice),
+    })
+    child.order_type = 'LO'
+    child.price = price
+    logEvent(parent.parent_order_id, child.child_order_id, 'DECISION', 'MTL', `MTL_TO_LO:${price}`, 'SYSTEM', {
+      reason_code: 'MTL_REMAINDER_TO_LO',
+    })
   }
 
   /** Hết phiên ATO, ATC: khớp một lần duy nhất tại giá khớp định kỳ, lệnh đủ điều kiện khớp hết. */
@@ -877,7 +989,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
   function checkConditions(parent: ParentOrder, side: Side, last: number) {
     if (runtimeOf(parent).triggeredConditionId !== null) return
     // Trong ATO, ATC chưa có giao dịch mới nên giá khớp chỉ là giá cũ, không được dùng để kích hoạt.
-    if (market?.session !== 'CONTINUOUS') return
+    if (sessionOf(parent.symbol) !== 'CONTINUOUS') return
     for (const condition of conditions) {
       if (condition.parent_order_id !== parent.parent_order_id || condition.status !== 'ACTIVE') continue
       if (condition.trigger_price === null) continue
@@ -1103,6 +1215,10 @@ export function createOrderEngine(options: EngineOptions = {}) {
       case 'POV':
         stepPov(parent, quote)
         break
+      case 'LIMIT':
+        // Lệnh LO thường: một lệnh con cho toàn bộ phần còn lại, tại giá đặt.
+        if (workingOf(parent) === 0) createChild(parent, parent.side, 'LO', parent.limit_price, allowedOf(parent))
+        break
     }
   }
 
@@ -1164,6 +1280,8 @@ export function createOrderEngine(options: EngineOptions = {}) {
     // Đổi tốc độ cũng phát lại trạng thái, nhưng đồng hồ chưa nhích thì chưa phải một nhịp mới.
     const isSameMoment = market?.sim_seconds === state.sim_seconds && market?.trading_date === state.trading_date
     market = state
+    // Trạng thái mới của bộ giả lập đã gồm phần room đã chuyển ở nhịp trước.
+    roomInFlight.clear()
     tickTakes.clear()
     // Ba việc này phải chạy cả khi đồng hồ đứng yên (đã tới 15:00), nếu không lệnh sẽ kẹt mãi.
     // Đối soát trước, chờ ACK sau: Child vừa sang UNKNOWN ở nhịp này bắt đầu đếm đối soát từ nhịp sau.
@@ -1172,10 +1290,15 @@ export function createOrderEngine(options: EngineOptions = {}) {
     checkMarketData(state)
     if (isSameMoment) return
 
-    const previous = previousSession
+    const previousOf = previousSessions
     const isNewDay = currentDate !== null && currentDate !== state.trading_date
+    // Phiên trước của mã chưa từng thấy: lấy phiên chung của nhịp trước, như trước khi có phiên theo bảng.
+    const previousFallback = previousSession
     previousSession = state.session
+    previousSessions = new Map(state.quotes.map((quote) => [quote.symbol, sessionOf(quote.symbol, state)]))
     currentDate = state.trading_date
+    const prevOf = (parent: ParentOrder) => previousOf.get(parent.symbol) ?? previousFallback
+    const nowOf = (parent: ParentOrder) => sessionOf(parent.symbol, state)
     const liveParents = parents.filter((parent) => !isTerminalStatus(parent.status))
 
     if (isNewDay) for (const parent of liveParents) checkCarriedPrices(parent)
@@ -1186,35 +1309,44 @@ export function createOrderEngine(options: EngineOptions = {}) {
       settleParent(parent)
     }
 
-    // Vừa hết phiên ATO, ATC: bộ giả lập đã chốt giá khớp định kỳ ở nhịp này.
-    if (previous !== null && isAuctionSession(previous) && state.session !== previous) {
-      for (const parent of liveParents) {
-        const quote = getQuote(parent.symbol)
-        if (quote && isRunning(parent)) matchAuctionChildren(parent, quote)
-      }
+    // Vừa hết phiên ATO, ATC của bảng giao dịch: bộ giả lập đã chốt giá khớp định kỳ ở nhịp này.
+    for (const parent of liveParents) {
+      const previous = prevOf(parent)
+      if (previous === null || !isAuctionSession(previous) || nowOf(parent) === previous) continue
+      const quote = getQuote(parent.symbol)
+      if (quote && isRunning(parent)) matchAuctionChildren(parent, quote)
     }
-
-    if (state.session === 'ATC' && previous !== 'ATC') {
-      for (const parent of liveParents) if (isRunning(parent)) cancelOpenMtlChildren(parent)
-    }
-
-    if (state.session === 'CLOSED') {
-      if (closedDate !== state.trading_date) {
-        closedDate = state.trading_date
-        for (const parent of liveParents) if (!isTerminalStatus(parent.status)) closeDay(parent)
-      }
-      return
-    }
-
-    for (const parent of liveParents) if (isRunning(parent)) checkOwnDeadline(parent)
-
-    // Nghỉ trưa và trước giờ mở cửa không gửi lệnh mới. ATO, ATC gửi lệnh được nhưng chỉ khớp lúc hết phiên.
-    if (state.session !== 'CONTINUOUS' && !isAuctionSession(state.session)) return
 
     for (const parent of liveParents) {
+      if (nowOf(parent) === 'ATC' && prevOf(parent) !== 'ATC' && isRunning(parent)) cancelOpenMtlChildren(parent)
+    }
+
+    // Hết khớp lệnh trong ngày (HOSE 14:45): lệnh trong ngày hết hiệu lực, lệnh nhiều phiên mang sang phiên sau.
+    // Mỗi bảng đóng một lần mỗi ngày, theo giờ của bảng đó.
+    const open: ParentOrder[] = []
+    const closingNow = new Set<string>()
+    for (const parent of liveParents) {
+      if (!isMatchingOver(nowOf(parent))) {
+        open.push(parent)
+        continue
+      }
+      const key = boardKey(parent.symbol, state)
+      if (closedBoards.has(key) && !closingNow.has(key)) continue
+      closingNow.add(key)
+      if (!isTerminalStatus(parent.status)) closeDay(parent)
+    }
+    for (const key of closingNow) closedBoards.add(key)
+    if (isMatchingOver(state.session)) closedDate = state.trading_date
+
+    for (const parent of open) if (isRunning(parent)) checkOwnDeadline(parent)
+
+    for (const parent of open) {
+      // Nghỉ trưa và trước giờ mở cửa không gửi lệnh mới. ATO, ATC gửi lệnh được nhưng chỉ khớp lúc hết phiên.
+      const session = nowOf(parent)
+      if (session !== 'CONTINUOUS' && !isAuctionSession(session)) continue
       const quote = getQuote(parent.symbol)
       if (!quote) continue
-      if (state.session === 'CONTINUOUS' && isRunning(parent)) fillChildren(parent, quote)
+      if (session === 'CONTINUOUS' && isRunning(parent)) fillChildren(parent, quote)
       if (isRunning(parent)) stepParent(parent, quote)
       settleParent(parent)
     }
@@ -1230,7 +1362,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
   // ===== Thao tác của người dùng =====
 
   function assertAllowed(parent: ParentOrder, action: OrderAction) {
-    const availability = getAllowedActions(parent.status, market?.session ?? 'CLOSED', parent.reason_code)[action]
+    const availability = getAllowedActions(parent.status, sessionOf(parent.symbol), parent.reason_code, rulesOfSymbol(parent.symbol))[action]
     if (!availability.allowed) throw new EngineError(availability.reason ?? 'Không được phép thao tác')
   }
 
@@ -1271,9 +1403,15 @@ export function createOrderEngine(options: EngineOptions = {}) {
     if (isKillSwitched(request.account_no)) {
       throw new EngineError('Tài khoản đang bị dừng bởi kill switch, chưa đặt được lệnh mới')
     }
-    // Luật đặt lệnh của cấu hình hệ thống chỉ áp cho lệnh mới; lệnh đang chạy giữ tham số lúc đặt.
-    const ruleErrors = validateOrderRules(fromCreateOrderRequest(request), config.getOrderRules())
-    if (ruleErrors.length > 0) throw new EngineError(ruleErrors[0].message, 422)
+    // Một đường kiểm tra duy nhất (như backend thật): luật giao dịch theo gói luật của mã + luật đặt lệnh
+    // của cấu hình hệ thống (chỉ áp cho lệnh mới; lệnh đang chạy giữ tham số lúc đặt).
+    // Chưa có giá của mã (engine chưa nhận nhịp nào) thì chỉ kiểm được luật cấu hình.
+    // Test đơn vị của engine tắt enforceRules để đặt được lệnh giá ngoài biên (lệnh con không khớp).
+    const values = fromCreateOrderRequest(request)
+    const ruleErrors = enforceRules && getQuote(request.symbol)
+      ? validateOrderValues(values, validationContext())
+      : validateOrderRules(values, config.getOrderRules())
+    if (ruleErrors.length > 0) throw new EngineError(ruleErrors[0].message, 422, ruleErrors)
     const today = getToday()
     const now = nowIso()
     orderSequence += 1
@@ -1294,11 +1432,17 @@ export function createOrderEngine(options: EngineOptions = {}) {
       valid_to: request.valid_to ?? today,
       persistence_mode: request.persistence_mode,
       ...(request.template_id ? { template_id: request.template_id } : {}),
+      ...(request.lot_type === 'ODD' ? { lot_type: 'ODD' as const } : {}),
       version: 1,
       created_at: now,
       updated_at: now,
     }
     parents.push(parent)
+    // Room ngoại bị trừ ngay khi đặt lệnh mua (KRX), không đợi khớp.
+    if (needsRoom(parent)) {
+      parent.foreign_room_held = true
+      changeRoom(parent, -parent.total_qty)
+    }
     runtimeOf(parent) // Ghi nhận giờ tạo ngay, vì hạn chờ của HUNT tính từ lúc này.
     parameters.set(parentOrderId, request.parameters)
     conditions.push(...buildConditions(parent))
@@ -1357,6 +1501,15 @@ export function createOrderEngine(options: EngineOptions = {}) {
 
     const hasLimitPrice = STRATEGIES[parent.strategy_type].fields.some((field) => field.name === 'limit_price')
     const limitPrice = hasLimitPrice ? request.limit_price : null
+    // KRX: mỗi lần sửa chỉ đổi giá HOẶC khối lượng (amendPolicy của pack).
+    const rules = rulesOfSymbol(parent.symbol)
+    const kind = classifyAmend({ price: parent.limit_price, qty: parent.total_qty }, { price: limitPrice, qty: request.total_qty })
+    if ((kind === 'BOTH' && rules.amendPolicy.oneFieldPerAmend) || kind === 'NONE') {
+      const code = kind === 'BOTH' ? 'AMEND_ONE_FIELD' : 'AMEND_NO_CHANGE'
+      const message = ruleMessage({ code, params: {} })
+      throw new EngineError(message, 422, [{ field: kind === 'BOTH' ? 'limit_price' : 'total_qty', message, code }])
+    }
+    const amendKind = kind === 'BOTH' ? undefined : kind
     const isBracket = parent.strategy_type === 'BRACKET'
     if (isBracket && parent.executed_qty >= parent.total_qty && workingOf(parent) === 0) {
       throw new EngineError('Lệnh Bracket đã vào đủ, không sửa được nữa')
@@ -1388,23 +1541,88 @@ export function createOrderEngine(options: EngineOptions = {}) {
     if (request.total_qty < minimum) {
       throw new EngineError(`Khối lượng mới không được nhỏ hơn ${minimum} (đã khớp cộng lệnh con chưa rõ)`, 422)
     }
+    // Tăng KL lệnh mua của nhà đầu tư nước ngoài: phần tăng thêm phải còn room.
+    const added = request.total_qty - parent.total_qty
+    const room = roomQuote(parent.symbol)
+    if (added > 0 && room && holdsRoom(parent)) {
+      const violation = checkForeignRoom(parent.side, added, symbolInfoFromQuote(room), { isForeign: true })[0]
+      if (violation) throw new EngineError(ruleMessage(violation), 422, [{ field: 'total_qty', message: ruleMessage(violation), code: violation.code }])
+    }
 
     const oldValue = JSON.stringify({ total_qty: parent.total_qty, limit_price: parent.limit_price })
-    cancelOpenChildren(parent, userId)
+    const oldLimit = parent.limit_price
+    changeRoom(parent, parent.total_qty - request.total_qty)
     parent.total_qty = request.total_qty
     parent.limit_price = limitPrice
     parent.version += 1
     parent.updated_at = nowIso()
-    logEvent(  
+    logEvent(
       parent.parent_order_id,
       null,
       'MODIFY',
       oldValue,
       JSON.stringify({ total_qty: parent.total_qty, limit_price: parent.limit_price }),
       userId,
+      amendKind ? { amend_kind: amendKind } : undefined,
     )
+    amendOpenChildren(parent, amendKind, oldLimit, losesPriority(amendKind ?? 'PRICE', rules), userId)
     settleParent(parent)
     return parent
+  }
+
+  /**
+   * Sửa lệnh con LO đang chờ TẠI CHỖ thay vì hủy rồi sinh lại (KRX):
+   * - đổi giá: lệnh con đặt ở giá giới hạn cũ đổi sang giá mới, mất ưu tiên thời gian;
+   * - giảm KL: cắt bớt từ lệnh con mới nhất cho vừa phần còn lại, giữ ưu tiên;
+   * - tăng KL: lệnh LO thường (LIMIT) tăng KL lệnh con và mất ưu tiên; lệnh thuật toán tự sinh thêm lệnh con.
+   * Lệnh con không phải LO (MTL, ATO, ATC) vẫn hủy và sinh lại như trước. Lệnh con đang chờ Core giữ nguyên.
+   */
+  function amendOpenChildren(
+    parent: ParentOrder,
+    kind: AmendKind | undefined,
+    oldLimit: number | null,
+    losesQueue: boolean,
+    userId: string,
+  ) {
+    const amendable = childrenOf(parent).filter(
+      (child) =>
+        !isExitChild(parent, child) &&
+        (child.status === 'CREATED' || child.status === 'ACKNOWLEDGED' || child.status === 'PARTIAL_FILLED'),
+    )
+    const now = nowIso()
+    const logChild = (child: ChildOrder, before: object, after: object, amend: AmendKind) =>
+      logEvent(parent.parent_order_id, child.child_order_id, 'MODIFY', JSON.stringify(before), JSON.stringify(after), userId, {
+        amend_kind: amend,
+      })
+    for (const child of amendable) {
+      if (child.order_type !== 'LO') setChildStatus(child, 'CANCELLED', 'CANCEL', userId)
+    }
+    const lo = amendable.filter((child) => child.order_type === 'LO' && isChildLive(child.status))
+    if (kind === 'PRICE' && parent.limit_price !== null) {
+      for (const child of lo) {
+        if (child.price !== oldLimit) continue
+        logChild(child, { price: child.price }, { price: parent.limit_price }, 'PRICE')
+        child.price = parent.limit_price
+        if (losesQueue) child.priority_at = now
+      }
+    } else if (kind === 'QTY_DOWN') {
+      let excess = workingOf(parent) - (parent.total_qty - parent.executed_qty)
+      for (const child of [...lo].reverse()) {
+        if (excess <= 0) break
+        const cut = Math.min(excess, child.quantity - child.filled_qty)
+        excess -= cut
+        const quantity = child.quantity - cut
+        logChild(child, { quantity: child.quantity }, { quantity }, 'QTY_DOWN')
+        if (quantity <= child.filled_qty) setChildStatus(child, 'CANCELLED', 'CANCEL', userId)
+        else child.quantity = quantity
+      }
+    } else if (kind === 'QTY_UP' && parent.strategy_type === 'LIMIT' && lo.length > 0) {
+      const child = lo[lo.length - 1]
+      const quantity = child.quantity + allowedOf(parent)
+      logChild(child, { quantity: child.quantity }, { quantity }, 'QTY_UP')
+      child.quantity = quantity
+      if (losesQueue) child.priority_at = now
+    }
   }
 
   /** Các giá cần sửa của lệnh đang tạm dừng vì giá ngoài biên độ. */
@@ -1440,7 +1658,13 @@ export function createOrderEngine(options: EngineOptions = {}) {
     const checkBandOnly = getTriggeredCondition(parent) !== undefined || parent.executed_qty >= parent.total_qty
     const activeNames = new Set<string>(before.map((field) => field.name))
     const errors = checkBandOnly
-      ? after.map((field) => validatePrice(field.value, quote.ref_price)).filter((message) => message !== null)
+      ? after
+          .map((field) => {
+            const rule = buildRuleContext(quote, getToday())
+            const violation = checkPrice(field.value, rule.rules, rule.symbol)[0]
+            return violation ? ruleMessage(violation) : null
+          })
+          .filter((message) => message !== null)
       : validateOrderValues(
           fromCreateOrderRequest({
             client_request_id: parent.client_request_id,
@@ -1725,6 +1949,8 @@ export function createOrderEngine(options: EngineOptions = {}) {
     closedDate = null
     currentDate = null
     previousSession = null
+    previousSessions = new Map()
+    closedBoards.clear()
     orderSequence = seed.orders.length
     eventSequence = seed.events.length
   }
@@ -1748,6 +1974,8 @@ export function createOrderEngine(options: EngineOptions = {}) {
       closedDate,
       currentDate,
       previousSession,
+      previousSessions: Object.fromEntries(previousSessions),
+      closedBoards: [...closedBoards],
       orderSequence,
       eventSequence,
       matchSequence,
@@ -1778,6 +2006,9 @@ export function createOrderEngine(options: EngineOptions = {}) {
     closedDate = state.closedDate
     currentDate = state.currentDate
     previousSession = state.previousSession
+    previousSessions = new Map(Object.entries(state.previousSessions ?? {}))
+    closedBoards.clear()
+    ;(state.closedBoards ?? (state.closedDate ? [`${state.closedDate}|STO`] : [])).forEach((key) => closedBoards.add(key))
     orderSequence = state.orderSequence
     eventSequence = state.eventSequence
     matchSequence = state.matchSequence
@@ -1794,6 +2025,15 @@ export function createOrderEngine(options: EngineOptions = {}) {
       depthTakes = []
       return taken
     },
+    /** Lấy và xóa các thay đổi room ngoại (giữ khi đặt lệnh mua, trả khi hủy, hết hạn) để ghi vào bộ giả lập. */
+    drainRoomChanges: () => {
+      const changes = roomChanges
+      roomChanges = []
+      for (const change of changes) roomInFlight.set(change.symbol, (roomInFlight.get(change.symbol) ?? 0) + change.delta)
+      return changes
+    },
+    /** Room ngoại còn lại của mã theo engine (gồm phần vừa giữ). */
+    getForeignRoom: (symbol: string) => roomQuote(symbol)?.foreign_room,
     applyExecution,
     createOrder,
     pauseOrder,

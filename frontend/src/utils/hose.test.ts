@@ -12,9 +12,17 @@ import {
   isMtlAllowed,
   isValidTick,
   parseTimeToSeconds,
-  validatePrice,
-  validateQuantity,
 } from './hose'
+import { ruleMessage } from '@/explain/reasons'
+import { defaultRules } from '@/rules/registry'
+import { checkPrice, checkQty } from '@/rules/validate'
+
+// validatePrice, validateQuantity cũ đã gộp vào bộ kiểm tra theo gói luật (src/rules/validate.ts).
+const HOSE = defaultRules()
+const SYMBOL = { symbol: 'FPT', secType: 'STOCK' as const, ref: 100_000, ceiling: 107_000, floor: 93_000, halted: false }
+const message = (violations: ReturnType<typeof checkPrice>) => (violations[0] ? ruleMessage(violations[0]) : null)
+const validatePrice = (price: number) => message(checkPrice(price, HOSE, SYMBOL))
+const validateQuantity = (qty: number) => message(checkQty(qty, 'ROUND', HOSE))
 
 const at = (hour: number, minute: number, second = 0) => hour * 3600 + minute * 60 + second
 
@@ -89,7 +97,10 @@ describe('phiên giao dịch', () => {
     [at(14, 29, 59), 'CONTINUOUS'],
     [at(14, 30), 'ATC'],
     [at(14, 44, 59), 'ATC'],
-    [at(14, 45), 'CLOSED'],
+    // KRX: 14:45–15:00 thỏa thuận sau giờ (không khớp lệnh), đóng cửa hẳn từ 15:00.
+    [at(14, 45), 'PUT_THROUGH'],
+    [at(14, 59, 59), 'PUT_THROUGH'],
+    [at(15, 0), 'CLOSED'],
   ])('giây %i thuộc phiên %s', (seconds, session) => {
     expect(getSessionAt(seconds)).toBe(session)
   })
@@ -126,24 +137,24 @@ describe('phiên giao dịch', () => {
 describe('validatePrice', () => {
   // Tham chiếu 100.000: trần 107.000, sàn 93.000, bước 100.
   it('chấp nhận giá hợp lệ, gồm cả đúng trần và đúng sàn', () => {
-    expect(validatePrice(100_000, 100_000)).toBeNull()
-    expect(validatePrice(107_000, 100_000)).toBeNull()
-    expect(validatePrice(93_000, 100_000)).toBeNull()
+    expect(validatePrice(100_000)).toBeNull()
+    expect(validatePrice(107_000)).toBeNull()
+    expect(validatePrice(93_000)).toBeNull()
   })
 
   it('từ chối giá vượt trần hoặc dưới sàn', () => {
-    expect(validatePrice(107_100, 100_000)).toContain('trần 107.000')
-    expect(validatePrice(92_900, 100_000)).toContain('sàn 93.000')
+    expect(validatePrice(107_100)).toContain('trần 107.000')
+    expect(validatePrice(92_900)).toContain('sàn 93.000')
   })
 
   it('từ chối giá sai bước', () => {
-    expect(validatePrice(100_050, 100_000)).toContain('bước 100đ')
+    expect(validatePrice(100_050)).toContain('bước 100đ')
   })
 
   it('từ chối giá không nguyên hoặc không dương', () => {
-    expect(validatePrice(100_000.5, 100_000)).toContain('số nguyên')
-    expect(validatePrice(0, 100_000)).toContain('số nguyên')
-    expect(validatePrice(-100, 100_000)).toContain('số nguyên')
+    expect(validatePrice(100_000.5)).toContain('số nguyên')
+    expect(validatePrice(0)).toContain('số nguyên')
+    expect(validatePrice(-100)).toContain('số nguyên')
   })
 })
 

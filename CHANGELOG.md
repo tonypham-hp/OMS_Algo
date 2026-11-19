@@ -4,6 +4,42 @@ Ghi các thay đổi đáng chú ý của frontend OMS Algo theo từng đợt p
 [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/), đánh số phiên bản theo [SemVer](https://semver.org/lang/vi/).
 Bản 0.x là bản demo chạy với dữ liệu giả lập, chưa có backend.
 
+## [0.2.0] – 2026-11-19 · Đợt 8A: Luật giao dịch theo KRX
+
+HOSE chạy hệ thống KRX từ 05/05/2025; cổ phiếu niêm yết HNX giao dịch trên HOSE từ 28/12/2026 (TT 139/2025/TT-BTC).
+Luật giao dịch thành dữ liệu cấu hình theo bảng giao dịch × ngày hiệu lực.
+
+### Thêm
+- Gói luật `src/rules/`: pack STO, STX (hết hiệu lực 23/12/2026), UPX theo KRX, pack thử nghiệm bỏ nghỉ trưa;
+  `resolveRules(board, ngày)`, `symbolBoard(mã, ngày)`, lịch ngày giao dịch có ngày nghỉ. Điểm chưa rõ là cờ có nhãn
+  "Chưa kiểm chứng" / "Giả định" (MOK/MAK tắt, khóa sửa/hủy ATO/ATC, luật mã HNX sau khi sang HOSE).
+- Bộ kiểm tra `validateOrder` (hàm thuần) phủ ma trận bảng × phiên × loại lệnh × lô × loại chứng khoán, câu lỗi có số
+  cụ thể (`RULE_REASONS`). Form Đặt lệnh, Sửa lệnh, Sửa giá, mẫu chiến lược, HUNT, Demo và engine dùng chung.
+- Phiếu lệnh: công tắc Lô chẵn / Lô lẻ (lô lẻ 1–99 CP, chỉ lệnh "Lệnh giới hạn (LO)" mới), nhãn sàn HOSE/HNX/UPCoM cạnh
+  mã, bước giá theo loại chứng khoán (ETF, chứng quyền 10 đ), biên độ theo bảng.
+- Sửa lệnh: mỗi lần chỉ giá hoặc khối lượng, ô còn lại bị khóa, cảnh báo mất/giữ ưu tiên thời gian; lệnh con LO sửa tại
+  chỗ, MODIFY ghi `amend_kind`.
+- MTL khớp một phần: phần còn lại chuyển LO giá khớp gần nhất ± 1 bước. Lệnh trong ngày hết hiệu lực lúc 14:45, Sổ lệnh
+  hiện "Hết hiệu lực 14:45". Phiên thỏa thuận sau giờ 14:45–15:00 trên đồng hồ. Sổ lệnh có bộ lọc Lô.
+- Room ngoại theo mã (dòng "Room NN còn lại" ở OrderBook3), tài khoản 058C345678 là nhà đầu tư nước ngoài; lệnh mua giữ
+  room ngay khi đặt, vượt room bị từ chối (`FOREIGN_ROOM_EXCEEDED`).
+- Ngày mô phỏng cạnh đồng hồ phiên, nút "Đến 28/12/2026": mã HNX đổi nhãn sàn, áp luật mới, không tải lại trang.
+- Trang `/cau-hinh/luat` "Luật giao dịch" (OPS, chỉ đọc), nút "Thử cấu hình bỏ nghỉ trưa".
+- Mã mô phỏng: XHA, XHB, XHC (HNX), XUA, XUB (UPCoM), XETF30 (ETF), CFPT2699 (chứng quyền).
+- Demo: kịch bản 7 "Sửa lệnh: mất / giữ ưu tiên", 8 "Lô lẻ khớp trong ATC", 9 "Ngày 28/12/2026: mã HNX sang HOSE".
+- Test: ma trận `validateOrder` (1.008 ô), test thuộc tính trần/sàn, ví dụ tính tay, `resolveRules`/`symbolBoard` tại
+  23–28/12/2026, pack bỏ nghỉ trưa; Playwright `krx.spec`. Ảnh [docs/screenshots/dot8a/](docs/screenshots/dot8a/).
+
+### Đổi
+- 14:45–15:00 là `PUT_THROUGH` (thỏa thuận sau giờ), không còn `CLOSED`; đóng cửa hẳn từ 15:00. Nút "Sang ngày mới" hiện
+  từ 14:45.
+- Sửa lệnh không còn hủy lệnh con rồi sinh lại; đổi cả giá lẫn KL một lần bị từ chối.
+- Lỗi 422 của API giả lập có thêm `errors[].code`. Engine kiểm lệnh mới theo gói luật (một đường kiểm tra), API không
+  kiểm lại lần hai.
+- Dưới 1600px nút "Về đầu ngày" trên thanh trên chỉ còn biểu tượng (chỗ cho đồng hồ ngày).
+- Dữ liệu đã lưu trong trình duyệt của bản cũ bị bỏ (phiên bản trạng thái 9).
+
+
 ## [0.1.1] – 2026-11-18 · Đợt 7: Lịch sử và đối soát
 
 ### Thêm

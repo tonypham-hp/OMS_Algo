@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isValidTick } from '@/utils/hose'
+import { isValidTick, rulesForQuote } from '@/utils/hose'
 import { createMarketSimulator } from './simulator'
 
 /** Hàm random có seed (mulberry32) để test luôn cho cùng một kết quả. */
@@ -14,13 +14,14 @@ function seededRandom(seed: number) {
 }
 
 describe('bộ giả lập giá', () => {
-  it('giá luôn là số nguyên, đúng bước giá và trong biên độ', () => {
+  it('giá luôn là số nguyên, đúng bước giá (theo bảng, loại chứng khoán của mã) và trong biên độ', () => {
     const simulator = createMarketSimulator({ random: seededRandom(1) })
     for (let index = 0; index < 3000; index += 1) {
       simulator.tick()
       for (const quote of simulator.getState().quotes) {
+        const { rules, secType } = rulesForQuote(quote)
         expect(Number.isInteger(quote.last_price)).toBe(true)
-        expect(isValidTick(quote.last_price)).toBe(true)
+        expect(isValidTick(quote.last_price, secType, rules), `${quote.symbol} ${quote.last_price}`).toBe(true)
         expect(quote.last_price).toBeLessThanOrEqual(quote.ceiling_price)
         expect(quote.last_price).toBeGreaterThanOrEqual(quote.floor_price)
       }
@@ -145,7 +146,8 @@ describe('bộ giả lập giá', () => {
       }
 
       const matched = quoteOf(simulator)
-      expect(simulator.getState().session).toBe('CLOSED')
+      // KRX: 14:45–15:00 là thỏa thuận sau giờ, không còn khớp lệnh (trước Đợt 8A coi là đóng cửa).
+      expect(simulator.getState().session).toBe('PUT_THROUGH')
       expect(simulator.getState().sim_seconds).toBe(14 * 3600 + 45 * 60)
       expect(matched.last_price).toBe(indicative)
       expect(matched.total_volume).toBe(before.total_volume + matched.last_qty)

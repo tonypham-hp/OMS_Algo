@@ -82,7 +82,7 @@ export default function OrderDetail() {
                       </span>
                     )}
                     <span data-demo-id="order-status" className="inline-flex">
-                      <OrderStatusBadge status={order.data.status} />
+                      <OrderStatusBadge status={order.data.status} order={order.data} />
                     </span>
                   </div>
                   <OrderDetailActions order={order.data} />

@@ -1,6 +1,13 @@
 import { QTY_LOT_SIZE } from '@/config/hose'
 import type { BookLevel, OrderBookDepth, Side, SymbolQuote } from '@/types'
-import { getTickSize, isValidTick, stepPrice } from '@/utils/hose'
+import { isValidTick, rulesForQuote, stepPrice } from '@/utils/hose'
+
+/** Mỗi mức cách nhau đúng 1 bước giá theo bảng giao dịch và loại chứng khoán của mã. */
+type TickQuote = Pick<SymbolQuote, 'board' | 'sec_type'>
+const step = (quote: TickQuote, price: number, steps: number) => {
+  const { rules, secType } = rulesForQuote(quote)
+  return stepPrice(price, steps, secType, rules)
+}
 
 /** Số mức giá của sổ lệnh tất định (engine dùng khi quote không có depth). */
 export const BOOK_LEVELS = 5
@@ -38,7 +45,7 @@ export function getBookLevels(quote: SymbolQuote, side: Side, count = BOOK_LEVEL
     if (price < quote.floor_price || price > quote.ceiling_price) break
     levels.push({ price, qty: LEVEL_QTY[index] ?? LEVEL_QTY[LEVEL_QTY.length - 1] })
     // Bước xuống dùng bước giá của mức phía dưới, như bộ giả lập.
-    price = side === 'BUY' ? price + getTickSize(price) : price - getTickSize(price - 1)
+    price = step(quote, price, side === 'BUY' ? 1 : -1)
   }
   return levels
 }
@@ -63,17 +70,17 @@ function isInBand(price: number, quote: Pick<SymbolQuote, 'floor_price' | 'ceili
 }
 
 /** Giá kế tiếp phía sau mức `price`: phía bán đi lên, phía mua đi xuống, đúng bước giá. */
-function nextPriceAfter(side: BookSide, price: number) {
-  return stepPrice(price, side === 'asks' ? 1 : -1)
+function nextPriceAfter(side: BookSide, price: number, quote: TickQuote) {
+  return step(quote, price, side === 'asks' ? 1 : -1)
 }
 
 /** Thêm mức mới phía sau cho tới đủ `count` mức hoặc chạm trần (phía bán), sàn (phía mua). */
 function extendSide(levels: BookLevel[], side: BookSide, start: number, quote: SymbolQuote, random: RandomFn, count: number) {
   const result = [...levels]
-  let price = result.length > 0 ? nextPriceAfter(side, result[result.length - 1].price) : start
+  let price = result.length > 0 ? nextPriceAfter(side, result[result.length - 1].price, quote) : start
   while (result.length < count && isInBand(price, quote)) {
     result.push({ price, qty: randomLevelQty(random) })
-    price = nextPriceAfter(side, price)
+    price = nextPriceAfter(side, price, quote)
   }
   return result
 }
@@ -161,17 +168,23 @@ export function rebaseDepth(depth: OrderBookDepth, quote: SymbolQuote, random: R
   return { bids, asks }
 }
 
-/** Kiểm sổ lệnh theo luật HOSE. Trả về danh sách lỗi, rỗng là hợp lệ. Dùng cho test và kiểm tra lúc chạy. */
-export function validateDepth(depth: OrderBookDepth, quote: Pick<SymbolQuote, 'floor_price' | 'ceiling_price'>): string[] {
+/** Kiểm sổ lệnh theo gói luật của mã. Trả về danh sách lỗi, rỗng là hợp lệ. Dùng cho test và kiểm tra lúc chạy. */
+export function validateDepth(
+  depth: OrderBookDepth,
+  quote: Pick<SymbolQuote, 'floor_price' | 'ceiling_price' | 'board' | 'sec_type'>,
+): string[] {
   const errors: string[] = []
+  const { rules, secType } = rulesForQuote(quote)
   const check = (side: BookSide) => {
     depth[side].forEach((level, index) => {
-      if (!isValidTick(level.price)) errors.push(`${side}[${index}] sai bước giá: ${level.price}`)
+      if (!isValidTick(level.price, secType, rules)) errors.push(`${side}[${index}] sai bước giá: ${level.price}`)
       if (!isInBand(level.price, quote)) errors.push(`${side}[${index}] ngoài trần – sàn: ${level.price}`)
-      if (level.qty <= 0 || level.qty % QTY_LOT_SIZE !== 0) errors.push(`${side}[${index}] KL không phải bội 100: ${level.qty}`)
+      if (level.qty <= 0 || level.qty % QTY_LOT_SIZE !== 0) {
+        errors.push(`${side}[${index}] KL không phải bội ${QTY_LOT_SIZE}: ${level.qty}`)
+      }
       const previous = depth[side][index - 1]
       if (previous) {
-        const ordered = side === 'asks' ? level.price >= stepPrice(previous.price, 1) : level.price <= stepPrice(previous.price, -1)
+        const ordered = side === 'asks' ? level.price >= step(quote, previous.price, 1) : level.price <= step(quote, previous.price, -1)
         if (!ordered) errors.push(`${side}[${index}] không cách mức trước ít nhất 1 bước giá`)
       }
     })

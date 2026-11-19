@@ -30,7 +30,7 @@ export const configStore = createConfigStore({
 })
 
 /** Engine dùng chung của app: nhận từng nhịp giá từ bộ giả lập, đọc tham số từ cấu hình hệ thống. */
-export const orderEngine = createOrderEngine({ config: configStore })
+export const orderEngine = createOrderEngine({ config: configStore, enforceRules: true })
 
 /** Băng tick khớp toàn thị trường cho báo cáo hiệu quả thực hiện (VWAP, tỷ lệ tham gia). */
 export const marketTape = createMarketTape()
@@ -103,6 +103,8 @@ marketSimulator.subscribe((state) => {
   orderEngine.onMarketTick(state)
   // Lệnh quét của OMS lấy thanh khoản ở sổ lệnh: trừ KL đó khỏi sổ lệnh của thị trường.
   orderEngine.drainDepthTakes().forEach((take) => marketSimulator.consumeDepth(take.symbol, take.side, take.price, take.qty))
+  // Lệnh mua của nhà đầu tư nước ngoài giữ, trả room ngoại: ghi vào bảng giá.
+  orderEngine.drainRoomChanges().forEach((change) => marketSimulator.adjustForeignRoom(change.symbol, change.delta))
   recordNewExecutions()
   ticksSinceSave += 1
   if (ticksSinceSave >= SAVE_EVERY_TICKS) {

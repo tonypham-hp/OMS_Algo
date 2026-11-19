@@ -2,6 +2,8 @@ import { formatBps, formatNumber } from '@/lib/format'
 import type { StrategyType } from '@/types'
 import type { ReportSortKey } from '@/utils/execQuality'
 import { getCeilingPrice, getFloorPrice, getTickSize } from '@/utils/hose'
+import { describeTickTable } from '@/rules/describe'
+import { defaultRules } from '@/rules/registry'
 import { MAX_ORDER_QTY, PRICE_BAND_PCT, QTY_LOT_SIZE } from './hose'
 import type { StrategyFieldName } from './strategies'
 
@@ -258,7 +260,7 @@ export const GLOSSARY: GlossaryEntry[] = [
     id: 'tick-size',
     term: 'Bước giá',
     short: 'Đơn vị nhỏ nhất giá được thay đổi, tùy mức giá.',
-    detail: 'Giá dưới 10.000 đ bước 10 đ; từ 10.000 tới dưới 50.000 đ bước 50 đ; từ 50.000 đ trở lên bước 100 đ.',
+    detail: `Cổ phiếu HOSE: ${describeTickTable(defaultRules().tickTable.STOCK)}. ETF, chứng quyền: ${describeTickTable(defaultRules().tickTable.ETF)}. HNX, UPCoM: bước 100 đ.`,
     formula: 'Giá hợp lệ khi giá chia hết cho bước giá của mức đó',
     example: (ctx) => (has(ctx.limit_price) ? `Giá ${n(ctx.limit_price)} có bước giá ${n(getTickSize(ctx.limit_price))} đ.` : null),
   },
@@ -296,6 +298,7 @@ export const STRATEGY_TERMS: Record<StrategyType, string> = {
   VWAP: 'vwap',
   POV: 'pov',
   HUNT: 'hunt',
+  LIMIT: 'lo',
 }
 
 /** Thuật ngữ của các ô tham số trên ticket Đặt lệnh. Ô không có ở đây hiện nhãn thường. */

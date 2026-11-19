@@ -1,3 +1,4 @@
+import { QTY_LOT_SIZE } from '@/config/hose'
 import { toDateString } from '@/lib/format'
 import type {
   ChildOrder,
@@ -16,6 +17,7 @@ import type {
   StrategyParameter,
   StrategyType,
 } from '@/types'
+import { shiftTradingDays } from '@/rules/calendar'
 import { getTickSize } from '@/utils/hose'
 import type { CoreOverride, SeedData } from './engine'
 
@@ -462,15 +464,9 @@ const isFinished = (status: ParentOrderStatus) => status === 'COMPLETED' || stat
 /** Khoảng cách giữa hai tick thị trường mẫu, giây. */
 const SEED_TICK_SECONDS = 20
 
-/** Ngày giao dịch cách `now` n phiên, bỏ thứ Bảy và Chủ nhật. */
+/** Ngày giao dịch cách `now` n phiên, theo lịch giao dịch (bỏ cuối tuần và ngày nghỉ). */
 export function tradingDaysAgo(now: Date, days: number): string {
-  const date = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  let left = days
-  while (left > 0) {
-    date.setDate(date.getDate() - 1)
-    if (date.getDay() !== 0 && date.getDay() !== 6) left -= 1
-  }
-  return toDateString(date)
+  return shiftTradingDays(toDateString(now), -days)
 }
 
 const toSeconds = (clock: string) => {
@@ -512,7 +508,7 @@ function createHistoryTape(symbol: string, date: string, history: SeedHistory, s
   for (let step = 0; step < count; step += 1) {
     const seconds = from + step * SEED_TICK_SECONDS + 10
     const noise = Math.floor(random() * 3) - 1
-    const qty = Math.max(100, Math.round((baseQty * (0.5 + random())) / 100) * 100)
+    const qty = Math.max(QTY_LOT_SIZE, Math.round((baseQty * (0.5 + random())) / QTY_LOT_SIZE) * QTY_LOT_SIZE)
     trades.push({ symbol, time: `${date}T${toClock(seconds)}`, price: priceOnPath(history.path, step / count, noise), qty })
   }
   return trades

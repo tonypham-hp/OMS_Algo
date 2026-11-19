@@ -29,8 +29,41 @@ function placeOrder(env: DemoEnv, ctx: DemoContext, params: PlaceOrderParams) {
     persistence_mode: 'DAY',
     valid_to: null,
     parameters: toParameters(params.parameters),
+    ...(params.lot_type === 'ODD' ? { lot_type: 'ODD' as const } : {}),
   }
-  ctx.refs[params.ref] = env.engine.createOrder(request, env.userId).parent_order_id
+  expecting(ctx, params.expectError, () => {
+    ctx.refs[params.ref] = env.engine.createOrder(request, env.userId).parent_order_id
+  })
+}
+
+/**
+ * Thao tác phải bị từ chối (expectError): lưu câu lỗi vào ctx.lastError để check; không bị từ chối thì báo lỗi bước.
+ * Không chờ lỗi thì chạy bình thường.
+ */
+function expecting(ctx: DemoContext, expectError: boolean | undefined, run: () => void) {
+  if (!expectError) {
+    run()
+    return
+  }
+  ctx.lastError = null
+  try {
+    run()
+  } catch (error) {
+    ctx.lastError = error instanceof Error ? error.message : String(error)
+    return
+  }
+  throw new Error('Thao tác lẽ ra phải bị từ chối nhưng đã được nhận')
+}
+
+function amend(env: DemoEnv, ctx: DemoContext, params: { order: string; total_qty?: number; limit_price?: number; expectError?: boolean }) {
+  const order = env.engine.getOrder(requireOrderId(ctx, params.order))
+  expecting(ctx, params.expectError, () => {
+    env.engine.updateOrder(
+      order.parent_order_id,
+      { version: order.version, total_qty: params.total_qty ?? order.total_qty, limit_price: params.limit_price ?? order.limit_price },
+      env.userId,
+    )
+  })
 }
 
 function nextMatchId(ctx: DemoContext) {
@@ -170,5 +203,9 @@ export function runAction(env: DemoEnv, ctx: DemoContext, action: DemoAction) {
     case 'replayMissedFills':
       ctx.missedReports.splice(0).forEach((report) => engine.applyExecution(report))
       return
+    case 'setDate':
+      return simulator.setTradingDate(action.params.date, { allowPast: true })
+    case 'amend':
+      return amend(env, ctx, action.params)
   }
 }

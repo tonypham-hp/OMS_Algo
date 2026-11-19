@@ -29,8 +29,11 @@ import { useAuthStore } from '@/store/auth.store'
 import { useMarketStore } from '@/store/market.store'
 import { useUiStore } from '@/store/ui.store'
 import type { OrderRules, PersistenceMode, Side, StrategyType } from '@/types'
-import { getDisplayPrice, getTickSize, isAuctionSession, isMtlAllowed } from '@/utils/hose'
+import { getDisplayPrice, getTickSize, isAuctionSession, isMtlAllowed, rulesForQuote } from '@/utils/hose'
 import { applyTemplate, getVisibleTemplates } from '@/utils/strategyTemplates'
+import { BoardBadge } from '@/components/BoardBadge'
+import { sessionForQuote } from '@/rules/context'
+import { SEC_TYPE_LABELS } from '@/rules/symbols'
 import { ConfirmDialog } from './ConfirmDialog'
 import { createOrderSchema, toCreateOrderRequest, type OrderFormValues } from './orderSchema'
 import { StrategyFields } from './StrategyFields'
@@ -44,11 +47,18 @@ interface OrderResolverContext {
 // Luôn đọc giá và luật đặt lệnh mới nhất ở thời điểm kiểm tra, không giữ bản cũ.
 const orderResolver: Resolver<OrderFormValues, OrderResolverContext> = (values, context, options) =>
   zodResolver(
-    createOrderSchema(() => ({
-      getQuote: (symbol) => useMarketStore.getState().quotes.find((quote) => quote.symbol === symbol),
-      today: useMarketStore.getState().trading_date,
-      orderRules: context?.orderRules,
-    })),
+    createOrderSchema(() => {
+      const market = useMarketStore.getState()
+      const findQuote = (symbol: string) => market.quotes.find((quote) => quote.symbol === symbol)
+      const foreign = useAuthStore.getState().user?.foreign_accounts ?? []
+      return {
+        getQuote: findQuote,
+        today: market.trading_date,
+        orderRules: context?.orderRules,
+        getAccount: (accountNo: string) => ({ isForeign: foreign.includes(accountNo) }),
+        getSession: (symbol: string) => sessionForQuote(findQuote(symbol), market),
+      }
+    }),
   )(values, context, options)
 
 const PERSISTENCE_MODES = Object.keys(PERSISTENCE_LABELS) as PersistenceMode[]
@@ -70,14 +80,13 @@ export function OrderTicket() {
   const user = useAuthStore((state) => state.user)
   const accounts = user?.accounts ?? []
   const quotes = useMarketStore((state) => state.quotes)
-  const session = useMarketStore((state) => state.session)
   const selectedSymbol = useUiStore((state) => state.selectedSymbol)
   const setSelectedSymbol = useUiStore((state) => state.setSelectedSymbol)
   const createOrder = useCreateOrder()
   const [pendingValues, setPendingValues] = useState<OrderFormValues | null>(null)
   const orderRules = useOrderRules().data
-  const enabledTypes = STRATEGY_TYPES.filter((type) => !orderRules || orderRules.enabledStrategies.includes(type))
-  const defaultStrategy = enabledTypes.includes(DEFAULT_STRATEGY) ? DEFAULT_STRATEGY : (enabledTypes[0] ?? DEFAULT_STRATEGY)
+  const allEnabledTypes = STRATEGY_TYPES.filter((type) => !orderRules || orderRules.enabledStrategies.includes(type))
+  const defaultStrategy = allEnabledTypes.includes(DEFAULT_STRATEGY) ? DEFAULT_STRATEGY : (allEnabledTypes[0] ?? DEFAULT_STRATEGY)
 
   const form = useForm<OrderFormValues, OrderResolverContext>({
     resolver: orderResolver,
@@ -91,11 +100,18 @@ export function OrderTicket() {
   const strategy = STRATEGIES[strategyType]
   const persistenceMode = values.persistence_mode ?? 'DAY'
   const quote = quotes.find((item) => item.symbol === selectedSymbol)
+  // Lô lẻ (1–99 CP) chỉ đặt được lệnh LO: danh sách loại lệnh chỉ còn LIMIT.
+  const lotType = values.lot_type ?? 'ROUND'
+  const enabledTypes = lotType === 'ODD' ? allEnabledTypes.filter((type) => type === 'LIMIT') : allEnabledTypes
+  const tradingDate = useMarketStore((state) => state.trading_date)
+  const quoteRules = quote ? rulesForQuote(quote, tradingDate) : null
+  const symbolSession = useMarketStore((state) => sessionForQuote(quote, state))
+  const tickBase = typeof values.limit_price === 'number' && values.limit_price > 0 ? values.limit_price : quote?.last_price
 
   // Mẫu chiến lược: chỉ điền sẵn loại lệnh và tham số, người dùng vẫn sửa được mọi ô, form vẫn kiểm tra như cũ.
   // Đổi sang loại lệnh khác loại của mẫu thì coi như bỏ chọn mẫu.
   const role = user?.role
-  const templates = getVisibleTemplates(role, enabledTypes)
+  const templates = getVisibleTemplates(role, allEnabledTypes)
   // Mở từ trang Mẫu chiến lược (/dat-lenh?mau=<id>): chọn sẵn mẫu đó ngay lần vẽ đầu.
   const [searchParams, setSearchParams] = useSearchParams()
   const requestedTemplate = searchParams.get('mau')
@@ -136,7 +152,7 @@ export function OrderTicket() {
   useEffect(() => {
     if (!requestedTemplate || !hasQuote) return
     const template = getTemplate(requestedTemplate)
-    const visible = template && getVisibleTemplates(role, enabledTypes).some((item) => item.id === template.id)
+    const visible = template && getVisibleTemplates(role, allEnabledTypes).some((item) => item.id === template.id)
     if (template && visible) fillFromTemplate(template)
     setSearchParams((params) => {
       params.delete('mau')
@@ -251,9 +267,47 @@ export function OrderTicket() {
             )}
           />
 
+          <Controller
+            control={control}
+            name="lot_type"
+            render={({ field }) => (
+              <div className="flex flex-col gap-1.5">
+                <div className="grid grid-cols-2 gap-2" role="group" aria-label="Loại lô" data-demo-id="lot-toggle">
+                  {(['ROUND', 'ODD'] as const).map((lot) => {
+                    const isActive = (field.value ?? 'ROUND') === lot
+                    return (
+                      <Button
+                        key={lot}
+                        type="button"
+                        size="sm"
+                        variant={isActive ? 'secondary' : 'ghost'}
+                        aria-pressed={isActive}
+                        onClick={() => {
+                          field.onChange(lot)
+                          // Lô lẻ chỉ có lệnh LO.
+                          if (lot === 'ODD') setValue('strategy_type', 'LIMIT', { shouldValidate: true })
+                        }}
+                      >
+                        {lot === 'ROUND' ? 'Lô chẵn' : 'Lô lẻ'}
+                      </Button>
+                    )
+                  })}
+                </div>
+                {field.value === 'ODD' && quoteRules && (
+                  <p className="text-muted-foreground text-xs" data-demo-id="odd-lot-hint">
+                    Lô lẻ: {quoteRules.rules.lots.odd.min}–{quoteRules.rules.lots.odd.max} CP, chỉ lệnh LO, khớp trong ATO, liên tục và ATC.
+                  </p>
+                )}
+              </div>
+            )}
+          />
+
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="symbol">Mã</Label>
+              <Label htmlFor="symbol" className="flex items-center gap-2">
+                Mã
+                {quote && <BoardBadge quote={quote} />}
+              </Label>
               <Select value={selectedSymbol} onValueChange={setSelectedSymbol}>
                 <SelectTrigger id="symbol" className="w-full">
                   <SelectValue />
@@ -306,11 +360,11 @@ export function OrderTicket() {
                 ['TC', quote.ref_price, PRICE_COLOR.ref],
                 ['Sàn', quote.floor_price, PRICE_COLOR.floor],
                 [
-                  isAuctionSession(session) ? 'Dự kiến' : 'Khớp',
+                  isAuctionSession(symbolSession) ? 'Dự kiến' : 'Khớp',
                   getDisplayPrice(quote),
                   getPriceColor(getDisplayPrice(quote), quote),
                 ],
-                ['Bước', getTickSize(quote.last_price), ''],
+                ['Bước', quoteRules ? getTickSize(tickBase ?? quote.last_price, quoteRules.secType, quoteRules.rules) : 0, ''],
               ].map(([label, price, color]) => (
                 <div key={label}>
                   <dt className="text-muted-foreground">{label}</dt>
@@ -319,6 +373,13 @@ export function OrderTicket() {
                   </dd>
                 </div>
               ))}
+              {quoteRules && (
+                <p className="text-muted-foreground col-span-5 text-[11px]" data-demo-id="price-band">
+                  {SEC_TYPE_LABELS[quoteRules.secType]} · biên ±{quoteRules.rules.priceBand.normal}%
+                  {quote.sec_type === 'CW' ? ' (theo mã cơ sở), giá đặt từ ' + formatNumber(quoteRules.rules.minPrice) + 'đ' : ''}
+                  {quote.board === null ? ' · Ngừng giao dịch hôm nay' : ` · ${SESSION_LABELS[symbolSession]}`}
+                </p>
+              )}
             </dl>
           )}
 
@@ -423,9 +484,9 @@ export function OrderTicket() {
             )}
           </div>
 
-          {strategy.usesMtl && !isMtlAllowed(session) && (
+          {strategy.usesMtl && !isMtlAllowed(symbolSession, quoteRules?.rules) && (
             <p role="status" className="rounded-md bg-amber-500/15 p-2 text-xs text-amber-300">
-              Hiện tại: {SESSION_LABELS[session]}. Lệnh {strategy.label} có thể sinh lệnh con MTL, mà MTL
+              Hiện tại: {SESSION_LABELS[symbolSession]}. Lệnh {strategy.label} có thể sinh lệnh con MTL, mà MTL
               chỉ hợp lệ trong phiên liên tục. Trong ATO, ATC lệnh con đó được gửi dưới dạng lệnh ATO, ATC.
             </p>
           )}

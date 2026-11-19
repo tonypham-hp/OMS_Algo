@@ -28,6 +28,10 @@ const SIDE_OPTIONS = (Object.keys(SIDE_LABELS) as Side[]).map((side) => ({
   value: side as string,
   label: SIDE_LABELS[side],
 }))
+const LOT_OPTIONS = [
+  { value: 'ROUND', label: 'Lô chẵn' },
+  { value: 'ODD', label: 'Lô lẻ' },
+]
 const STRATEGY_OPTIONS = STRATEGY_TYPES.map((type) => ({
   value: type as string,
   label: STRATEGIES[type].label,
@@ -76,6 +80,7 @@ export function OrderFilters({ filters, onChange, symbols, accounts }: OrderFilt
       <FilterSelect id="filter-symbol" label="Mã" value={filters.symbol} options={toOptions(symbols)} onChange={set('symbol')} />
       <FilterSelect id="filter-side" label="Chiều" value={filters.side} options={SIDE_OPTIONS} onChange={set('side')} />
       <FilterSelect id="filter-strategy" label="Loại lệnh" value={filters.strategy_type} options={STRATEGY_OPTIONS} onChange={set('strategy_type')} />
+      <FilterSelect id="filter-lot" label="Lô" value={filters.lot_type} options={LOT_OPTIONS} onChange={set('lot_type')} />
       {accounts.length > 0 && (
         <FilterSelect id="filter-account" label="Tài khoản" value={filters.account_no} options={toOptions(accounts)} onChange={set('account_no')} />
       )}

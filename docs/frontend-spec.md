@@ -136,13 +136,78 @@ Lệnh PAUSED_SYSTEM do giá ngoài biên độ (reason_code = PRICE_OUT_OF_BAND
 - **Notification**: notification_type (PARENT_ACTIVATED, CONDITION_TRIGGERED, CHILD_REJECTED,
   PARENT_PAUSED, PARENT_COMPLETED, PARENT_CANCELLED, PARENT_EXPIRED), sent_at
 
-## 7. Luật HOSE (kiểm tra ở form và trong simulator)
-- Phiên: ATO 9:00–9:15 · liên tục 9:15–11:30 · nghỉ trưa · liên tục 13:00–14:30 · ATC 14:30–14:45.
-- Không sửa / hủy lệnh trong ATO, ATC. Lệnh MTL chỉ trong phiên liên tục.
-- Biên độ ±7% so với giá tham chiếu (giá trần / sàn).
-- Bước giá: 10đ (giá < 10.000), 50đ (10.000–49.950), 100đ (≥ 50.000).
-- Khối lượng: bội số 100, tối đa 500.000 cổ phiếu / lệnh.
-- Giá dùng số nguyên đồng (không dùng số thực); hiển thị kiểu Việt Nam: 1.000.000.
+## 7. Luật giao dịch theo KRX (Đợt 8A)
+
+HOSE chạy hệ thống KRX từ 05/05/2025. Luật không viết trong code mà là **dữ liệu cấu hình**: mỗi gói luật (`RulePack`)
+áp cho một bảng giao dịch trong một khoảng ngày hiệu lực. Đổi giờ phiên, biên độ, bước giá chỉ cần thêm hoặc sửa một
+pack. Giá dùng số nguyên đồng; hiển thị kiểu Việt Nam: 1.000.000.
+
+### Gói luật (`src/rules/`)
+- `types.ts`: `RulePack` gồm bảng (`STO` HOSE, `STX` HNX, `UPX` UPCoM), ngày hiệu lực, phiên, loại lệnh theo phiên
+  và theo lô, biên độ (thường, ngày đầu), bảng bước giá theo loại chứng khoán (`STOCK`, `CLOSED_FUND`, `ETF`, `CW`), lô
+  chẵn/lẻ, KL tối đa, chính sách sửa/hủy, giờ hết hiệu lực, cờ cấu hình (có trạng thái kiểm chứng và nhãn), nguồn công
+  khai. Chừa sẵn `restricted`, `haltResume`, `putThrough` cho Đợt 8B.
+- `packs/`: `sto-krx-2025`, `stx-krx-2025` (hết hiệu lực 23/12/2026), `upx-krx-2025`, và pack **thử nghiệm**
+  `sto-experimental-no-lunch` (bỏ nghỉ trưa, chỉ để chứng minh đổi lịch phiên không cần sửa code).
+- `registry.ts`: `resolveRules(board, simDate)` chọn pack theo ngày; `setExperimentalPack` nạp đè pack thử nghiệm lúc chạy.
+- `symbols.ts`: danh mục mã (sở niêm yết, loại chứng khoán) và `symbolBoard(symbol, simDate)`.
+- `calendar.ts`: ngày giao dịch bỏ thứ Bảy, Chủ nhật và danh sách ngày nghỉ `config/holidays.ts` (danh sách mẫu).
+- `price.ts`, `session.ts`: bước giá, trần/sàn, MTL phần còn lại, phiên theo pack.
+- `config/hose.ts`, `utils/hose.ts` chỉ còn là lớp mỏng đọc từ pack HOSE đang hiệu lực.
+
+### Đã xác nhận (HOSE, bảng STO, `verified = true`)
+- Phiên: ATO 9:00–9:15 · liên tục 9:15–11:30 và 13:00–14:30 · ATC 14:30–14:45 · thỏa thuận sau giờ 14:45–15:00
+  (8A chỉ hiện trên đồng hồ phiên, chưa có phiếu thỏa thuận).
+- Lệnh LO, ATC chưa khớp **hết hiệu lực lúc 14:45**; Sổ lệnh hiện "Hết hiệu lực 14:45".
+- MTL chỉ trong phiên liên tục; phần chưa khớp chuyển thành LO tại giá khớp gần nhất +1 bước giá (mua) / −1 bước (bán).
+  Ví dụ: mua, giá khớp gần nhất 27.650 → LO 27.700. Chi tiết lệnh hiện "Phần còn lại chuyển LO giá …".
+- ATO/ATC không còn ưu tiên trước LO mua giá trần / LO bán giá sàn đặt trước đó (`auctionPriorityOverLimit = false`).
+- Sửa lệnh LO tại chỗ: mỗi lần **chỉ giá HOẶC khối lượng**. Đổi giá hoặc tăng KL thì mất ưu tiên thời gian, giảm KL thì
+  giữ. OrderEvent MODIFY ghi `amend_kind` = `PRICE` / `QTY_UP` / `QTY_DOWN`; lệnh con có `priority_at`.
+- Lô lẻ 1–99 CP: chỉ lệnh LO (chiến lược "Lệnh giới hạn (LO)"), khớp cả ATO, liên tục, ATC.
+- Biên độ ±7%, ngày giao dịch đầu ±20%. Trần = tham chiếu × (1 + biên) làm tròn **xuống** theo bước giá; sàn =
+  tham chiếu × (1 − biên) làm tròn **lên**. Ví dụ tham chiếu 128.500 → trần 137.400, sàn 119.600.
+- Bước giá: cổ phiếu, chứng chỉ quỹ đóng 10/50/100 đ (dưới 10.000 / tới dưới 50.000 / từ 50.000); ETF và chứng quyền
+  10 đ mọi mức giá (ETF 21.350 hợp lệ). Chứng quyền: trần/sàn theo khoảng trần/sàn của mã cơ sở chia tỷ lệ chuyển đổi;
+  sàn âm hiển thị 0 nhưng lệnh phải từ 10 đ.
+- Lô chẵn: bội số 100, tối đa 500.000 CP/lệnh.
+- Room ngoại bị trừ **ngay khi đặt** lệnh mua; lệnh mua vượt room còn lại bị từ chối (`FOREIGN_ROOM_EXCEEDED`). Phần
+  chưa khớp trả lại room khi hủy, hết hiệu lực; tăng KL giữ thêm, giảm KL trả lại.
+
+### Đã lên lịch: cổ phiếu niêm yết HNX sang HOSE (Thông tư 139/2025/TT-BTC)
+- Giao dịch phiên cuối trên HNX ngày 23/12/2026, ngừng giao dịch 24–25/12/2026, giao dịch trên HOSE từ 28/12/2026.
+- `symbolBoard`: mã niêm yết HNX trả `STX` tới 23/12, `null` (ngừng giao dịch) ngày 24–25/12, `STO` từ 28/12.
+  Đặt lệnh ngày ngừng giao dịch bị từ chối (`SYMBOL_TRANSFER_HALT`).
+- Đồng hồ ngày mô phỏng cạnh đồng hồ phiên: chọn ngày giao dịch (chỉ tiến), nút "Đến 28/12/2026". Đổi ngày thì mã HNX
+  đổi nhãn sàn và áp luật mới, không tải lại trang.
+
+### Chưa kiểm chứng (cờ cấu hình, `verified = false`, có nhãn trên giao diện)
+- MOK/MAK (FOK/FAK) trên HOSE: cờ `MOK_MAK` mặc định **tắt** (`ORDER_TYPE_DISABLED`).
+- Khóa sửa/hủy trong ATO/ATC: giữ quy tắc đang dùng, cờ `AMEND_CANCEL_IN_AUCTION_LOCK`, nhãn "Chưa kiểm chứng".
+- Biên độ, bước giá của mã HNX sau khi sang HOSE: giả định dùng luật STO, cờ `TRANSFERRED_SYMBOL_RULES`, nhãn "Giả định".
+- HNX (`STX`): biên ±10% (ngày đầu ±30%), bước 100 đ; UPCoM (`UPX`): biên ±15% (ngày đầu ±40%), bước 100 đ, tham
+  chiếu là bình quân gia quyền phiên trước. Lịch phiên dưới KRX chưa kiểm chứng từ nguồn gốc nên cả hai pack
+  `verified = false`.
+
+### Bộ kiểm tra (`src/rules/validate.ts`, hàm thuần)
+- `validateOrder(input, rules, sessionNow, symbolInfo, account)` phủ ma trận bảng × phiên × loại lệnh × loại lô × loại
+  chứng khoán; trả `RuleViolation[]` có mã lý do, trường, mức (`error` / `warn`) và số liệu. Kèm `checkPrice`,
+  `checkQty`, `validateAmend`/`classifyAmend`, `validateCancel`.
+- Câu tiếng Việt có số cụ thể: `RULE_REASONS` trong `src/explain/reasons.ts`.
+- Một đường kiểm tra: form Đặt lệnh, Sửa lệnh, Sửa giá, mẫu chiến lược, HUNT, Demo và engine (API giả lập) đều gọi bộ
+  này. Lệnh gửi ngay (LO thường, lô lẻ) chịu luật phiên đầy đủ; lệnh thuật toán chỉ nhận cảnh báo phiên (lệnh con gửi khi
+  vào phiên). Lỗi 422 trả `errors: [{ field, message, code }]`.
+
+### Giao diện
+- Phiếu lệnh: công tắc "Lô chẵn / Lô lẻ"; nhãn sàn HOSE/HNX/UPCoM cạnh mã (kèm "Giả định", "Ngừng GD"); bước giá theo
+  loại chứng khoán và giá đang nhập; dòng loại chứng khoán, biên độ, phiên của bảng.
+- Sửa lệnh: sửa một ô thì ô kia bị khóa, nút "Đổi trường sửa", cảnh báo mất/giữ ưu tiên.
+- Sổ lệnh: bộ lọc Lô; OrderBook3 có dòng "Room NN còn lại".
+- Trang `/cau-hinh/luat` (chỉ OPS, chỉ đọc): bảng các pack, ngày hiệu lực, kiểm chứng, cờ, nguồn; nút "Thử cấu hình bỏ
+  nghỉ trưa".
+
+### Ngoài phạm vi 8A (để 8B, schema đã chừa chỗ)
+- Mã bị hạn chế giao dịch (khớp định kỳ 15 phút, khóa sửa/hủy cuối lượt), phiên mở lại sau tạm ngừng, phiếu lệnh thỏa thuận.
 
 ## 8. Quy tắc nghiệp vụ lõi (simulator phải tôn trọng)
 - KL được phép sinh lệnh con = total_qty − executed_qty − working (Child chưa kết thúc).
@@ -152,7 +217,10 @@ Lệnh PAUSED_SYSTEM do giá ngoài biên độ (reason_code = PRICE_OUT_OF_BAND
 - Mọi thay đổi trạng thái đều ghi một OrderEvent.
 
 ## 9. Bộ giả lập (src/mocks)
-- Mã: FPT, HPG, VCB, MWG, TCB, VNM, SSI, VHM, MBB, ACB với giá tham chiếu hợp lý.
+- Mã: FPT, HPG, VCB, MWG, TCB, VNM, SSI, VHM, MBB, ACB với giá tham chiếu hợp lý. Từ Đợt 8A thêm mã **mô phỏng**:
+  XHA, XHB, XHC (niêm yết HNX), XUA, XUB (UPCoM), XETF30 (ETF), CFPT2699 (chứng quyền trên FPT, tỷ lệ 10:1), dùng dãy
+  random riêng để giá 10 mã cũ không đổi. Room ngoại theo mã; tài khoản 058C345678 là nhà đầu tư nước ngoài.
+- Mỗi mã có bảng giao dịch, loại chứng khoán và phiên theo bảng (`MarketState.board_sessions`).
 - Giá nhảy ngẫu nhiên trong biên độ, đúng bước giá; có đồng hồ phiên + nút tua nhanh (x1, x10, x60).
 - Engine giả lập: lệnh cha sinh lệnh con theo strategy (Iceberg theo slice, TWAP theo interval…),
   lệnh con khớp dần theo giá thị trường.
@@ -187,7 +255,7 @@ Lệnh PAUSED_SYSTEM do giá ngoài biên độ (reason_code = PRICE_OUT_OF_BAND
 - Tiếng Việt toàn bộ giao diện.
 
 ## 11. Nghiệm thu mỗi màn
-- `npm run lint` và `npm run build` không lỗi; có ít nhất vài test Vitest cho hàm kiểm tra luật HOSE.
+- `npm run lint` và `npm run build` không lỗi; có test Vitest cho bộ kiểm tra luật giao dịch (mục 7).
 - Chạy `npm run dev`, mở localhost, thao tác được đúng luồng của màn đó.
 - Commit theo Conventional Commits, ví dụ `feat(frontend): add order ticket with HOSE validation`.
 
@@ -328,7 +396,7 @@ App tự chạy 6 kịch bản E2E của [TC-E2E.md](test-cases/TC-E2E.md) để
   - Nút: Chạy lại, Kịch bản khác, Xuất kết quả, Thoát Demo.
   - File xuất: CSV UTF-8 có BOM, các cột Kịch bản; Bước; Chú thích; Điều kiện; Kết quả; Giờ giả lập.
 
-### 6 kịch bản
+### 9 kịch bản
 | # | Kịch bản | TC | Ghi chú |
 |---|---|---|---|
 | 1 | Iceberg thành công | 050, 051, 052, 220, 231 | Core khớp thiếu rồi hủy phần còn lại; lệnh con kế tiếp theo KL đã khớp thật |
@@ -337,14 +405,18 @@ App tự chạy 6 kịch bản E2E của [TC-E2E.md](test-cases/TC-E2E.md) để
 | 4 | HUNT quét mức + phần còn lại | 090, 091 | Quét tối đa 3 mức trong giá tối đa, phần còn lại đặt bị động. Từ Đợt 4 tô sáng OrderBook3 và khung "HUNT quét từng mức"; kiểm thêm khớp tại giá mức (BQ 118.157) và sổ lệnh dồn mức |
 | 5 | Core mất ACK → UNKNOWN → đối soát | 140, 141, 150 | Có thêm một báo khớp trùng bị bỏ qua |
 | 6 | OMS sập → khôi phục | 200, 202 | "Đĩa" là bản ghi JSON trong bộ nhớ; backend thật dùng CSDL |
+| 7 | Sửa lệnh: mất / giữ ưu tiên | KRX-AMEND | Đợt 8A. LO 1.000 CP; giảm KL giữ ưu tiên, đổi cả hai bị từ chối, đổi giá và tăng KL mất ưu tiên |
+| 8 | Lô lẻ khớp trong ATC | KRX-ODD | Đợt 8A. Lô lẻ 150 CP bị từ chối; LO lô lẻ 50 CP đặt 14:35 khớp ở giá ATC |
+| 9 | Ngày 28/12/2026: mã HNX sang HOSE | KRX-TRANSFER | Đợt 8A. XHA (mô phỏng) theo luật HNX ngày 23/12, ngừng giao dịch 24/12, theo luật HOSE từ 28/12 |
 
-Test: `src/demo/scenarios.test.ts` chạy cả 6 kịch bản headless, mọi check phải ĐẠT, chạy 2 lần cho kết quả giống nhau.
+Kịch bản 1–6 không đổi chú thích: luật KRX không đổi hành vi các bước của chúng.
+Test: `src/demo/scenarios.test.ts` chạy cả 9 kịch bản headless, mọi check phải ĐẠT, chạy 2 lần cho kết quả giống nhau.
 
 ## 14. Sổ lệnh 3 mức (Đợt 4)
 
 ### Dữ liệu (`src/mocks/depth.ts`, hàm thuần)
 - Mỗi mã có `quote.depth = { bids, asks }`, mỗi phía 3 mức `{ price, qty, own_taken? }`.
-- Luật HOSE:
+- Luật giao dịch (mục 7; bước giá theo bảng và loại chứng khoán của mã):
   - Giá đúng bước giá theo vùng: dưới 10.000 bước 10, 10.000–49.950 bước 50, từ 50.000 bước 100. Đi từng bước qua
     ngưỡng, ví dụ 49.950 → 50.000 → 50.100.
   - Giá nằm trong trần – sàn; gần trần (sàn) thì phía bán (mua) có thể ít hơn 3 mức.
@@ -431,7 +503,8 @@ Giữ nguyên quy tắc cũ; Đợt 4 đưa phần tính toán ra hàm thuần v
   - Giá: giá khớp, mua 1 hoặc bán 1, dịch n bước giá, kẹp trần – sàn.
   - Khoảng trượt: n bước giá của giá tham chiếu.
   - Giờ: theo đồng hồ giả lập, kẹp trong 09:15–14:45.
-- Cách tính này giữ mọi mẫu đúng luật HOSE ở mọi vùng giá và mọi giờ trong ngày (có test).
+- Cách tính này giữ mọi mẫu đúng luật giao dịch (mục 7) ở mọi vùng giá và mọi giờ trong ngày (có test). Từ Đợt 8A giờ
+  phiên, bước giá lấy từ gói luật của mã, và giá điền sẵn đi qua `checkPrice` (sai thì hiện cảnh báo).
 
 | id | Tên | Loại | Vai trò |
 |---|---|---|---|
@@ -447,7 +520,7 @@ Giữ nguyên quy tắc cũ; Đợt 4 đưa phần tính toán ra hàm thuần v
 
 ### Dải mẫu trên ticket Đặt lệnh (`TemplateStrip`)
 - Bấm một thẻ thì điền sẵn chiều, loại lệnh, KL và tham số; tài khoản và mã giữ như đang chọn.
-- Không tự đặt lệnh. Người dùng sửa được mọi ô, và form kiểm tra luật HOSE như cũ.
+- Không tự đặt lệnh. Người dùng sửa được mọi ô, và form kiểm tra luật giao dịch (mục 7) như cũ.
 - Thẻ đang chọn có viền nhấn, kèm dòng "Đã điền theo mẫu …" và lưu ý của mẫu.
 - Nút "Bỏ chọn mẫu" giữ nguyên giá trị đã điền. Đổi loại lệnh khác loại của mẫu thì tự bỏ chọn.
 

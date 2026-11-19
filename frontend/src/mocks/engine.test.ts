@@ -365,10 +365,13 @@ describe('kích hoạt theo giá', () => {
     const engine = newEngine()
     const id = place(engine, 'OCO', [intParam('tp_price', 100_500), intParam('sl_price', 99_500)], { side: 'SELL' })
     engine.onMarketTick(marketAt(AT_1000 + 1, 99_500))
+    expect(engine.getChildren(id)[0].order_type).toBe('MTL')
     engine.onMarketTick(marketAt(AT_1000 + 2, 100_500))
 
+    // KRX (Đợt 8A): MTL khớp một phần thì phần còn lại thành LO bán tại giá khớp gần nhất − 1 bước.
     expect(engine.getChildren(id)).toHaveLength(1)
-    expect(engine.getChildren(id)[0].order_type).toBe('MTL')
+    expect(engine.getChildren(id)[0]).toMatchObject({ order_type: 'LO', price: 100_400 })
+    expect(engine.getEvents(id).some((event) => event.new_value === 'MTL_TO_LO:100400' && event.reason_code === 'MTL_REMAINDER_TO_LO')).toBe(true)
     const [tp, sl] = engine.getConditions(id)
     expect(tp.status).toBe('CANCELLED')
     expect(sl.status).toBe('TRIGGERED')
@@ -614,27 +617,44 @@ describe('khớp định kỳ ATO, ATC', () => {
     expect(engine.getChildren(id)[0].order_type).toBe('MTL')
   })
 
-  it('Stop đã kích hoạt, vào ATC: hủy MTL còn sót, sinh lệnh ATC, khớp đúng 14:45', () => {
+  it('Stop kích hoạt cuối phiên liên tục, MTL chưa khớp: vào ATC hủy MTL, sinh lệnh ATC, khớp đúng 14:45', () => {
     const engine = newEngine()
     const id = place(engine, 'STOP', [intParam('trigger_price', 100_000)])
-    engine.onMarketTick(marketAt(hhmm(14, 29)))
-    engine.onMarketTick(marketAt(hhmm(14, 29) + 1))
+    engine.onMarketTick(marketAt(hhmm(14, 29) + 59))
     expect(engine.getChildren(id)[0].order_type).toBe('MTL')
-    const filledBefore = engine.getOrder(id).executed_qty
-    expect(filledBefore).toBeLessThan(1_000)
+    expect(engine.getOrder(id).executed_qty).toBe(0)
 
     engine.onMarketTick(marketAt(hhmm(14, 30)))
     expect(engine.getChildren(id)[0].status).toBe('CANCELLED')
     const atc = engine.getChildren(id)[1]
-    expect(atc).toMatchObject({ order_type: 'ATC', price: null, quantity: 1_000 - filledBefore })
+    expect(atc).toMatchObject({ order_type: 'ATC', price: null, quantity: 1_000 })
 
     run(engine, 10, 100_000, hhmm(14, 31))
-    expect(engine.getOrder(id).executed_qty).toBe(filledBefore)
+    expect(engine.getOrder(id).executed_qty).toBe(0)
 
     engine.onMarketTick(marketAt(CLOSE_AUCTION, 100_300))
     expect(engine.getChildren(id)[1].status).toBe('FILLED')
-    expect(engine.getExecutions(id).at(-1)).toMatchObject({ price: 100_300, qty: 1_000 - filledBefore })
+    expect(engine.getExecutions(id).at(-1)).toMatchObject({ price: 100_300, qty: 1_000 })
     expect(engine.getOrder(id)).toMatchObject({ executed_qty: 1_000, status: 'COMPLETED' })
+  })
+
+  it('KRX: MTL khớp một phần thì phần còn lại thành LO giá +1 bước (mua), vẫn chờ trong ATC', () => {
+    const engine = newEngine()
+    const id = place(engine, 'STOP', [intParam('trigger_price', 100_000)])
+    engine.onMarketTick(marketAt(hhmm(14, 29)))
+    engine.onMarketTick(marketAt(hhmm(14, 29) + 1))
+    const filledBefore = engine.getOrder(id).executed_qty
+    expect(filledBefore).toBeGreaterThan(0)
+    expect(filledBefore).toBeLessThan(1_000)
+    expect(engine.getChildren(id)[0]).toMatchObject({ order_type: 'LO', price: 100_100 })
+
+    engine.onMarketTick(marketAt(hhmm(14, 30)))
+    expect(engine.getChildren(id)).toHaveLength(1)
+    expect(engine.getChildren(id)[0].status).toBe('PARTIAL_FILLED')
+
+    // Giá khớp ATC 100.300 cao hơn giá LO mua 100.100: không khớp, hết hiệu lực lúc 14:45.
+    engine.onMarketTick(marketAt(CLOSE_AUCTION, 100_300))
+    expect(engine.getOrder(id)).toMatchObject({ executed_qty: filledBefore, status: 'EXPIRED' })
   })
 
   it('Tiếp tục lệnh đã kích hoạt trong ATO: sinh lệnh ATO, khớp lúc 09:15', () => {
@@ -1439,17 +1459,34 @@ describe('thao tác của người dùng', () => {
     expect(engine.getEvents(id).some((event) => event.action === 'RECOVERY')).toBe(true)
   })
 
-  it('Sửa: hủy lệnh con cũ, sinh lại theo giá trị mới, version tăng, có MODIFY', () => {
+  it('Sửa giá (KRX): lệnh con LO sửa tại chỗ, mất ưu tiên thời gian, version tăng, MODIFY ghi PRICE', () => {
     const engine = newEngine()
     const id = place(engine, 'ICEBERG', [intParam('slice_qty', 500)], { limit_price: 90_000 + 3_000 })
     run(engine, 2)
-    engine.updateOrder(id, { version: 1, total_qty: 2_000, limit_price: 94_000 }, 'tester')
+    const before = { ...engine.getChildren(id)[0] }
+    run(engine, 1, 100_000, AT_1000 + 5)
+    engine.updateOrder(id, { version: 1, total_qty: 1_000, limit_price: 94_000 }, 'tester')
 
-    expect(engine.getOrder(id)).toMatchObject({ total_qty: 2_000, limit_price: 94_000, version: 2 })
-    expect(engine.getChildren(id)[0].status).toBe('CANCELLED')
-    run(engine, 1, 100_000, AT_1000 + 10)
-    expect(liveChildren(engine, id)[0]).toMatchObject({ price: 94_000, quantity: 500 })
-    expect(engine.getEvents(id).some((event) => event.action === 'MODIFY')).toBe(true)
+    expect(engine.getOrder(id)).toMatchObject({ total_qty: 1_000, limit_price: 94_000, version: 2 })
+    const child = engine.getChildren(id)[0]
+    expect(child).toMatchObject({ child_order_id: before.child_order_id, status: 'ACKNOWLEDGED', price: 94_000, quantity: 500 })
+    expect(child.priority_at).not.toBe(before.priority_at)
+    expect(engine.getEvents(id).filter((event) => event.action === 'MODIFY').map((event) => event.amend_kind)).toEqual(['PRICE', 'PRICE'])
+  })
+
+  it('Sửa giảm KL (KRX): giữ ưu tiên thời gian; đổi cả giá lẫn KL một lần bị từ chối', () => {
+    const engine = newEngine()
+    const id = place(engine, 'LIMIT', [], { limit_price: 93_000 })
+    run(engine, 2)
+    const before = { ...engine.getChildren(id)[0] }
+    run(engine, 1, 100_000, AT_1000 + 5)
+    expect(() => engine.updateOrder(id, { version: 1, total_qty: 500, limit_price: 94_000 }, 'tester')).toThrow('không đổi cả hai')
+    engine.updateOrder(id, { version: 1, total_qty: 600, limit_price: 93_000 }, 'tester')
+    expect(engine.getChildren(id)[0]).toMatchObject({ quantity: 600, priority_at: before.priority_at })
+    engine.updateOrder(id, { version: 2, total_qty: 800, limit_price: 93_000 }, 'tester')
+    expect(engine.getChildren(id)[0].quantity).toBe(800)
+    expect(engine.getChildren(id)[0].priority_at).not.toBe(before.priority_at)
+    expect(engine.getEvents(id).filter((event) => event.action === 'MODIFY' && event.child_order_id === null).map((event) => event.amend_kind)).toEqual(['QTY_DOWN', 'QTY_UP'])
   })
 
   it('Sửa sai version thì từ chối', () => {

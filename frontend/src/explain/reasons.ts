@@ -1,4 +1,6 @@
 import { formatDate, formatNumber } from '@/lib/format'
+import { LISTING_TRANSFERS } from '@/rules/symbols'
+import type { RuleCode, RuleViolation } from '@/rules/types'
 import type { ParentOrderStatus } from '@/types'
 import type { ActionDef, ExplainCode, ExplainContext, RejectInfo } from './types'
 
@@ -16,6 +18,7 @@ export interface ReasonDef {
 }
 
 export const NOT_ENOUGH_DATA = 'chưa đủ dữ liệu'
+const TRANSFER_FIRST_DATE = LISTING_TRANSFERS[0].firstTradingDate
 
 const n = formatNumber
 const RUNNING: ParentOrderStatus[] = ['ACTIVE', 'PARTIALLY_EXECUTED']
@@ -352,4 +355,63 @@ export const REASONS: Record<ExplainCode, ReasonDef> = {
 
 function capitalize(text: string) {
   return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
+// ===== Lỗi kiểm tra lệnh theo gói luật (src/rules/validate.ts) =====
+
+const SESSION_NAMES: Record<string, string> = {
+  PRE_OPEN: 'giờ chưa mở cửa',
+  ATO: 'phiên ATO',
+  CONTINUOUS: 'phiên khớp lệnh liên tục',
+  LUNCH: 'giờ nghỉ trưa',
+  ATC: 'phiên ATC',
+  PUT_THROUGH: 'phiên thỏa thuận sau giờ',
+  CLOSED: 'giờ đóng cửa',
+}
+const BOARD_NAMES: Record<string, string> = { STO: 'HOSE', STX: 'HNX', UPX: 'UPCoM' }
+const SEC_TYPE_NAMES: Record<string, string> = { STOCK: 'cổ phiếu', CLOSED_FUND: 'chứng chỉ quỹ đóng', ETF: 'ETF', CW: 'chứng quyền' }
+type RuleParams = RuleViolation['params']
+const num = (value: RuleParams[string]) => (typeof value === 'number' ? n(value) : String(value))
+const session = (p: RuleParams) => SESSION_NAMES[String(p.session)] ?? String(p.session)
+const board = (p: RuleParams) => BOARD_NAMES[String(p.board)] ?? String(p.board)
+const band = (p: RuleParams) =>
+  p.secType === 'CW' ? 'theo biên độ của mã cơ sở' : `tham chiếu ${num(p.ref)}, biên ±${num(p.band)}%`
+
+/**
+ * Câu tiếng Việt cho từng mã lỗi kiểm tra lệnh, có số cụ thể của lệnh. Phần đầu câu giữ đúng chữ cũ
+ * ("Giá không được vượt giá trần …", "Khối lượng phải là bội số của …") để người dùng quen mắt.
+ */
+export const RULE_REASONS: Record<RuleCode, (p: RuleParams) => string> = {
+  SYMBOL_TRANSFER_HALT: (p) =>
+    `Mã ${p.symbol} ngừng giao dịch hôm nay để chuyển từ HNX sang HOSE (giao dịch lại trên HOSE từ ${formatDate(TRANSFER_FIRST_DATE)}).`,
+  BOARD_CLOSED: (p) => `Bảng ${board(p)} không nhận lệnh trong ${session(p)}.`,
+  ORDER_TYPE_NOT_IN_SESSION: (p) =>
+    `Lệnh ${p.orderType} không đặt được trong ${session(p)} của bảng ${board(p)} (nhận: ${p.allowed || 'không có'}).`,
+  ORDER_TYPE_DISABLED: (p) => `Lệnh ${p.orderType} đang tắt trên bảng ${board(p)} (${String(p.label).toLowerCase()} với KRX).`,
+  MTL_CONTINUOUS_ONLY: (p) => `Lệnh MTL chỉ đặt được trong phiên khớp lệnh liên tục, hiện là ${session(p)}.`,
+  PRICE_REQUIRED: (p) => `Lệnh ${p.orderType} phải có giá.`,
+  PRICE_NOT_ALLOWED: (p) => `Lệnh ${p.orderType} là lệnh thị trường, không nhập giá.`,
+  PRICE_INVALID: () => 'Giá phải là số nguyên đồng lớn hơn 0',
+  PRICE_OUT_OF_BAND: (p) =>
+    p.limit === 'ceiling'
+      ? `Giá không được vượt giá trần ${num(p.ceiling)} (${band(p)}).`
+      : `Giá không được thấp hơn giá sàn ${num(p.floor)} (${band(p)}).`,
+  PRICE_TICK: (p) =>
+    `Giá phải theo bước ${num(p.tick)}đ ở mức giá này (${SEC_TYPE_NAMES[String(p.secType)] ?? p.secType}: ${num(p.price)} không chia hết cho ${num(p.tick)}).`,
+  PRICE_BELOW_MIN: (p) => `Giá đặt tối thiểu ${num(p.min)}đ (giá sàn hiển thị ${num(p.floor)}đ).`,
+  QTY_INVALID: () => 'Khối lượng phải là số nguyên lớn hơn 0',
+  LOT_ROUND_MULTIPLE: (p) => `Khối lượng phải là bội số của ${num(p.lot)}`,
+  LOT_ODD_RANGE: (p) => `Lô lẻ: khối lượng từ ${num(p.min)} đến ${num(p.max)} CP (đang nhập ${num(p.qty)} CP).`,
+  ODD_LOT_LO_ONLY: (p) => `Lô lẻ chỉ đặt lệnh LO, không đặt được lệnh ${p.orderType}.`,
+  MAX_QTY: (p) => `Khối lượng tối đa ${num(p.max)} cổ phiếu/lệnh (đang nhập ${num(p.qty)}).`,
+  FOREIGN_ROOM_EXCEEDED: (p) =>
+    `Room ngoại của ${p.symbol} chỉ còn ${num(p.room)} CP, không mua được ${num(p.qty)} CP (tài khoản nhà đầu tư nước ngoài).`,
+  AMEND_ONE_FIELD: () => 'Mỗi lần sửa chỉ được đổi giá hoặc khối lượng, không đổi cả hai cùng lúc.',
+  AMEND_NO_CHANGE: () => 'Chưa đổi giá hay khối lượng.',
+  AMEND_LOCKED_SESSION: (p) => `Không được sửa lệnh trong ${session(p)}.`,
+  CANCEL_LOCKED_SESSION: (p) => `Không được hủy lệnh trong ${session(p)}.`,
+}
+
+export function ruleMessage(violation: Pick<RuleViolation, 'code' | 'params'>): string {
+  return RULE_REASONS[violation.code](violation.params)
 }

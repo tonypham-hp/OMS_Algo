@@ -27,7 +27,7 @@ export function createEmptySeed(): SeedData {
 }
 
 export function createDemoContext(): DemoContext {
-  return { refs: {}, marks: {}, disk: null, beforeCrash: null, missedReports: [], matchSequence: 0 }
+  return { refs: {}, marks: {}, disk: null, beforeCrash: null, missedReports: [], matchSequence: 0, lastError: null }
 }
 
 /**
@@ -36,7 +36,7 @@ export function createDemoContext(): DemoContext {
  */
 export function createDemoEnv(options: { startDate?: Date; account?: string } = {}): DemoEnv {
   const simulator = createMarketSimulator({ startDate: options.startDate ?? new Date(2026, 10, 12), random: () => 0.5 })
-  const engine = createOrderEngine()
+  const engine = createOrderEngine({ enforceRules: true })
   const tape = createMarketTape()
   const recorded = new Set<string>()
 
@@ -44,6 +44,7 @@ export function createDemoEnv(options: { startDate?: Date; account?: string } = 
   simulator.subscribe((state) => {
     engine.onMarketTick(state)
     engine.drainDepthTakes().forEach((take) => simulator.consumeDepth(take.symbol, take.side, take.price, take.qty))
+    engine.drainRoomChanges().forEach((change) => simulator.adjustForeignRoom(change.symbol, change.delta))
     // Lần khớp của OMS cũng là KL thị trường (giống runtime của app); ghi theo mã khớp để không ghi trùng.
     const fresh = engine.listExecutions().filter((execution) => !recorded.has(execution.exchange_match_id))
     if (fresh.length === 0) return

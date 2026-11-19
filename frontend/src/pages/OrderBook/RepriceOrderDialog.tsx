@@ -39,7 +39,7 @@ function RepriceForm({
   suggested,
 }: RepriceOrderDialogProps & { fields: OrderPriceField[] }) {
   const reprice = useRepriceOrder()
-  const [schema] = useState(() => createRepriceSchema(fields, () => getQuote(order.symbol)?.ref_price))
+  const [schema] = useState(() => createRepriceSchema(fields, () => getQuote(order.symbol)))
   const { control, handleSubmit } = useForm<RepriceOrderValues>({
     resolver: zodResolver(schema),
     mode: 'onChange',

@@ -8,10 +8,11 @@ interface NumberInputProps {
   onBlur?: () => void
   unit?: string
   invalid?: boolean
+  disabled?: boolean
 }
 
 /** Ô nhập số nguyên, tự hiển thị dấu chấm ngăn cách kiểu Việt Nam: 1.000.000. */
-export function NumberInput({ id, value, onChange, onBlur, unit, invalid }: NumberInputProps) {
+export function NumberInput({ id, value, onChange, onBlur, unit, invalid, disabled }: NumberInputProps) {
   return (
     <div className="relative">
       <Input
@@ -21,6 +22,7 @@ export function NumberInput({ id, value, onChange, onBlur, unit, invalid }: Numb
         className={unit ? 'pr-12 text-right tabular-nums' : 'text-right tabular-nums'}
         value={value === undefined ? '' : formatNumber(value)}
         aria-invalid={invalid}
+        disabled={disabled}
         onBlur={onBlur}
         onChange={(event) => {
           const digits = event.target.value.replace(/\D/g, '')

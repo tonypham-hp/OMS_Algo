@@ -3,6 +3,7 @@ import { GitBranch, RefreshCcw, ShieldCheck, type LucideIcon } from 'lucide-reac
 import { useState } from 'react'
 import { ErrorState, LoadingState } from '@/components/states'
 import { Button } from '@/components/ui/button'
+import { PRICE_BAND_PCT, QTY_LOT_SIZE } from '@/config/hose'
 import { getAccessibleLabels } from '@/config/navigation'
 import { ROLE_LABELS } from '@/config/permissions'
 import { cn } from '@/lib/utils'
@@ -26,8 +27,8 @@ const FEATURES: ReadonlyArray<{ icon: LucideIcon; title: string; description: st
   },
   {
     icon: ShieldCheck,
-    title: 'Đúng luật HOSE',
-    description: 'Biên độ ±7%, bước giá, lô 100, phiên ATO/ATC được kiểm ngay khi nhập và trong engine.',
+    title: 'Luật giao dịch theo KRX',
+    description: `Biên độ ±${PRICE_BAND_PCT}% (HOSE), bước giá theo loại chứng khoán, lô ${QTY_LOT_SIZE} và lô lẻ, phiên ATO/ATC được kiểm ngay khi nhập và trong engine.`,
   },
 ]
 

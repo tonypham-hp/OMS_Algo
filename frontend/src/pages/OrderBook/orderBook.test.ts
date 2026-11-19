@@ -1,8 +1,23 @@
 import { describe, expect, it } from 'vitest'
-import type { ParentOrder } from '@/types'
+import type { ParentOrder, SymbolQuote } from '@/types'
 import { validateEditOrder } from './editOrderSchema'
 import { ALL, EMPTY_FILTERS, filterOrders } from './filterOrders'
 import { validateReprice } from './repriceOrderSchema'
+
+// Tham chiếu 100.000: trần 107.000, sàn 93.000, bước 100 (cổ phiếu HOSE).
+const QUOTE: SymbolQuote = {
+  symbol: 'FPT',
+  ref_price: 100_000,
+  ceiling_price: 107_000,
+  floor_price: 93_000,
+  last_price: 100_000,
+  indicative_price: null,
+  last_qty: 0,
+  total_volume: 0,
+  bid_price: 99_900,
+  ask_price: 100_100,
+  tick_direction: 0,
+}
 
 function order(extra: Partial<ParentOrder>): ParentOrder {
   return {
@@ -61,7 +76,7 @@ describe('kiểm tra form Sửa giá', () => {
     { name: 'sl_price', value: 90_000 },
   ] as const
   const check = (tp: number | null, sl: number | null) =>
-    validateReprice({ tp_price: tp, sl_price: sl }, [...FIELDS], 100_000).map((error) => error.field)
+    validateReprice({ tp_price: tp, sl_price: sl }, [...FIELDS], QUOTE).map((error) => error.field)
 
   it('mọi giá trong biên độ, đúng bước thì hợp lệ', () => {
     expect(check(105_000, 95_000)).toEqual([])
@@ -79,26 +94,31 @@ describe('kiểm tra form Sửa', () => {
   const fields = (...args: Parameters<typeof validateEditOrder>) =>
     validateEditOrder(...args).map((error) => error.field)
 
-  it('hợp lệ', () => {
-    expect(fields({ total_qty: 2_000, limit_price: 100_100 }, order({}), 100_000)).toEqual([])
+  it('hợp lệ: mỗi lần chỉ đổi giá hoặc khối lượng', () => {
+    expect(fields({ total_qty: 2_000, limit_price: 100_000 }, order({}), QUOTE)).toEqual([])
+    expect(fields({ total_qty: 1_000, limit_price: 100_100 }, order({}), QUOTE)).toEqual([])
+  })
+
+  it('KRX: đổi cả giá lẫn khối lượng trong một lần sửa thì báo lỗi', () => {
+    expect(fields({ total_qty: 2_000, limit_price: 100_100 }, order({}), QUOTE)).toEqual(['limit_price'])
   })
 
   it('KL sai luật HOSE hoặc nhỏ hơn phần đã khớp', () => {
-    expect(fields({ total_qty: 150, limit_price: 100_000 }, order({}), 100_000)).toEqual(['total_qty'])
-    expect(fields({ total_qty: 500, limit_price: 100_000 }, order({ executed_qty: 600 }), 100_000)).toEqual(['total_qty'])
-    expect(fields({ total_qty: 600, limit_price: 100_000 }, order({ executed_qty: 600 }), 100_000)).toEqual([])
+    expect(fields({ total_qty: 150, limit_price: 100_000 }, order({}), QUOTE)).toEqual(['total_qty'])
+    expect(fields({ total_qty: 500, limit_price: 100_000 }, order({ executed_qty: 600 }), QUOTE)).toEqual(['total_qty'])
+    expect(fields({ total_qty: 600, limit_price: 100_000 }, order({ executed_qty: 600 }), QUOTE)).toEqual([])
   })
 
   it('giá sai bước hoặc vượt trần', () => {
-    expect(fields({ total_qty: 1_000, limit_price: 100_050 }, order({}), 100_000)).toEqual(['limit_price'])
-    expect(fields({ total_qty: 1_000, limit_price: 107_100 }, order({}), 100_000)).toEqual(['limit_price'])
+    expect(fields({ total_qty: 1_000, limit_price: 100_050 }, order({}), QUOTE)).toEqual(['limit_price'])
+    expect(fields({ total_qty: 1_000, limit_price: 107_100 }, order({}), QUOTE)).toEqual(['limit_price'])
   })
 
   it('loại lệnh không có giá giới hạn thì không bắt nhập giá', () => {
-    expect(fields({ total_qty: 1_000, limit_price: null }, order({ strategy_type: 'STOP', limit_price: null }), 100_000)).toEqual([])
+    expect(fields({ total_qty: 1_000, limit_price: null }, order({ strategy_type: 'STOP', limit_price: null }), QUOTE)).toEqual([])
   })
 
   it('báo thiếu', () => {
-    expect(fields({ total_qty: null, limit_price: null }, order({}), 100_000)).toEqual(['total_qty', 'limit_price'])
+    expect(fields({ total_qty: null, limit_price: null }, order({}), QUOTE)).toEqual(['total_qty', 'limit_price'])
   })
 })

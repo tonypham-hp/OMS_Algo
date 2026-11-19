@@ -2,6 +2,7 @@
 // để khi nối backend FastAPI không phải đổi tên.
 import type { OrderEvent } from './event'
 import type { MarketWindowStats } from './market'
+import type { LotKind } from '@/rules/types'
 
 export type Side = 'BUY' | 'SELL'
 
@@ -17,6 +18,8 @@ export type StrategyType =
   | 'VWAP'
   | 'POV'
   | 'HUNT'
+  /** Đợt 8A: lệnh giới hạn LO thường (một lệnh con đủ KL), dùng cho lô lẻ. */
+  | 'LIMIT'
 
 export type ParentOrderStatus =
   | 'DRAFT'
@@ -56,6 +59,12 @@ export interface ParentOrder {
   persistence_mode: PersistenceMode
   /** Ngoài ERD: mẫu chiến lược đã dùng khi đặt lệnh (tùy chọn). */
   template_id?: string
+  /** Ngoài ERD (Đợt 8A): lô chẵn hay lô lẻ (1–99 CP, chỉ LO). Không có là lô chẵn. */
+  lot_type?: LotKind
+  /** Ngoài ERD (Đợt 8A): lệnh mua của nhà đầu tư nước ngoài đang giữ room ngoại (trả lại phần chưa khớp khi kết thúc). */
+  foreign_room_held?: boolean
+  /** Ngoài ERD (Đợt 8A): lý do hết hạn khi status = EXPIRED (DAY_END: hết hiệu lực lúc hết khớp lệnh trong ngày). */
+  expire_reason?: 'DAY_END' | 'VALID_TO_REACHED' | 'WINDOW_END' | 'HUNT_MAX_WAIT' | 'HUNT_NO_LEVEL'
   version: number
   created_at: string
   updated_at: string
@@ -111,6 +120,11 @@ export interface ChildOrder {
   core_order_id: string | null
   created_at: string
   sent_at: string | null
+  /**
+   * Ngoài ERD (Đợt 8A): mốc ưu tiên thời gian của lệnh con trên sổ lệnh của sàn. Sửa giá hoặc tăng KL thì đặt lại
+   * (mất ưu tiên), giảm KL thì giữ. Không có: bằng created_at.
+   */
+  priority_at?: string
 }
 
 export interface Execution {
@@ -156,6 +170,8 @@ export interface CreateOrderRequest {
   parameters: StrategyParameter[]
   /** Ngoài ERD: mẫu chiến lược đã dùng để điền sẵn form (tùy chọn). */
   template_id?: string
+  /** Ngoài ERD (Đợt 8A): lô lẻ (1–99 CP, chỉ LO). Không có là lô chẵn. */
+  lot_type?: LotKind
 }
 
 export interface CreateOrderResponse {

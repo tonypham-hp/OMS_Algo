@@ -9,6 +9,8 @@ export interface OrderFilterValues {
   side: string
   strategy_type: string
   account_no: string
+  /** Lô chẵn (ROUND) hay lô lẻ (ODD). */
+  lot_type: string
 }
 
 export const EMPTY_FILTERS: OrderFilterValues = {
@@ -17,6 +19,7 @@ export const EMPTY_FILTERS: OrderFilterValues = {
   side: ALL,
   strategy_type: ALL,
   account_no: ALL,
+  lot_type: ALL,
 }
 
 export function filterOrders(orders: ParentOrder[], filters: OrderFilterValues): ParentOrder[] {
@@ -27,6 +30,7 @@ export function filterOrders(orders: ParentOrder[], filters: OrderFilterValues):
       matches(filters.symbol, order.symbol) &&
       matches(filters.side, order.side) &&
       matches(filters.strategy_type, order.strategy_type) &&
-      matches(filters.account_no, order.account_no),
+      matches(filters.account_no, order.account_no) &&
+      matches(filters.lot_type ?? ALL, order.lot_type ?? 'ROUND'),
   )
 }

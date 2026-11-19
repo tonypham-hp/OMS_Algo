@@ -13,6 +13,7 @@ import type {
   Side,
   StrategyType,
 } from '@/types'
+import { sessionDates } from '@/rules/calendar'
 import { isTerminalStatus } from './orderActions'
 
 // Chỉ số hiệu quả thực hiện lệnh. Toàn bộ là hàm thuần: không gọi API, không đọc store.
@@ -155,20 +156,9 @@ export function getExecQuality(
 
 // ===== Cả báo cáo =====
 
-/** n ngày giao dịch gần nhất tính tới `tradingDate` (gồm cả ngày đó), bỏ thứ Bảy và Chủ nhật. */
+/** n ngày giao dịch gần nhất tính tới `tradingDate` (gồm cả ngày đó), theo lịch giao dịch (src/rules/calendar.ts). */
 export function getSessionDates(tradingDate: string, count: number): string[] {
-  const [year, month, day] = tradingDate.split('-').map(Number)
-  const date = new Date(year, month - 1, day)
-  const dates: string[] = []
-  while (dates.length < count) {
-    if (date.getDay() !== 0 && date.getDay() !== 6) {
-      dates.push(
-        `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
-      )
-    }
-    date.setDate(date.getDate() - 1)
-  }
-  return dates
+  return sessionDates(tradingDate, count)
 }
 
 export type ReportPeriod = 'TODAY' | 'FIVE_SESSIONS'

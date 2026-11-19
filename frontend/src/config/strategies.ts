@@ -168,6 +168,12 @@ export const STRATEGIES: Record<StrategyType, StrategyConfig> = {
     ],
     usesMtl: false,
   },
+  LIMIT: {
+    label: 'Lệnh giới hạn (LO)',
+    description: 'Gửi ngay một lệnh LO đủ khối lượng tại giá đặt. Dùng được cho lô lẻ (1–99 CP).',
+    fields: [LIMIT_PRICE],
+    usesMtl: false,
+  },
 }
 
 export const STRATEGY_TYPES = Object.keys(STRATEGIES) as StrategyType[]

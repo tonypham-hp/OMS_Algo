@@ -1,26 +1,24 @@
-import { QTY_LOT_SIZE, TRADING_SESSIONS } from '@/config/hose'
+import { QTY_LOT_SIZE } from '@/config/hose'
 import { formatClock, toDateString } from '@/lib/format'
-import type { MarketState, MarketTrade, OrderBookDepth, SimSpeed, SymbolQuote } from '@/types'
-import {
-  getCeilingPrice,
-  getDisplayPrice,
-  getFloorPrice,
-  getSessionAt,
-  isAuctionSession,
-  stepPrice,
-} from '@/utils/hose'
-import { DEMO_SYMBOLS } from './data'
+import { isTradingDay, nextTradingDate } from '@/rules/calendar'
+import { getTickSize, priceLimits, stepPrice } from '@/rules/price'
+import { resolveRules, rulesFor } from '@/rules/registry'
+import { getSessionAt, isAuctionSession, parseTimeToSeconds, sessionEndAt } from '@/rules/session'
+import { getListing, symbolBoardStatus } from '@/rules/symbols'
+import type { Board, RulePack, SecType } from '@/rules/types'
+import type { MarketState, MarketTrade, OrderBookDepth, SessionCode, SimSpeed, SymbolQuote } from '@/types'
+import { getDisplayPrice } from '@/utils/hose'
+import { ALL_SYMBOLS, EXTRA_SYMBOLS, FOREIGN_ROOM } from './data'
 import { type BookSide, consumeLevel, createDepthRandom, generateDepth, rebaseDepth, replenishDepth } from './depth'
 
-const hhmm = (hour: number, minute: number) => hour * 3600 + minute * 60
-
 /** Mở app ở 09:10 (đang ATO) để demo được lúc chuyển sang phiên liên tục. */
-const START_SECONDS = hhmm(9, 10)
-/** Đồng hồ dừng ở 15:00, sau khi đóng cửa 14:45. */
-const END_SECONDS = hhmm(15, 0)
+const START_SECONDS = parseTimeToSeconds('09:10') as number
+/** Đồng hồ dừng ở 15:00, hết phiên thỏa thuận sau giờ của HOSE. */
+const END_SECONDS = parseTimeToSeconds('15:00') as number
 const TICK_INTERVAL_MS = 1000
 /** Xác suất một mã có giao dịch trong mỗi nhịp. */
 const TRADE_PROBABILITY = 0.4
+const BOARDS: readonly Board[] = ['STO', 'STX', 'UPX']
 
 type RandomFn = () => number
 type Listener = (state: MarketState) => void
@@ -42,35 +40,65 @@ export type SimulatorState = Pick<MarketState, 'trading_date' | 'sim_seconds' | 
   feed_stale: boolean
 }
 
-/** Ngày làm việc kế tiếp, bỏ qua thứ Bảy và Chủ nhật. */
-function getNextTradingDate(date: string): string {
-  const [year, month, day] = date.split('-').map(Number)
-  const next = new Date(year, month - 1, day + 1)
-  while (next.getDay() === 0 || next.getDay() === 6) next.setDate(next.getDate() + 1)
-  return toDateString(next)
-}
-
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max)
 }
 
-function createInitialQuote(symbol: string, refPrice: number, depthRandom: RandomFn): SymbolQuote {
-  const ceiling = getCeilingPrice(refPrice)
-  const floor = getFloorPrice(refPrice)
+/** Luật của một dòng bảng giá. Mã ngừng giao dịch vẫn hiện trần/sàn theo bảng HOSE. */
+function contextOf(quote: Pick<SymbolQuote, 'board' | 'sec_type'>, date: string): { rules: RulePack; secType: SecType } {
+  return { rules: rulesFor(quote.board ?? 'STO', date), secType: quote.sec_type ?? 'STOCK' }
+}
+
+function step(quote: SymbolQuote, price: number, steps: number, date: string) {
+  const { rules, secType } = contextOf(quote, date)
+  return stepPrice(price, steps, secType, rules)
+}
+
+/**
+ * Dòng bảng giá đầu ngày: bảng giao dịch theo ngày (mã HNX sang HOSE từ 28/12/2026), trần/sàn theo pack
+ * và loại chứng khoán. Chứng quyền tính theo mã cơ sở nên cần `underlying`.
+ */
+function createInitialQuote(
+  symbol: string,
+  refPrice: number,
+  depthRandom: RandomFn,
+  date: string,
+  extra: { underlying?: SymbolQuote; foreignRoom?: number } = {},
+): SymbolQuote {
+  const status = symbolBoardStatus(symbol, date)
+  const listing = getListing(symbol)
+  const secType = listing?.secType ?? 'STOCK'
+  const rules = rulesFor(status.board ?? 'STO', date)
+  const cw =
+    secType === 'CW' && listing?.cw && extra.underlying
+      ? {
+          ratio: listing.cw.ratio,
+          underlyingRef: extra.underlying.ref_price,
+          underlyingCeiling: extra.underlying.ceiling_price,
+          underlyingFloor: extra.underlying.floor_price,
+        }
+      : undefined
+  const limits = priceLimits(refPrice, secType, rules, { cw, firstDay: listing?.firstTradingDate === date })
+  const tickStep = (price: number, steps: number) => stepPrice(price, steps, secType, rules)
+  const foreignRoom = extra.foreignRoom ?? FOREIGN_ROOM[symbol]
   const quote: SymbolQuote = {
     symbol,
     ref_price: refPrice,
-    ceiling_price: ceiling,
-    floor_price: floor,
+    ceiling_price: limits.ceiling,
+    floor_price: limits.floor,
     last_price: refPrice,
     indicative_price: null,
     last_qty: 0,
     total_volume: 0,
-    bid_price: clamp(stepPrice(refPrice, -1), floor, ceiling),
-    ask_price: clamp(stepPrice(refPrice, 1), floor, ceiling),
+    bid_price: clamp(tickStep(refPrice, -1), limits.minOrderPrice, limits.ceiling),
+    ask_price: clamp(tickStep(refPrice, 1), limits.minOrderPrice, limits.ceiling),
     tick_direction: 0,
+    board: status.board,
+    sec_type: secType,
+    ...(status.transferred ? { transferred: true } : {}),
+    ...(foreignRoom !== undefined ? { foreign_room: foreignRoom } : {}),
   }
-  return { ...quote, depth: generateDepth(quote, depthRandom) }
+  return status.halted ? quote : { ...quote, depth: generateDepth(quote, depthRandom) }
 }
 
 /** Neo lại sổ lệnh theo giá mua, bán tốt nhất mới (hoặc sinh mới nếu chưa có). */
@@ -89,63 +117,24 @@ function syncBestFromDepth(quote: SymbolQuote): SymbolQuote {
   }
 }
 
-/** Bước giá ngẫu nhiên từ -2 đến 2, bỏ giá trị 0, luôn nằm trong biên độ. */
-function randomWalk(price: number, quote: SymbolQuote, random: RandomFn): number {
-  const magnitude = random() < 0.75 ? 1 : 2
-  const steps = random() < 0.5 ? -magnitude : magnitude
-  return clamp(stepPrice(price, steps), quote.floor_price, quote.ceiling_price)
-}
-
-/** Ghi nhận một lần khớp: cập nhật giá khớp, KL, giá mua bán. */
-function withMatch(quote: SymbolQuote, price: number, qty: number): SymbolQuote {
-  return {
-    ...quote,
-    last_price: price,
-    indicative_price: null,
-    last_qty: qty,
-    total_volume: quote.total_volume + qty,
-    bid_price: clamp(stepPrice(price, -1), quote.floor_price, quote.ceiling_price),
-    ask_price: clamp(stepPrice(price, 1), quote.floor_price, quote.ceiling_price),
-    tick_direction: Math.sign(price - quote.last_price) as SymbolQuote['tick_direction'],
-  }
-}
-
-function nextQuote(quote: SymbolQuote, random: RandomFn): SymbolQuote {
-  if (random() > TRADE_PROBABILITY) return { ...quote, tick_direction: 0 }
-  const price = randomWalk(quote.last_price, quote, random)
-  return withMatch(quote, price, (1 + Math.floor(random() * 50)) * QTY_LOT_SIZE)
-}
-
-/** Trong ATO, ATC chỉ giá dự kiến thay đổi. Giá khớp và KL đứng yên cho tới lúc khớp định kỳ. */
-function nextIndicative(quote: SymbolQuote, random: RandomFn): SymbolQuote {
-  const current = getDisplayPrice(quote)
-  if (random() > TRADE_PROBABILITY) return { ...quote, indicative_price: current, tick_direction: 0 }
-  const price = randomWalk(current, quote, random)
-  return {
-    ...quote,
-    indicative_price: price,
-    tick_direction: Math.sign(price - current) as SymbolQuote['tick_direction'],
-  }
-}
-
-/** Hết phiên ATO, ATC: khớp một lần duy nhất theo giá dự kiến. KL định kỳ lớn hơn một nhịp thường. */
-function matchAuction(quote: SymbolQuote, random: RandomFn): SymbolQuote {
-  const qty = (50 + Math.floor(random() * 200)) * QTY_LOT_SIZE
-  return withMatch(quote, getDisplayPrice(quote), qty)
-}
-
 export function createMarketSimulator(options: SimulatorOptions = {}) {
   const random = options.random ?? Math.random
-  const symbols = options.symbols ?? DEMO_SYMBOLS
+  const symbols = options.symbols ?? ALL_SYMBOLS
   const listeners = new Set<Listener>()
   const tradeListeners = new Set<TradeListener>()
   const depthRandom = createDepthRandom(options.depthSeed ?? 20_261_113)
+  // Mã thêm ở Đợt 8A sinh giá bằng dãy random riêng, để giá của 10 mã cũ (và mọi kết quả cũ) không đổi.
+  const extraSymbols = new Set(options.symbols ? [] : EXTRA_SYMBOLS.map((item) => item.symbol))
+  const extraRandom = createDepthRandom(20_261_228)
+  const extraDepthRandom = createDepthRandom(20_261_229)
+  const randomOf = (symbol: string) => (extraSymbols.has(symbol) ? extraRandom : random)
+  const depthRandomOf = (symbol: string) => (extraSymbols.has(symbol) ? extraDepthRandom : depthRandom)
 
   const getStartDate = () => toDateString(options.startDate ?? new Date())
   let tradingDate = getStartDate()
   let simSeconds = START_SECONDS
   let speed: SimSpeed = 1
-  let quotes = symbols.map((item) => createInitialQuote(item.symbol, item.ref_price, depthRandom))
+  let quotes: SymbolQuote[] = []
   let timer: ReturnType<typeof setInterval> | null = null
   /** Thời gian thật (mili giây) kể từ lần cuối nhận được giá. Cố ý không nhân với tốc độ tua. */
   let quoteAgeMs = 0
@@ -153,13 +142,53 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
   let feedStale = false
   /** Chế độ có kịch bản (Demo). */
   let scripted = false
+  /** Tổng giá trị, KL khớp trong ngày theo mã, để tính giá tham chiếu bình quân gia quyền (UPCoM). */
+  let dayStats = new Map<string, { value: number; volume: number }>()
+
+  /** Dựng bảng giá đầu ngày. Chứng quyền dựng sau mã cơ sở. */
+  function buildQuotes(entries: ReadonlyArray<{ symbol: string; ref_price: number; foreign_room?: number }>) {
+    const built = new Map<string, SymbolQuote>()
+    const ordered = [...entries].sort((a, b) => Number(Boolean(getListing(a.symbol)?.cw)) - Number(Boolean(getListing(b.symbol)?.cw)))
+    for (const entry of ordered) {
+      const underlying = getListing(entry.symbol)?.cw?.underlying
+      built.set(
+        entry.symbol,
+        createInitialQuote(entry.symbol, entry.ref_price, depthRandomOf(entry.symbol), tradingDate, {
+          underlying: underlying ? built.get(underlying) : undefined,
+          foreignRoom: entry.foreign_room,
+        }),
+      )
+    }
+    return entries.map((entry) => built.get(entry.symbol) as SymbolQuote)
+  }
+
+  quotes = buildQuotes(symbols)
+
+  const stoRules = () => rulesFor('STO', tradingDate)
+
+  /** Phiên của từng bảng có pack hiệu lực trong ngày. */
+  function boardSessions(seconds: number): Partial<Record<Board, SessionCode>> {
+    const result: Partial<Record<Board, SessionCode>> = {}
+    for (const board of BOARDS) {
+      const rules = resolveRules(board, tradingDate)
+      if (rules) result[board] = getSessionAt(seconds, rules)
+    }
+    return result
+  }
+
+  /** Phiên của một mã: theo bảng giao dịch của mã; mã ngừng giao dịch coi như đóng cửa. */
+  function quoteSession(quote: SymbolQuote, sessions: Partial<Record<Board, SessionCode>>): SessionCode {
+    if (quote.board === null) return 'CLOSED'
+    return sessions[quote.board ?? 'STO'] ?? 'CLOSED'
+  }
 
   function getState(): MarketState {
     return {
       trading_date: tradingDate,
       sim_seconds: simSeconds,
       quote_age_seconds: Math.floor(quoteAgeMs / 1000),
-      session: getSessionAt(simSeconds),
+      session: getSessionAt(simSeconds, stoRules()),
+      board_sessions: boardSessions(simSeconds),
       speed,
       quotes,
     }
@@ -170,28 +199,79 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
     listeners.forEach((listener) => listener(state))
   }
 
+  /** Bước giá ngẫu nhiên từ -2 đến 2, bỏ giá trị 0, luôn nằm trong biên độ. */
+  function randomWalk(price: number, quote: SymbolQuote, rand: RandomFn): number {
+    const magnitude = rand() < 0.75 ? 1 : 2
+    const steps = rand() < 0.5 ? -magnitude : magnitude
+    const { rules } = contextOf(quote, tradingDate)
+    return clamp(step(quote, price, steps, tradingDate), Math.max(quote.floor_price, rules.minPrice), quote.ceiling_price)
+  }
+
+  /** Ghi nhận một lần khớp: cập nhật giá khớp, KL, giá mua bán. */
+  function withMatch(quote: SymbolQuote, price: number, qty: number): SymbolQuote {
+    const { rules } = contextOf(quote, tradingDate)
+    const low = Math.max(quote.floor_price, rules.minPrice)
+    return {
+      ...quote,
+      last_price: price,
+      indicative_price: null,
+      last_qty: qty,
+      total_volume: quote.total_volume + qty,
+      bid_price: clamp(step(quote, price, -1, tradingDate), low, quote.ceiling_price),
+      ask_price: clamp(step(quote, price, 1, tradingDate), low, quote.ceiling_price),
+      tick_direction: Math.sign(price - quote.last_price) as SymbolQuote['tick_direction'],
+    }
+  }
+
+  function nextQuote(quote: SymbolQuote): SymbolQuote {
+    const rand = randomOf(quote.symbol)
+    if (rand() > TRADE_PROBABILITY) return { ...quote, tick_direction: 0 }
+    const price = randomWalk(quote.last_price, quote, rand)
+    return withMatch(quote, price, (1 + Math.floor(rand() * 50)) * QTY_LOT_SIZE)
+  }
+
+  /** Trong ATO, ATC chỉ giá dự kiến thay đổi. Giá khớp và KL đứng yên cho tới lúc khớp định kỳ. */
+  function nextIndicative(quote: SymbolQuote): SymbolQuote {
+    const rand = randomOf(quote.symbol)
+    const current = getDisplayPrice(quote)
+    if (rand() > TRADE_PROBABILITY) return { ...quote, indicative_price: current, tick_direction: 0 }
+    const price = randomWalk(current, quote, rand)
+    return { ...quote, indicative_price: price, tick_direction: Math.sign(price - current) as SymbolQuote['tick_direction'] }
+  }
+
+  /** Hết phiên ATO, ATC: khớp một lần duy nhất theo giá dự kiến. KL định kỳ lớn hơn một nhịp thường. */
+  function matchAuction(quote: SymbolQuote): SymbolQuote {
+    const qty = (50 + Math.floor(randomOf(quote.symbol)() * 200)) * QTY_LOT_SIZE
+    return withMatch(quote, getDisplayPrice(quote), qty)
+  }
+
   /** Mã nào có KL khớp tăng trong nhịp này thì phát một tick khớp: giá khớp mới, KL phần tăng thêm. */
   function emitTrades(before: SymbolQuote[]) {
-    if (tradeListeners.size === 0) return
     const time = `${tradingDate}T${formatClock(simSeconds)}`
     const trades: MarketTrade[] = []
     quotes.forEach((quote, index) => {
       const qty = quote.total_volume - (before[index]?.total_volume ?? 0)
-      if (qty > 0) trades.push({ symbol: quote.symbol, time, price: quote.last_price, qty })
+      if (qty <= 0) return
+      trades.push({ symbol: quote.symbol, time, price: quote.last_price, qty })
+      const stats = dayStats.get(quote.symbol) ?? { value: 0, volume: 0 }
+      dayStats.set(quote.symbol, { value: stats.value + quote.last_price * qty, volume: stats.volume + qty })
     })
-    if (trades.length > 0) tradeListeners.forEach((listener) => listener(trades))
+    if (trades.length > 0 && tradeListeners.size > 0) tradeListeners.forEach((listener) => listener(trades))
   }
 
-  /** Một nhịp giả lập: tua đồng hồ theo tốc độ, rồi cho giá nhảy nếu thị trường đang mở. */
+  /** Một nhịp giả lập: tua đồng hồ theo tốc độ, rồi cho giá nhảy theo phiên của bảng giao dịch từng mã. */
   function tick(elapsedMs = TICK_INTERVAL_MS) {
     // Chế độ có kịch bản (Demo): đồng hồ và giá chỉ đổi theo lệnh của kịch bản.
     if (scripted) return
-    const previous = getSessionAt(simSeconds)
+    const previous = boardSessions(simSeconds)
     let next = Math.min(simSeconds + (elapsedMs / 1000) * speed, END_SECONDS)
-    if (isAuctionSession(previous)) {
-      // Không tua vượt giờ khớp định kỳ, để luôn khớp đúng 09:15:00 và 14:45:00 ở mọi tốc độ.
-      const auctionEnd = TRADING_SESSIONS.find((item) => item.code === previous)?.end
-      if (auctionEnd !== undefined) next = Math.min(next, auctionEnd)
+    // Không tua vượt giờ khớp định kỳ của bảng nào, để luôn khớp đúng giờ (09:15:00, 14:45:00) ở mọi tốc độ.
+    for (const board of BOARDS) {
+      const session = previous[board]
+      const rules = resolveRules(board, tradingDate)
+      if (!session || !rules || !isAuctionSession(session)) continue
+      const end = sessionEndAt(simSeconds, rules)
+      if (end !== null) next = Math.min(next, end)
     }
     simSeconds = next
 
@@ -203,19 +283,42 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
     }
 
     quoteAgeMs = 0
-    const session = getSessionAt(simSeconds)
+    const current = boardSessions(simSeconds)
     const before = quotes
     quotes = quotes.map((quote) => {
-      if (isAuctionSession(previous) && session !== previous) return withDepth(matchAuction(quote, random), depthRandom)
-      if (isAuctionSession(session)) return nextIndicative(quote, random)
-      if (session === 'CONTINUOUS') {
-        const next = withDepth(nextQuote(quote, random), depthRandom)
-        return next.depth ? { ...next, depth: replenishDepth(next.depth, depthRandom) } : next
+      const was = quoteSession(quote, previous)
+      const now = quoteSession(quote, current)
+      const depthRand = depthRandomOf(quote.symbol)
+      if (isAuctionSession(was) && now !== was) return withDepth(matchAuction(quote), depthRand)
+      if (isAuctionSession(now)) return nextIndicative(quote)
+      if (now === 'CONTINUOUS') {
+        const moved = withDepth(nextQuote(quote), depthRand)
+        return moved.depth ? { ...moved, depth: replenishDepth(moved.depth, depthRand) } : moved
       }
       return { ...quote, tick_direction: 0 }
     })
     emitTrades(before)
     notify()
+  }
+
+  /** Giá tham chiếu ngày mới: giá đóng cửa, hoặc bình quân gia quyền phiên trước (UPCoM), làm tròn đúng bước giá. */
+  function nextReference(quote: SymbolQuote): number {
+    const { rules, secType } = contextOf(quote, tradingDate)
+    const stats = dayStats.get(quote.symbol)
+    if (rules.referencePrice !== 'VWAP_PREV' || !stats || stats.volume === 0) return quote.last_price
+    const vwap = stats.value / stats.volume
+    const tick = getTickSize(vwap, secType, rules)
+    return Math.max(rules.minPrice, Math.round(vwap / tick) * tick)
+  }
+
+  /** Sang ngày `date`: giá tham chiếu từ ngày cũ, bảng và trần/sàn theo luật của ngày mới. */
+  function startDay(date: string) {
+    const entries = quotes.map((quote) => ({ symbol: quote.symbol, ref_price: nextReference(quote), foreign_room: quote.foreign_room }))
+    tradingDate = date
+    simSeconds = START_SECONDS
+    quoteAgeMs = 0
+    dayStats = new Map()
+    quotes = buildQuotes(entries)
   }
 
   return {
@@ -229,6 +332,8 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
         listeners.delete(listener)
       }
     },
+    /** Phát lại trạng thái hiện tại (ví dụ sau khi nạp pack thử nghiệm: phiên tính lại theo pack mới). */
+    refresh: notify,
     // ===== Điều khiển có kịch bản (Chế độ Demo) =====
     /** Bật thì nhịp hẹn giờ không làm gì: giá không tự đi, đồng hồ đứng, chỉ đổi qua các hàm bên dưới. */
     setScripted(on: boolean) {
@@ -258,11 +363,22 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
       let taken = 0
       quotes = quotes.map((quote) => {
         if (quote.symbol !== symbol || !quote.depth) return quote
-        const result = consumeLevel(quote.depth, side, price, qty, quote, depthRandom)
+        const result = consumeLevel(quote.depth, side, price, qty, quote, depthRandomOf(symbol))
         taken = result.taken
         return syncBestFromDepth({ ...quote, depth: result.depth })
       })
       return taken
+    },
+    /**
+     * Room ngoại của mã đổi `delta` cổ phiếu (âm: lệnh mua của nhà đầu tư nước ngoài vừa giữ room).
+     * Không phát trạng thái, giống consumeDepth.
+     */
+    adjustForeignRoom(symbol: string, delta: number) {
+      quotes = quotes.map((quote) =>
+        quote.symbol === symbol && quote.foreign_room !== undefined
+          ? { ...quote, foreign_room: Math.max(0, quote.foreign_room + delta) }
+          : quote,
+      )
     },
     /** Nhảy tới giờ giả lập (giây trong ngày), phát trạng thái để engine chạy một nhịp. */
     jumpTo(seconds: number) {
@@ -271,7 +387,7 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
     },
     /** Tua thêm `seconds` giây giả lập, mỗi giây một nhịp. Giá đứng yên; đang bơm giá trễ thì tuổi giá tăng. */
     advance(seconds: number) {
-      for (let step = 0; step < seconds && simSeconds < END_SECONDS; step += 1) {
+      for (let index = 0; index < seconds && simSeconds < END_SECONDS; index += 1) {
         simSeconds += 1
         quoteAgeMs = feedStale ? quoteAgeMs + TICK_INTERVAL_MS : 0
         quotes = quotes.map((quote) => (quote.tick_direction === 0 ? quote : { ...quote, tick_direction: 0 }))
@@ -307,15 +423,28 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
       simSeconds = START_SECONDS
       quoteAgeMs = 0
       feedStale = false
-      quotes = symbols.map((item) => createInitialQuote(item.symbol, item.ref_price, depthRandom))
+      dayStats = new Map()
+      quotes = buildQuotes(symbols)
       notify()
     },
     /** Sang ngày giao dịch mới: giá đóng cửa hôm trước thành giá tham chiếu hôm nay. */
     nextDay() {
-      tradingDate = getNextTradingDate(tradingDate)
-      simSeconds = START_SECONDS
-      quoteAgeMs = 0
-      quotes = quotes.map((quote) => createInitialQuote(quote.symbol, quote.last_price, depthRandom))
+      startDay(nextTradingDate(tradingDate))
+      notify()
+    },
+    /**
+     * Đổi ngày mô phỏng sang `date` (YYYY-MM-DD, ngày giao dịch, không lùi về quá khứ), không tải lại trang.
+     * Chốt ngày cũ trước (tua tới 15:00 để engine cho lệnh trong ngày hết hiệu lực, mang lệnh nhiều phiên sang),
+     * rồi dựng bảng giá ngày mới theo luật của ngày đó: mã niêm yết HNX đổi bảng, trần/sàn theo pack mới.
+     */
+    setTradingDate(date: string, options: { allowPast?: boolean } = {}) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !isTradingDay(date)) throw new Error(`Ngày ${date} không phải ngày giao dịch`)
+      // Chế độ Demo được đặt ngày tùy ý (kịch bản dựng dữ liệu riêng); người dùng chỉ đi tới.
+      if (date < tradingDate && !options.allowPast) throw new Error('Không lùi ngày mô phỏng về quá khứ')
+      if (date === tradingDate) return
+      simSeconds = END_SECONDS
+      notify()
+      startDay(date)
       notify()
     },
     exportState(): SimulatorState {
@@ -334,8 +463,10 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
       quoteAgeMs = state.quote_age_ms
       feedStale = state.feed_stale
       speed = state.speed
-      // Bản lưu cũ chưa có sổ lệnh: sinh mới.
-      quotes = state.quotes.map((quote) => (quote.depth ? quote : withDepth(quote, depthRandom)))
+      // Bản lưu cũ chưa có sổ lệnh: sinh mới (mã ngừng giao dịch không có sổ lệnh).
+      quotes = state.quotes.map((quote) =>
+        quote.depth || quote.board === null ? quote : withDepth(quote, depthRandomOf(quote.symbol)),
+      )
     },
   }
 }
