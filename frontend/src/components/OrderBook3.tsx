@@ -147,6 +147,16 @@ export function OrderBook3({ quote, session, depth, highlightPrice = null, onPic
         )}
         <table className="w-full text-sm">
           <thead>
+            {quote.foreign_room !== undefined && (
+              <tr className="border-b text-xs" data-demo-id="orderbook-room">
+                <th scope="row" colSpan={2} className="text-muted-foreground px-2 py-1 text-right font-medium">
+                  Room NN còn lại
+                </th>
+                <td className={cn('px-2 py-1 font-semibold tabular-nums', quote.foreign_room === 0 && 'text-price-down')}>
+                  {formatNumber(quote.foreign_room)} CP
+                </td>
+              </tr>
+            )}
             <tr className="text-muted-foreground border-b text-xs">
               <th className="px-2 py-1 text-right font-medium">Khối lượng</th>
               <th className="px-2 py-1 text-right font-medium">Giá</th>

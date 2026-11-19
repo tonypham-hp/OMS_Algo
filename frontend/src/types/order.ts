@@ -61,6 +61,8 @@ export interface ParentOrder {
   template_id?: string
   /** Ngoài ERD (Đợt 8A): lô chẵn hay lô lẻ (1–99 CP, chỉ LO). Không có là lô chẵn. */
   lot_type?: LotKind
+  /** Ngoài ERD (Đợt 8A): lệnh mua của nhà đầu tư nước ngoài đang giữ room ngoại (trả lại phần chưa khớp khi kết thúc). */
+  foreign_room_held?: boolean
   /** Ngoài ERD (Đợt 8A): lý do hết hạn khi status = EXPIRED (DAY_END: hết hiệu lực lúc hết khớp lệnh trong ngày). */
   expire_reason?: 'DAY_END' | 'VALID_TO_REACHED' | 'WINDOW_END' | 'HUNT_MAX_WAIT' | 'HUNT_NO_LEVEL'
   version: number

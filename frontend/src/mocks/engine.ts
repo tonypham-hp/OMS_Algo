@@ -44,10 +44,10 @@ import type {
 } from '@/types'
 import { formatDate, formatNumber } from '@/lib/format'
 import { ruleMessage } from '@/explain/reasons'
-import { buildRuleContext } from '@/rules/context'
+import { buildRuleContext, symbolInfoFromQuote } from '@/rules/context'
 import { mtlRemainderPrice } from '@/rules/price'
 import type { AmendKind } from '@/rules/types'
-import { checkPrice, classifyAmend, losesPriority } from '@/rules/validate'
+import { checkForeignRoom, checkPrice, classifyAmend, losesPriority } from '@/rules/validate'
 import { isAuctionSession, isMatchingOver, parseTimeToSeconds, rulesForQuote } from '@/utils/hose'
 import {
   getAllowedActions,
@@ -310,6 +310,12 @@ export function createOrderEngine(options: EngineOptions = {}) {
   let eventSequence = 0
   let matchSequence = 0
   let coreSequence = 0
+  /**
+   * Room ngoại lệnh mua của nhà đầu tư nước ngoài vừa giữ (âm) hoặc trả lại (dương), chờ runtime ghi vào bộ giả lập.
+   * `roomInFlight`: phần đã chuyển cho bộ giả lập nhưng engine chưa thấy trong nhịp giá mới.
+   */
+  let roomChanges: Array<{ symbol: string; delta: number }> = []
+  const roomInFlight = new Map<string, number>()
   /** KL lệnh của OMS đã lấy ở sổ lệnh, chờ runtime trừ khỏi bộ giả lập. */
   let depthTakes: DepthTake[] = []
   /** KL đã lấy ở từng mức trong nhịp hiện tại, để nhiều lệnh con cùng mức không lấy quá KL đang có. */
@@ -329,6 +335,33 @@ export function createOrderEngine(options: EngineOptions = {}) {
     return market?.quotes.find((quote) => quote.symbol === symbol)
   }
 
+  /** Room ngoại còn lại theo engine: room của bảng giá trừ phần đã giữ mà bảng giá chưa phản ánh. */
+  function pendingRoom(symbol: string) {
+    const pending = roomChanges.filter((change) => change.symbol === symbol).reduce((sum, change) => sum + change.delta, 0)
+    return pending + (roomInFlight.get(symbol) ?? 0)
+  }
+
+  function roomQuote(symbol: string): SymbolQuote | undefined {
+    const quote = getQuote(symbol)
+    if (!quote || quote.foreign_room === undefined) return quote
+    return { ...quote, foreign_room: Math.max(0, quote.foreign_room + pendingRoom(symbol)) }
+  }
+
+  /** Lệnh mua của nhà đầu tư nước ngoài trên mã có giới hạn room. */
+  function needsRoom(parent: ParentOrder) {
+    return parent.side === 'BUY' && isForeignAccount(parent.account_no) && getQuote(parent.symbol)?.foreign_room !== undefined
+  }
+
+  /** Lệnh đang giữ room (đặt qua engine). Lệnh mẫu nạp sẵn không giữ room nên cũng không trả lại. */
+  function holdsRoom(parent: ParentOrder) {
+    return parent.foreign_room_held === true
+  }
+
+  /** Giữ (delta âm) hoặc trả lại (dương) room ngoại cho lệnh mua của nhà đầu tư nước ngoài. */
+  function changeRoom(parent: ParentOrder, delta: number) {
+    if (delta !== 0 && holdsRoom(parent)) roomChanges.push({ symbol: parent.symbol, delta })
+  }
+
   /**
    * Phiên của một mã: theo bảng giao dịch của mã (HOSE, HNX, UPCoM có lịch phiên khác nhau).
    * Mã ngừng giao dịch coi như đóng cửa. Trạng thái không có phiên theo bảng (dữ liệu cũ, test) thì theo phiên chung.
@@ -345,10 +378,10 @@ export function createOrderEngine(options: EngineOptions = {}) {
     return rulesForQuote(getQuote(symbol), getToday()).rules
   }
 
-  /** Ngữ cảnh kiểm tra lệnh theo thị trường engine đang thấy. */
+  /** Ngữ cảnh kiểm tra lệnh theo thị trường engine đang thấy (room ngoại tính cả phần vừa giữ). */
   function validationContext() {
     return {
-      getQuote,
+      getQuote: roomQuote,
       today: getToday(),
       orderRules: config.getOrderRules(),
       getAccount: (accountNo: string) => ({ isForeign: isForeignAccount(accountNo) }),
@@ -458,6 +491,8 @@ export function createOrderEngine(options: EngineOptions = {}) {
     parent.status = next
     parent.updated_at = nowIso()
     logEvent(parent.parent_order_id, null, action, previous, next, userId, extra)
+    // Lệnh mua của nhà đầu tư nước ngoài kết thúc: phần chưa khớp trả lại room.
+    if (isTerminalStatus(next) && !isTerminalStatus(previous)) changeRoom(parent, parent.total_qty - parent.executed_qty)
   }
 
   function setChildStatus(
@@ -1245,6 +1280,8 @@ export function createOrderEngine(options: EngineOptions = {}) {
     // Đổi tốc độ cũng phát lại trạng thái, nhưng đồng hồ chưa nhích thì chưa phải một nhịp mới.
     const isSameMoment = market?.sim_seconds === state.sim_seconds && market?.trading_date === state.trading_date
     market = state
+    // Trạng thái mới của bộ giả lập đã gồm phần room đã chuyển ở nhịp trước.
+    roomInFlight.clear()
     tickTakes.clear()
     // Ba việc này phải chạy cả khi đồng hồ đứng yên (đã tới 15:00), nếu không lệnh sẽ kẹt mãi.
     // Đối soát trước, chờ ACK sau: Child vừa sang UNKNOWN ở nhịp này bắt đầu đếm đối soát từ nhịp sau.
@@ -1401,6 +1438,11 @@ export function createOrderEngine(options: EngineOptions = {}) {
       updated_at: now,
     }
     parents.push(parent)
+    // Room ngoại bị trừ ngay khi đặt lệnh mua (KRX), không đợi khớp.
+    if (needsRoom(parent)) {
+      parent.foreign_room_held = true
+      changeRoom(parent, -parent.total_qty)
+    }
     runtimeOf(parent) // Ghi nhận giờ tạo ngay, vì hạn chờ của HUNT tính từ lúc này.
     parameters.set(parentOrderId, request.parameters)
     conditions.push(...buildConditions(parent))
@@ -1499,9 +1541,17 @@ export function createOrderEngine(options: EngineOptions = {}) {
     if (request.total_qty < minimum) {
       throw new EngineError(`Khối lượng mới không được nhỏ hơn ${minimum} (đã khớp cộng lệnh con chưa rõ)`, 422)
     }
+    // Tăng KL lệnh mua của nhà đầu tư nước ngoài: phần tăng thêm phải còn room.
+    const added = request.total_qty - parent.total_qty
+    const room = roomQuote(parent.symbol)
+    if (added > 0 && room && holdsRoom(parent)) {
+      const violation = checkForeignRoom(parent.side, added, symbolInfoFromQuote(room), { isForeign: true })[0]
+      if (violation) throw new EngineError(ruleMessage(violation), 422, [{ field: 'total_qty', message: ruleMessage(violation), code: violation.code }])
+    }
 
     const oldValue = JSON.stringify({ total_qty: parent.total_qty, limit_price: parent.limit_price })
     const oldLimit = parent.limit_price
+    changeRoom(parent, parent.total_qty - request.total_qty)
     parent.total_qty = request.total_qty
     parent.limit_price = limitPrice
     parent.version += 1
@@ -1975,6 +2025,15 @@ export function createOrderEngine(options: EngineOptions = {}) {
       depthTakes = []
       return taken
     },
+    /** Lấy và xóa các thay đổi room ngoại (giữ khi đặt lệnh mua, trả khi hủy, hết hạn) để ghi vào bộ giả lập. */
+    drainRoomChanges: () => {
+      const changes = roomChanges
+      roomChanges = []
+      for (const change of changes) roomInFlight.set(change.symbol, (roomInFlight.get(change.symbol) ?? 0) + change.delta)
+      return changes
+    },
+    /** Room ngoại còn lại của mã theo engine (gồm phần vừa giữ). */
+    getForeignRoom: (symbol: string) => roomQuote(symbol)?.foreign_room,
     applyExecution,
     createOrder,
     pauseOrder,

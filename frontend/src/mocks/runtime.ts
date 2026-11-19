@@ -103,6 +103,8 @@ marketSimulator.subscribe((state) => {
   orderEngine.onMarketTick(state)
   // Lệnh quét của OMS lấy thanh khoản ở sổ lệnh: trừ KL đó khỏi sổ lệnh của thị trường.
   orderEngine.drainDepthTakes().forEach((take) => marketSimulator.consumeDepth(take.symbol, take.side, take.price, take.qty))
+  // Lệnh mua của nhà đầu tư nước ngoài giữ, trả room ngoại: ghi vào bảng giá.
+  orderEngine.drainRoomChanges().forEach((change) => marketSimulator.adjustForeignRoom(change.symbol, change.delta))
   recordNewExecutions()
   ticksSinceSave += 1
   if (ticksSinceSave >= SAVE_EVERY_TICKS) {
