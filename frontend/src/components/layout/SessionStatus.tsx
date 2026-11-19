@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button'
 import { SESSION_LABELS } from '@/config/hose'
 import { formatClock } from '@/lib/format'
 import { isMatchingOver } from '@/rules/session'
+import { SimDateControl } from './SimDateControl'
 import { cn } from '@/lib/utils'
 import { marketService } from '@/services/market.service'
 import { useDemoStore } from '@/store/demo.store'
@@ -36,11 +37,12 @@ export function SessionStatus() {
       <span className="tabular-nums">{formatClock(seconds)}</span>
     </span>
   )
-  if (demoActive) return <div className="flex items-center text-sm">{clock}</div>
+  if (demoActive) return <div className="flex items-center gap-3 text-sm">{clock}<SimDateControl readOnly /></div>
 
   return (
     <div className="flex items-center gap-3 text-sm" data-demo-id="session-status">
       {clock}
+      <SimDateControl />
       <div className="flex gap-1" role="group" aria-label="Tốc độ giả lập">
         {SPEEDS.map((item) => (
           <Button

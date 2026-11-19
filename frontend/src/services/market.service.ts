@@ -16,4 +16,6 @@ export const marketService = {
   setSpeed: (speed: SimSpeed) => marketSimulator.setSpeed(speed),
   resetDay: () => resetDemoDay(),
   nextDay: () => marketSimulator.nextDay(),
+  /** Đổi ngày mô phỏng (ném lỗi nếu không phải ngày giao dịch hoặc lùi về quá khứ). */
+  setTradingDate: (date: string) => marketSimulator.setTradingDate(date),
 }

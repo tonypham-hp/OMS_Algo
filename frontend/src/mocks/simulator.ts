@@ -1,6 +1,6 @@
 import { QTY_LOT_SIZE } from '@/config/hose'
 import { formatClock, toDateString } from '@/lib/format'
-import { nextTradingDate } from '@/rules/calendar'
+import { isTradingDay, nextTradingDate } from '@/rules/calendar'
 import { getTickSize, priceLimits, stepPrice } from '@/rules/price'
 import { resolveRules, rulesFor } from '@/rules/registry'
 import { getSessionAt, isAuctionSession, parseTimeToSeconds, sessionEndAt } from '@/rules/session'
@@ -430,6 +430,20 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
     /** Sang ngày giao dịch mới: giá đóng cửa hôm trước thành giá tham chiếu hôm nay. */
     nextDay() {
       startDay(nextTradingDate(tradingDate))
+      notify()
+    },
+    /**
+     * Đổi ngày mô phỏng sang `date` (YYYY-MM-DD, ngày giao dịch, không lùi về quá khứ), không tải lại trang.
+     * Chốt ngày cũ trước (tua tới 15:00 để engine cho lệnh trong ngày hết hiệu lực, mang lệnh nhiều phiên sang),
+     * rồi dựng bảng giá ngày mới theo luật của ngày đó: mã niêm yết HNX đổi bảng, trần/sàn theo pack mới.
+     */
+    setTradingDate(date: string) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !isTradingDay(date)) throw new Error(`Ngày ${date} không phải ngày giao dịch`)
+      if (date < tradingDate) throw new Error('Không lùi ngày mô phỏng về quá khứ')
+      if (date === tradingDate) return
+      simSeconds = END_SECONDS
+      notify()
+      startDay(date)
       notify()
     },
     exportState(): SimulatorState {
