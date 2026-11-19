@@ -10,11 +10,12 @@ describe('getNavSections', () => {
     expect(titles('DEALER')).toEqual([null, 'Giao dịch', 'Báo cáo'])
   })
 
-  it('vận hành thấy khu Vận hành với Giám sát hệ thống và Cấu hình chiến lược', () => {
+  it('vận hành thấy khu Vận hành với Giám sát hệ thống, Cấu hình chiến lược và Luật giao dịch', () => {
     const ops = getNavSections('OPS').find((section) => section.title === 'Vận hành')
     expect(ops?.items.map((item) => [item.label, item.path])).toEqual([
       ['Giám sát hệ thống', '/van-hanh'],
       ['Cấu hình chiến lược', '/cau-hinh'],
+      ['Luật giao dịch', '/cau-hinh/luat'],
     ])
   })
 

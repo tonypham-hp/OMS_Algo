@@ -17,6 +17,7 @@ const ExecutionReport = lazy(() => import('@/pages/ExecutionReport'))
 const History = lazy(() => import('@/pages/History'))
 const Operations = lazy(() => import('@/pages/Operations'))
 const StrategyConfig = lazy(() => import('@/pages/StrategyConfig'))
+const RulePacks = lazy(() => import('@/pages/RulePacks'))
 const Glossary = lazy(() => import('@/pages/Glossary'))
 const Forbidden = lazy(() => import('@/pages/Forbidden'))
 const NotFound = lazy(() => import('@/pages/NotFound'))
@@ -67,6 +68,10 @@ export const routes: RouteObject[] = [
           {
             element: <PermissionRoute permission="strategy_config" />,
             children: [{ path: '/cau-hinh', element: page(StrategyConfig) }],
+          },
+          {
+            element: <PermissionRoute permission="rule_config" />,
+            children: [{ path: '/cau-hinh/luat', element: page(RulePacks) }],
           },
           { path: '/403', element: page(Forbidden) },
           { path: '*', element: page(NotFound) },

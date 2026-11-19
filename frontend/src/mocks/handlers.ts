@@ -29,6 +29,20 @@ import { buildHistory, createReconApi, parseRange, type ReconDecisionBody } from
 import { buildExecutionReport, getOrderMarketStats, type ReportSource } from './report'
 import { configStore, marketTape, orderEngine, persistConfig } from './runtime'
 import { marketSimulator } from './simulator'
+import { getExperimentalPack, listPacks, resolveRules, setExperimentalPack } from '@/rules/registry'
+import type { Board } from '@/rules/types'
+import type { RulePacksResponse } from '@/services/rules.service'
+
+/** Gói luật cho trang Luật giao dịch: mọi pack, pack đang áp dụng theo ngày mô phỏng, pack thử nghiệm đang nạp. */
+function rulePacksResponse(): RulePacksResponse {
+  const date = marketSimulator.getState().trading_date
+  const active: Partial<Record<Board, string>> = {}
+  for (const board of ['STO', 'STX', 'UPX'] as const) {
+    const pack = resolveRules(board, date)
+    if (pack) active[board] = pack.id
+  }
+  return { trading_date: date, packs: listPacks(), active, experimental_id: getExperimentalPack()?.id ?? null }
+}
 
 function getUser(request: Request): DemoUser | undefined {
   const username = request.headers.get('X-User-Id')
@@ -162,6 +176,22 @@ const e2eFaultHandlers = import.meta.env.DEV ? createE2eFaultHandlers() : []
 export const handlers = [
   ...e2eFaultHandlers,
   http.get('*/api/config/parameters', ({ request }) => handleOps(request, () => configStore.listParameters())),
+
+  // Trang Luật giao dịch (chỉ OPS, chỉ đọc). Nạp pack thử nghiệm để chứng minh đổi lịch phiên không cần sửa code.
+  http.get('*/api/rules', ({ request }) => handleOps(request, () => rulePacksResponse())),
+  http.post('*/api/rules/experimental', async ({ request }) => {
+    const body = (await request.json()) as { pack_id: string | null }
+    return handleOps(request, () => {
+      try {
+        setExperimentalPack(body.pack_id)
+      } catch (error) {
+        throw new EngineError(error instanceof Error ? error.message : 'Không nạp được pack', 422)
+      }
+      // Phát lại trạng thái để đồng hồ phiên tính lại theo pack mới ngay.
+      marketSimulator.refresh()
+      return rulePacksResponse()
+    })
+  }),
 
   http.get('*/api/config/requests', ({ request }) => {
     const params = new URL(request.url).searchParams

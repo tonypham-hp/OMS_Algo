@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   LayoutTemplate,
   ListOrdered,
+  Scale,
   SlidersHorizontal,
   SquarePen,
   type LucideIcon,
@@ -53,6 +54,7 @@ export const NAV_SECTIONS: ReadonlyArray<NavSection> = [
     items: [
       { label: 'Giám sát hệ thống', icon: Activity, path: '/van-hanh', permission: 'operations' },
       { label: 'Cấu hình chiến lược', icon: SlidersHorizontal, path: '/cau-hinh', permission: 'strategy_config' },
+      { label: 'Luật giao dịch', icon: Scale, path: '/cau-hinh/luat', permission: 'rule_config' },
     ],
   },
 ]
