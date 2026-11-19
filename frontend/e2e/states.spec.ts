@@ -9,6 +9,7 @@ const SCREENS: ReadonlyArray<{ path: string; fail: string[]; message: RegExp; ro
   { path: '/bao-cao/lich-su?tab=doi-soat', fail: ['reconciliation'], message: /Không tải được đối soát/, role: 'DEALER' },
   { path: '/van-hanh', fail: ['ops'], message: /Không tải được dữ liệu vận hành/, role: 'OPS' },
   { path: '/cau-hinh', fail: ['config'], message: /Không tải được (tham số|lịch sử)/, role: 'OPS' },
+  { path: '/cau-hinh/luat', fail: ['rules'], message: /Không tải được gói luật/, role: 'OPS' },
 ]
 
 test.describe('Trạng thái lỗi (ErrorState)', () => {

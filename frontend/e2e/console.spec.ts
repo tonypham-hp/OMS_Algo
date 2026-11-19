@@ -14,6 +14,7 @@ const ROUTES: ReadonlyArray<{ path: string; title: RegExp; roles: Role[] }> = [
   { path: '/thuat-ngu', title: /Thuật ngữ/, roles: ['CUSTOMER', 'DEALER', 'OPS'] },
   { path: '/van-hanh', title: /Màn vận hành/, roles: ['OPS'] },
   { path: '/cau-hinh', title: /Cấu hình chiến lược/, roles: ['OPS'] },
+  { path: '/cau-hinh/luat', title: /Luật giao dịch/, roles: ['OPS'] },
   { path: '/khong-ton-tai', title: /404|Không tìm thấy/, roles: ['CUSTOMER', 'DEALER', 'OPS'] },
 ]
 
