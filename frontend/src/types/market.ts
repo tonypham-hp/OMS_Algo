@@ -1,4 +1,5 @@
-export type SessionCode = 'PRE_OPEN' | 'ATO' | 'CONTINUOUS' | 'LUNCH' | 'ATC' | 'CLOSED'
+/** PUT_THROUGH: thỏa thuận sau giờ 14:45–15:00, không còn khớp lệnh (8A chỉ hiện trên đồng hồ). */
+export type SessionCode = 'PRE_OPEN' | 'ATO' | 'CONTINUOUS' | 'LUNCH' | 'ATC' | 'PUT_THROUGH' | 'CLOSED'
 
 export type SimSpeed = 1 | 10 | 60
 

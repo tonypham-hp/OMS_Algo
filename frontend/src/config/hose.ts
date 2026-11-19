@@ -20,6 +20,7 @@ export const SESSION_LABELS: Record<SessionCode, string> = {
   CONTINUOUS: 'Khớp lệnh liên tục',
   LUNCH: 'Nghỉ trưa',
   ATC: 'Phiên ATC',
+  PUT_THROUGH: 'Thỏa thuận sau giờ',
   CLOSED: 'Đã đóng cửa',
 }
 

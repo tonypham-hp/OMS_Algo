@@ -16,6 +16,7 @@ const SESSION_DOT: Record<SessionCode, string> = {
   CONTINUOUS: 'bg-price-up',
   LUNCH: 'bg-slate-500',
   ATC: 'bg-price-ref',
+  PUT_THROUGH: 'bg-slate-500',
   CLOSED: 'bg-price-down',
 }
 
