@@ -298,6 +298,7 @@ export const STRATEGY_TERMS: Record<StrategyType, string> = {
   VWAP: 'vwap',
   POV: 'pov',
   HUNT: 'hunt',
+  LIMIT: 'lo',
 }
 
 /** Thuật ngữ của các ô tham số trên ticket Đặt lệnh. Ô không có ở đây hiện nhãn thường. */

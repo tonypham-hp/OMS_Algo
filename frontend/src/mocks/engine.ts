@@ -1154,6 +1154,10 @@ export function createOrderEngine(options: EngineOptions = {}) {
       case 'POV':
         stepPov(parent, quote)
         break
+      case 'LIMIT':
+        // Lệnh LO thường: một lệnh con cho toàn bộ phần còn lại, tại giá đặt.
+        if (workingOf(parent) === 0) createChild(parent, parent.side, 'LO', parent.limit_price, allowedOf(parent))
+        break
     }
   }
 
@@ -1365,6 +1369,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
       valid_to: request.valid_to ?? today,
       persistence_mode: request.persistence_mode,
       ...(request.template_id ? { template_id: request.template_id } : {}),
+      ...(request.lot_type === 'ODD' ? { lot_type: 'ODD' as const } : {}),
       version: 1,
       created_at: now,
       updated_at: now,

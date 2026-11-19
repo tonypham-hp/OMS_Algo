@@ -18,6 +18,8 @@ export type StrategyType =
   | 'VWAP'
   | 'POV'
   | 'HUNT'
+  /** Đợt 8A: lệnh giới hạn LO thường (một lệnh con đủ KL), dùng cho lô lẻ. */
+  | 'LIMIT'
 
 export type ParentOrderStatus =
   | 'DRAFT'
@@ -159,6 +161,8 @@ export interface CreateOrderRequest {
   parameters: StrategyParameter[]
   /** Ngoài ERD: mẫu chiến lược đã dùng để điền sẵn form (tùy chọn). */
   template_id?: string
+  /** Ngoài ERD (Đợt 8A): lô lẻ (1–99 CP, chỉ LO). Không có là lô chẵn. */
+  lot_type?: LotKind
 }
 
 export interface CreateOrderResponse {

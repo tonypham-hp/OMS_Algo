@@ -31,6 +31,7 @@ const orderFormShape = z.object({
     'VWAP',
     'POV',
     'HUNT',
+    'LIMIT',
   ]),
   total_qty: z.number().optional(),
   lot_type: z.enum(['ROUND', 'ODD']).optional(),
@@ -299,8 +300,12 @@ export function getLot(values: OrderFormValues): LotKind {
   return values.lot_type ?? 'ROUND'
 }
 
-/** Loại lệnh con đầu tiên mà chiến lược gửi lên sàn, và có gửi ngay khi đặt hay không. */
+/**
+ * Loại lệnh con đầu tiên mà chiến lược gửi lên sàn, và có gửi ngay khi đặt hay không.
+ * LIMIT gửi ngay một lệnh LO nên chịu luật phiên đầy đủ; lệnh thuật toán chỉ nhận cảnh báo.
+ */
 export function strategyOrderType(values: OrderFormValues): { orderType: OrderType; immediate: boolean } {
+  if (values.strategy_type === 'LIMIT') return { orderType: 'LO', immediate: true }
   return { orderType: STRATEGIES[values.strategy_type].usesMtl ? 'MTL' : 'LO', immediate: false }
 }
 
@@ -395,6 +400,7 @@ export function toCreateOrderRequest(
     valid_to: values.persistence_mode === 'DAY' ? null : (values.valid_to ?? null),
     parameters,
     ...(options.templateId ? { template_id: options.templateId } : {}),
+    ...(values.lot_type === 'ODD' ? { lot_type: 'ODD' as const } : {}),
   }
 }
 
@@ -409,6 +415,7 @@ export function fromCreateOrderRequest(request: CreateOrderRequest): OrderFormVa
     persistence_mode: request.persistence_mode,
     valid_to: request.valid_to ?? undefined,
     limit_price: request.limit_price ?? undefined,
+    ...(request.lot_type ? { lot_type: request.lot_type } : {}),
   }
   for (const parameter of request.parameters) {
     const name = parameter.parameter_code as StrategyFieldName
