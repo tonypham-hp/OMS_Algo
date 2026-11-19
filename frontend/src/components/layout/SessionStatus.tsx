@@ -1,3 +1,4 @@
+import { RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SESSION_LABELS } from '@/config/hose'
 import { formatClock } from '@/lib/format'
@@ -61,8 +62,17 @@ export function SessionStatus() {
           Sang ngày mới
         </Button>
       )}
-      <Button size="xs" variant="ghost" className="whitespace-nowrap" onClick={() => marketService.resetDay()}>
-        Về đầu ngày
+      {/* Dưới 1600px thanh trên chật (thêm đồng hồ ngày): chỉ hiện biểu tượng, tên nút vẫn đọc được qua aria-label. */}
+      <Button
+        size="xs"
+        variant="ghost"
+        className="whitespace-nowrap"
+        aria-label="Về đầu ngày"
+        title="Về đầu ngày"
+        onClick={() => marketService.resetDay()}
+      >
+        <RotateCcw className="min-[1600px]:hidden" aria-hidden />
+        <span className="hidden min-[1600px]:inline">Về đầu ngày</span>
       </Button>
     </div>
   )
