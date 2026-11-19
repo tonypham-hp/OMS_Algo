@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { SESSION_LABELS } from '@/config/hose'
 import { formatClock } from '@/lib/format'
+import { isMatchingOver } from '@/rules/session'
 import { cn } from '@/lib/utils'
 import { marketService } from '@/services/market.service'
 import { useDemoStore } from '@/store/demo.store'
@@ -53,7 +54,7 @@ export function SessionStatus() {
           </Button>
         ))}
       </div>
-      {session === 'CLOSED' && (
+      {isMatchingOver(session) && (
         <Button size="xs" variant="outline" onClick={() => marketService.nextDay()}>
           Sang ngày mới
         </Button>

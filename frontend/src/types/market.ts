@@ -1,3 +1,5 @@
+import type { Board, SecType } from '@/rules/types'
+
 /** PUT_THROUGH: thỏa thuận sau giờ 14:45–15:00, không còn khớp lệnh (8A chỉ hiện trên đồng hồ). */
 export type SessionCode = 'PRE_OPEN' | 'ATO' | 'CONTINUOUS' | 'LUNCH' | 'ATC' | 'PUT_THROUGH' | 'CLOSED'
 
@@ -21,6 +23,14 @@ export interface SymbolQuote {
   tick_direction: -1 | 0 | 1
   /** Sổ lệnh nhiều mức, chỉ có khi được cung cấp (Demo). Không có thì engine dựng sổ lệnh tất định từ bid, ask. */
   depth?: OrderBookDepth
+  /** Bảng giao dịch của mã trong ngày (theo gói luật). null: mã ngừng giao dịch ngày này. Không có: coi là STO. */
+  board?: Board | null
+  /** Loại chứng khoán, quyết định bước giá. Không có: coi là cổ phiếu. */
+  sec_type?: SecType
+  /** Mã đã chuyển sàn, luật bảng mới là giả định (nhãn "Giả định"). */
+  transferred?: boolean
+  /** Room ngoại còn lại, cổ phiếu. Không có: không giới hạn. */
+  foreign_room?: number
 }
 
 /** Một mức giá trong sổ lệnh. */
@@ -46,7 +56,10 @@ export interface MarketState {
   sim_seconds: number
   /** Số giây thật kể từ lần cuối nhận được giá, không phụ thuộc tốc độ tua. Bình thường là 0. */
   quote_age_seconds: number
+  /** Phiên của bảng HOSE (đồng hồ phiên chung). */
   session: SessionCode
+  /** Phiên theo từng bảng giao dịch: HNX, UPCoM có lịch phiên khác HOSE. Không có: mọi bảng theo `session`. */
+  board_sessions?: Partial<Record<Board, SessionCode>>
   speed: SimSpeed
   quotes: SymbolQuote[]
 }

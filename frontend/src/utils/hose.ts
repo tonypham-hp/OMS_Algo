@@ -1,81 +1,51 @@
-import {
-  MARKET_CLOSE_SECONDS,
-  MARKET_OPEN_SECONDS,
-  MAX_ORDER_QTY,
-  PRICE_BAND_PCT,
-  QTY_LOT_SIZE,
-  TICK_SIZE_RULES,
-  TRADING_SESSIONS,
-} from '@/config/hose'
+// Lớp mỏng giữ tên hàm cũ. Mọi luật lấy từ gói luật (src/rules): mặc định là pack HOSE đang hiệu lực,
+// truyền `rules` và `secType` khi biết mã (xem rulesForQuote).
 import { formatNumber } from '@/lib/format'
+import * as price from '@/rules/price'
+import { defaultRules, rulesFor } from '@/rules/registry'
+import * as session from '@/rules/session'
+import type { RulePack, SecType } from '@/rules/types'
 import type { SessionCode, SymbolQuote } from '@/types'
 
-export function getTickSize(price: number): number {
-  const rule = TICK_SIZE_RULES.find((item) => price < item.below)
-  return rule ? rule.tick : TICK_SIZE_RULES[TICK_SIZE_RULES.length - 1].tick
+export { isAuctionSession, isMatchingOver, parseTimeToSeconds } from '@/rules/session'
+
+export function getTickSize(value: number, secType: SecType = 'STOCK', rules: RulePack = defaultRules()): number {
+  return price.getTickSize(value, secType, rules)
 }
 
-export function isValidTick(price: number): boolean {
-  return Number.isInteger(price) && price > 0 && price % getTickSize(price) === 0
+export function isValidTick(value: number, secType: SecType = 'STOCK', rules: RulePack = defaultRules()): boolean {
+  return price.isValidTick(value, secType, rules)
 }
 
-/**
- * Dịch giá `steps` bước giá. Đi từng bước một thay vì nhân (tick x số bước), vì bước giá đổi khi qua ngưỡng
- * 10.000 và 50.000. Ví dụ 49.950 + 100 = 50.050 sai bước, còn 49.950 → 50.000 → 50.100 thì đúng.
- * Bước xuống dùng bước giá của mức phía dưới: 50.000 xuống 49.950, không phải 49.900.
- */
-export function stepPrice(price: number, steps: number): number {
-  let result = price
-  for (let index = 0; index < Math.abs(steps); index += 1) {
-    result = steps > 0 ? result + getTickSize(result) : result - getTickSize(result - 1)
-  }
-  return result
+export function stepPrice(value: number, steps: number, secType: SecType = 'STOCK', rules: RulePack = defaultRules()): number {
+  return price.stepPrice(value, steps, secType, rules)
 }
 
-/** Làm tròn giá về bước giá gần nhất phía dưới (`down`) hoặc phía trên. */
-export function roundToTick(price: number, direction: 'down' | 'up' = 'down'): number {
-  const tick = getTickSize(price)
-  return direction === 'down' ? Math.floor(price / tick) * tick : Math.ceil(price / tick) * tick
+export function roundToTick(
+  value: number,
+  direction: 'down' | 'up' = 'down',
+  secType: SecType = 'STOCK',
+  rules: RulePack = defaultRules(),
+): number {
+  return price.roundToTick(value, direction, secType, rules)
 }
 
-/** Số bước giá từ `from` tới `to` (to > from cho số dương). */
-export function countTicks(from: number, to: number): number {
-  let count = 0
-  let price = from
-  const direction = to >= from ? 1 : -1
-  while (direction > 0 ? price < to : price > to) {
-    price = stepPrice(price, direction)
-    count += direction
-  }
-  return count
+export function countTicks(from: number, to: number, secType: SecType = 'STOCK', rules: RulePack = defaultRules()): number {
+  return price.countTicks(from, to, secType, rules)
 }
 
-/** Giá trần: +7% rồi làm tròn xuống theo bước giá, để không vượt biên độ. */
-export function getCeilingPrice(refPrice: number): number {
-  const raw = Math.floor((refPrice * (100 + PRICE_BAND_PCT)) / 100)
-  const tick = getTickSize(raw)
-  return Math.floor(raw / tick) * tick
+/** Giá trần: tham chiếu × (1 + biên) rồi làm tròn xuống theo bước giá. */
+export function getCeilingPrice(refPrice: number, rules: RulePack = defaultRules()): number {
+  return price.priceLimits(refPrice, 'STOCK', rules).ceiling
 }
 
-/** Giá sàn: -7% rồi làm tròn lên theo bước giá, để không vượt biên độ. */
-export function getFloorPrice(refPrice: number): number {
-  const raw = Math.ceil((refPrice * (100 - PRICE_BAND_PCT)) / 100)
-  const tick = getTickSize(raw)
-  return Math.ceil(raw / tick) * tick
+/** Giá sàn: tham chiếu × (1 − biên) rồi làm tròn lên theo bước giá. */
+export function getFloorPrice(refPrice: number, rules: RulePack = defaultRules()): number {
+  return price.priceLimits(refPrice, 'STOCK', rules).floor
 }
 
-export function getSessionAt(secondsOfDay: number): SessionCode {
-  if (secondsOfDay < MARKET_OPEN_SECONDS) return 'PRE_OPEN'
-  if (secondsOfDay >= MARKET_CLOSE_SECONDS) return 'CLOSED'
-  const session = TRADING_SESSIONS.find(
-    (item) => secondsOfDay >= item.start && secondsOfDay < item.end,
-  )
-  return session ? session.code : 'CLOSED'
-}
-
-/** Phiên khớp lệnh định kỳ: chỉ có giá dự kiến, khớp một lần lúc hết phiên. */
-export function isAuctionSession(session: SessionCode): boolean {
-  return session === 'ATO' || session === 'ATC'
+export function getSessionAt(secondsOfDay: number, rules: RulePack = defaultRules()): SessionCode {
+  return session.getSessionAt(secondsOfDay, rules)
 }
 
 /** Giá hiển thị trên bảng giá: giá dự kiến nếu đang có, không thì giá khớp. */
@@ -83,42 +53,39 @@ export function getDisplayPrice(quote: SymbolQuote): number {
   return quote.indicative_price ?? quote.last_price
 }
 
-/** Lệnh MTL chỉ hợp lệ trong phiên khớp lệnh liên tục. */
-export function isMtlAllowed(session: SessionCode): boolean {
-  return session === 'CONTINUOUS'
+/** MTL chỉ hợp lệ trong phiên khớp lệnh liên tục (theo loại lệnh của pack). */
+export function isMtlAllowed(current: SessionCode, rules: RulePack = defaultRules()): boolean {
+  return session.isMtlAllowed(rules, current)
 }
 
-/** Không được sửa, hủy lệnh trong phiên ATO và ATC. */
-export function isModifyCancelAllowed(session: SessionCode): boolean {
-  return session !== 'ATO' && session !== 'ATC'
+/** Sửa, hủy lệnh có bị khóa trong phiên này không (HOSE: khóa trong ATO, ATC – chưa kiểm chứng với KRX). */
+export function isModifyCancelAllowed(current: SessionCode, rules: RulePack = defaultRules()): boolean {
+  return session.isAmendAllowed(rules, current) && session.isCancelAllowed(rules, current)
 }
 
-/** Trả về câu báo lỗi tiếng Việt, hoặc null nếu giá hợp lệ. */
-export function validatePrice(price: number, refPrice: number): string | null {
-  if (!Number.isInteger(price) || price <= 0) return 'Giá phải là số nguyên đồng lớn hơn 0'
-  const ceiling = getCeilingPrice(refPrice)
-  const floor = getFloorPrice(refPrice)
-  if (price > ceiling) return `Giá không được vượt giá trần ${formatNumber(ceiling)}`
-  if (price < floor) return `Giá không được thấp hơn giá sàn ${formatNumber(floor)}`
-  const tick = getTickSize(price)
-  if (price % tick !== 0) return `Giá phải theo bước ${formatNumber(tick)}đ ở mức giá này`
+/** Luật và loại chứng khoán của một dòng bảng giá. Thiếu thông tin bảng thì coi là cổ phiếu HOSE. */
+export function rulesForQuote(quote: Pick<SymbolQuote, 'board' | 'sec_type'> | undefined, date?: string) {
+  const board = quote?.board ?? 'STO'
+  const rules = date ? rulesFor(board, date) : board === 'STO' ? defaultRules() : rulesFor(board, '9999-12-31')
+  return { rules, secType: quote?.sec_type ?? ('STOCK' as SecType) }
+}
+
+/** Trả về câu báo lỗi tiếng Việt, hoặc null nếu giá hợp lệ. (Thay bằng validateOrder ở src/rules/validate.ts.) */
+export function validatePrice(value: number, refPrice: number, rules: RulePack = defaultRules()): string | null {
+  if (!Number.isInteger(value) || value <= 0) return 'Giá phải là số nguyên đồng lớn hơn 0'
+  const ceiling = getCeilingPrice(refPrice, rules)
+  const floor = getFloorPrice(refPrice, rules)
+  if (value > ceiling) return `Giá không được vượt giá trần ${formatNumber(ceiling)}`
+  if (value < floor) return `Giá không được thấp hơn giá sàn ${formatNumber(floor)}`
+  const tick = getTickSize(value, 'STOCK', rules)
+  if (value % tick !== 0) return `Giá phải theo bước ${formatNumber(tick)}đ ở mức giá này`
   return null
 }
 
-/** Trả về câu báo lỗi tiếng Việt, hoặc null nếu khối lượng hợp lệ. */
-export function validateQuantity(qty: number): string | null {
+/** Trả về câu báo lỗi tiếng Việt, hoặc null nếu khối lượng hợp lệ. (Thay bằng validateOrder.) */
+export function validateQuantity(qty: number, rules: RulePack = defaultRules()): string | null {
   if (!Number.isInteger(qty) || qty <= 0) return 'Khối lượng phải là số nguyên lớn hơn 0'
-  if (qty % QTY_LOT_SIZE !== 0) return `Khối lượng phải là bội số của ${QTY_LOT_SIZE}`
-  if (qty > MAX_ORDER_QTY) return `Khối lượng tối đa ${formatNumber(MAX_ORDER_QTY)} cổ phiếu/lệnh`
+  if (qty % rules.lots.round !== 0) return `Khối lượng phải là bội số của ${rules.lots.round}`
+  if (qty > rules.maxQty.round) return `Khối lượng tối đa ${formatNumber(rules.maxQty.round)} cổ phiếu/lệnh`
   return null
-}
-
-/** "09:15" → 33300. Trả về null nếu sai định dạng. */
-export function parseTimeToSeconds(value: string): number | null {
-  const match = /^(\d{2}):(\d{2})$/.exec(value)
-  if (!match) return null
-  const hour = Number(match[1])
-  const minute = Number(match[2])
-  if (hour > 23 || minute > 59) return null
-  return hour * 3600 + minute * 60
 }

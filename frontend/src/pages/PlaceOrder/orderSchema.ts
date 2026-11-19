@@ -1,10 +1,11 @@
 import { z } from 'zod'
-import { MARKET_CLOSE_SECONDS, MARKET_OPEN_SECONDS } from '@/config/hose'
 import { STRATEGIES, type StrategyField, type StrategyFieldName } from '@/config/strategies'
 import { DEFAULT_ORDER_RULES } from '@/config/systemParams'
 import { formatNumber } from '@/lib/format'
 import type { CreateOrderRequest, OrderRules, StrategyParameter, SymbolQuote } from '@/types'
-import { getTickSize, parseTimeToSeconds, validatePrice, validateQuantity } from '@/utils/hose'
+import { formatClock } from '@/lib/format'
+import { expirySeconds, marketOpenSeconds } from '@/rules/session'
+import { getTickSize, parseTimeToSeconds, rulesForQuote, validatePrice, validateQuantity } from '@/utils/hose'
 
 // Mọi trường đều để optional ở đây để luôn chạy hết phần kiểm tra bên dưới
 // và báo được tất cả lỗi cùng lúc, thay vì dừng ở trường thiếu đầu tiên.
@@ -75,7 +76,8 @@ function validateField(
       return validatePrice(value as number, quote.ref_price)
     case 'money': {
       const money = value as number
-      const tick = getTickSize(quote.ref_price)
+      const { rules, secType } = rulesForQuote(quote)
+      const tick = getTickSize(quote.ref_price, secType, rules)
       if (money <= 0) return `${field.label} phải lớn hơn 0`
       if (money % tick !== 0) return `${field.label} phải là bội số của bước giá ${formatNumber(tick)}đ`
       return null
@@ -101,8 +103,11 @@ function validateField(
     case 'time': {
       const seconds = parseTimeToSeconds(value as string)
       if (seconds === null) return 'Giờ không hợp lệ'
-      if (seconds < MARKET_OPEN_SECONDS || seconds > MARKET_CLOSE_SECONDS) {
-        return 'Giờ phải nằm trong khoảng 09:00 đến 14:45'
+      const { rules } = rulesForQuote(quote)
+      const open = marketOpenSeconds(rules)
+      const close = expirySeconds(rules)
+      if (seconds < open || seconds > close) {
+        return `Giờ phải nằm trong khoảng ${formatClock(open).slice(0, 5)} đến ${formatClock(close).slice(0, 5)}`
       }
       return null
     }

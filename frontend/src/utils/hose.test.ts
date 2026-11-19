@@ -89,7 +89,10 @@ describe('phiên giao dịch', () => {
     [at(14, 29, 59), 'CONTINUOUS'],
     [at(14, 30), 'ATC'],
     [at(14, 44, 59), 'ATC'],
-    [at(14, 45), 'CLOSED'],
+    // KRX: 14:45–15:00 thỏa thuận sau giờ (không khớp lệnh), đóng cửa hẳn từ 15:00.
+    [at(14, 45), 'PUT_THROUGH'],
+    [at(14, 59, 59), 'PUT_THROUGH'],
+    [at(15, 0), 'CLOSED'],
   ])('giây %i thuộc phiên %s', (seconds, session) => {
     expect(getSessionAt(seconds)).toBe(session)
   })
