@@ -27,7 +27,7 @@ export function createEmptySeed(): SeedData {
 }
 
 export function createDemoContext(): DemoContext {
-  return { refs: {}, marks: {}, disk: null, beforeCrash: null, missedReports: [], matchSequence: 0 }
+  return { refs: {}, marks: {}, disk: null, beforeCrash: null, missedReports: [], matchSequence: 0, lastError: null }
 }
 
 /**

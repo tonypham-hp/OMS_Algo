@@ -437,9 +437,10 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
      * Chốt ngày cũ trước (tua tới 15:00 để engine cho lệnh trong ngày hết hiệu lực, mang lệnh nhiều phiên sang),
      * rồi dựng bảng giá ngày mới theo luật của ngày đó: mã niêm yết HNX đổi bảng, trần/sàn theo pack mới.
      */
-    setTradingDate(date: string) {
+    setTradingDate(date: string, options: { allowPast?: boolean } = {}) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !isTradingDay(date)) throw new Error(`Ngày ${date} không phải ngày giao dịch`)
-      if (date < tradingDate) throw new Error('Không lùi ngày mô phỏng về quá khứ')
+      // Chế độ Demo được đặt ngày tùy ý (kịch bản dựng dữ liệu riêng); người dùng chỉ đi tới.
+      if (date < tradingDate && !options.allowPast) throw new Error('Không lùi ngày mô phỏng về quá khứ')
       if (date === tradingDate) return
       simSeconds = END_SECONDS
       notify()

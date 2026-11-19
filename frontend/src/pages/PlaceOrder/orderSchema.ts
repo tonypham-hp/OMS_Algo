@@ -269,6 +269,11 @@ export function validateOrderValues(
   const crossErrors = validateCrossFields(onlyValidFields(values, invalid), quote)
   errors.push(...crossErrors)
 
+  // Lô lẻ chỉ đặt lệnh LO thường (LIMIT), không đặt lệnh thuật toán.
+  if (lot === 'ODD' && values.strategy_type !== 'LIMIT' && !errors.some((error) => error.field === 'strategy_type')) {
+    errors.push({ field: 'strategy_type', message: ruleMessage({ code: 'ODD_LOT_LO_ONLY', params: { orderType: STRATEGIES[values.strategy_type].label } }) })
+  }
+
   // Phần còn lại của ma trận luật: mã ngừng giao dịch, loại lệnh theo phiên, lô lẻ, room ngoại.
   // Giá và KL đã kiểm theo từng ô ở trên nên bỏ qua ở đây để không báo trùng.
   for (const violation of blocking(validateOrder(toOrderInput(values, lot), rule.rules, getSessionOf(context, values.symbol), rule.symbol, getAccountOf(context, values.account_no)))) {
