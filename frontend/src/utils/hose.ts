@@ -1,6 +1,5 @@
 // Lớp mỏng giữ tên hàm cũ. Mọi luật lấy từ gói luật (src/rules): mặc định là pack HOSE đang hiệu lực,
 // truyền `rules` và `secType` khi biết mã (xem rulesForQuote).
-import { formatNumber } from '@/lib/format'
 import * as price from '@/rules/price'
 import { defaultRules, rulesFor } from '@/rules/registry'
 import * as session from '@/rules/session'
@@ -70,22 +69,3 @@ export function rulesForQuote(quote: Pick<SymbolQuote, 'board' | 'sec_type'> | u
   return { rules, secType: quote?.sec_type ?? ('STOCK' as SecType) }
 }
 
-/** Trả về câu báo lỗi tiếng Việt, hoặc null nếu giá hợp lệ. (Thay bằng validateOrder ở src/rules/validate.ts.) */
-export function validatePrice(value: number, refPrice: number, rules: RulePack = defaultRules()): string | null {
-  if (!Number.isInteger(value) || value <= 0) return 'Giá phải là số nguyên đồng lớn hơn 0'
-  const ceiling = getCeilingPrice(refPrice, rules)
-  const floor = getFloorPrice(refPrice, rules)
-  if (value > ceiling) return `Giá không được vượt giá trần ${formatNumber(ceiling)}`
-  if (value < floor) return `Giá không được thấp hơn giá sàn ${formatNumber(floor)}`
-  const tick = getTickSize(value, 'STOCK', rules)
-  if (value % tick !== 0) return `Giá phải theo bước ${formatNumber(tick)}đ ở mức giá này`
-  return null
-}
-
-/** Trả về câu báo lỗi tiếng Việt, hoặc null nếu khối lượng hợp lệ. (Thay bằng validateOrder.) */
-export function validateQuantity(qty: number, rules: RulePack = defaultRules()): string | null {
-  if (!Number.isInteger(qty) || qty <= 0) return 'Khối lượng phải là số nguyên lớn hơn 0'
-  if (qty % rules.lots.round !== 0) return `Khối lượng phải là bội số của ${rules.lots.round}`
-  if (qty > rules.maxQty.round) return `Khối lượng tối đa ${formatNumber(rules.maxQty.round)} cổ phiếu/lệnh`
-  return null
-}

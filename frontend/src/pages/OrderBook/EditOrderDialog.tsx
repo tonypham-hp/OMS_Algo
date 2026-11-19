@@ -24,14 +24,14 @@ interface EditOrderDialogProps {
   onClose: () => void
 }
 
-function getRefPrice(symbol: string) {
-  return useMarketStore.getState().quotes.find((quote) => quote.symbol === symbol)?.ref_price
+function getQuote(symbol: string) {
+  return useMarketStore.getState().quotes.find((quote) => quote.symbol === symbol)
 }
 
 /** Component được tạo mới mỗi lần mở (nhờ `key` ở nơi gọi), nên form luôn lấy đúng giá trị của lệnh. */
 export function EditOrderDialog({ order, onClose }: EditOrderDialogProps) {
   const updateOrder = useUpdateOrder()
-  const [schema] = useState(() => createEditOrderSchema(order, () => getRefPrice(order.symbol)))
+  const [schema] = useState(() => createEditOrderSchema(order, () => getQuote(order.symbol)))
   const { control, handleSubmit } = useForm<EditOrderValues>({
     resolver: zodResolver(schema),
     mode: 'onChange',

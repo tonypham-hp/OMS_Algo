@@ -2,7 +2,6 @@ import type { JsonBodyType } from 'msw'
 import { http, HttpResponse } from 'msw/http'
 import { formatClock } from '@/lib/format'
 import { getPauseReason } from '@/pages/OrderDetail/pauseReason'
-import { fromCreateOrderRequest, validateOrderValues } from '@/pages/PlaceOrder/orderSchema'
 import type {
   ChangeRequestFilter,
   ChangeRequestStatus,
@@ -88,8 +87,8 @@ function reportSource(): ReportSource {
   }
 }
 
-function errorResponse(message: string, status: number) {
-  return HttpResponse.json({ message }, { status })
+function errorResponse(message: string, status: number, errors?: EngineError['errors']) {
+  return HttpResponse.json(errors ? { message, errors } : { message }, { status })
 }
 
 /** Khung chung của các thao tác trên một lệnh: kiểm tra quyền, đổi lỗi nghiệp vụ thành phản hồi HTTP. */
@@ -106,7 +105,7 @@ function handleOrderAction(
     }
     return HttpResponse.json(action(user.username))
   } catch (error) {
-    if (error instanceof EngineError) return errorResponse(error.message, error.status)
+    if (error instanceof EngineError) return errorResponse(error.message, error.status, error.errors)
     throw error
   }
 }
@@ -118,7 +117,7 @@ function handleUser(request: Request, action: (user: DemoUser) => unknown) {
   try {
     return HttpResponse.json(action(user) as JsonBodyType)
   } catch (error) {
-    if (error instanceof EngineError) return errorResponse(error.message, error.status)
+    if (error instanceof EngineError) return errorResponse(error.message, error.status, error.errors)
     throw error
   }
 }
@@ -131,7 +130,7 @@ function handleOps(request: Request, action: (username: string) => unknown) {
   try {
     return HttpResponse.json(action(user.username) as JsonBodyType)
   } catch (error) {
-    if (error instanceof EngineError) return errorResponse(error.message, error.status)
+    if (error instanceof EngineError) return errorResponse(error.message, error.status, error.errors)
     throw error
   }
 }
@@ -305,21 +304,11 @@ export const handlers = [
     const user = getUser(request)
     if (!user) return errorResponse('Chưa đăng nhập', 401)
     const body = (await request.json()) as CreateOrderRequest
-    const market = marketSimulator.getState()
-
-    // Kiểm tra lại bằng đúng luật của form: giá có thể đã đổi từ lúc người dùng nhập.
-    const errors = validateOrderValues(fromCreateOrderRequest(body), {
-      getQuote: (symbol) => market.quotes.find((quote) => quote.symbol === symbol),
-      today: market.trading_date,
-      orderRules: configStore.getOrderRules(),
-    })
-    if (errors.length > 0) {
-      return HttpResponse.json({ message: errors[0].message, errors }, { status: 422 })
-    }
+    // Engine kiểm tra lại bằng đúng luật của form (src/rules/validate.ts): giá có thể đã đổi từ lúc người dùng nhập.
     try {
       return HttpResponse.json({ parent_order: orderEngine.createOrder(body, user.username) }, { status: 201 })
     } catch (error) {
-      if (error instanceof EngineError) return errorResponse(error.message, error.status)
+      if (error instanceof EngineError) return errorResponse(error.message, error.status, error.errors)
       throw error
     }
   }),

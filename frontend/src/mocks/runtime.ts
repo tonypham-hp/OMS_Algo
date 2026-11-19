@@ -30,7 +30,7 @@ export const configStore = createConfigStore({
 })
 
 /** Engine dùng chung của app: nhận từng nhịp giá từ bộ giả lập, đọc tham số từ cấu hình hệ thống. */
-export const orderEngine = createOrderEngine({ config: configStore })
+export const orderEngine = createOrderEngine({ config: configStore, enforceRules: true })
 
 /** Băng tick khớp toàn thị trường cho báo cáo hiệu quả thực hiện (VWAP, tỷ lệ tham gia). */
 export const marketTape = createMarketTape()

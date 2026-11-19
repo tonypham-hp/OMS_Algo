@@ -2,6 +2,7 @@
 // để khi nối backend FastAPI không phải đổi tên.
 import type { OrderEvent } from './event'
 import type { MarketWindowStats } from './market'
+import type { LotKind } from '@/rules/types'
 
 export type Side = 'BUY' | 'SELL'
 
@@ -56,6 +57,8 @@ export interface ParentOrder {
   persistence_mode: PersistenceMode
   /** Ngoài ERD: mẫu chiến lược đã dùng khi đặt lệnh (tùy chọn). */
   template_id?: string
+  /** Ngoài ERD (Đợt 8A): lô chẵn hay lô lẻ (1–99 CP, chỉ LO). Không có là lô chẵn. */
+  lot_type?: LotKind
   version: number
   created_at: string
   updated_at: string

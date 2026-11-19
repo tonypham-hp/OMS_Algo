@@ -43,7 +43,10 @@ import type {
   UpdateOrderRequest,
 } from '@/types'
 import { formatDate, formatNumber } from '@/lib/format'
-import { isAuctionSession, isMatchingOver, parseTimeToSeconds, rulesForQuote, validatePrice } from '@/utils/hose'
+import { ruleMessage } from '@/explain/reasons'
+import { buildRuleContext } from '@/rules/context'
+import { checkPrice } from '@/rules/validate'
+import { isAuctionSession, isMatchingOver, parseTimeToSeconds, rulesForQuote } from '@/utils/hose'
 import {
   getAllowedActions,
   getReopenBlock,
@@ -53,6 +56,7 @@ import {
 } from '@/utils/orderActions'
 import { getTwapTarget, getVwapTarget } from '@/utils/schedule'
 import { countLevelsInLimit, planHuntSweep } from '@/utils/huntSweep'
+import { isForeignAccount } from './data'
 import { type BookSide, getBookLevels, oppositeBookSide } from './depth'
 
 /** Một lần lệnh của OMS lấy thanh khoản ở một mức của sổ lệnh; runtime trừ KL này khỏi sổ lệnh của bộ giả lập. */
@@ -84,11 +88,14 @@ const TERMINAL_CHILD_STATUSES: ReadonlySet<ChildOrderStatus> = new Set([
 /** Lỗi nghiệp vụ. `status` là mã HTTP mà API giả lập sẽ trả về. */
 export class EngineError extends Error {
   status: number
+  /** Lỗi theo từng trường (kiểm tra lệnh theo gói luật), có mã lý do nếu có. */
+  errors?: Array<{ field: string; message: string; code?: string }>
 
-  constructor(message: string, status = 409) {
+  constructor(message: string, status = 409, errors?: EngineError['errors']) {
     super(message)
     this.name = 'EngineError'
     this.status = status
+    this.errors = errors
   }
 }
 
@@ -137,6 +144,11 @@ interface EngineOptions {
   random?: () => number
   /** Không truyền thì dùng giá trị mặc định của tham số hệ thống. */
   config?: EngineConfig
+  /**
+   * Kiểm lệnh mới theo gói luật giao dịch (src/rules/validate.ts) ngay trong engine, như backend thật.
+   * App và Demo bật; test đơn vị của engine để tắt (chỉ kiểm luật cấu hình) để dựng được lệnh giá ngoài biên.
+   */
+  enforceRules?: boolean
 }
 
 /** Dữ liệu engine tự nhớ cho từng lệnh cha, không thuộc ERD. */
@@ -265,6 +277,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
   /** Đổi được bằng setRandom: Chế độ Demo chạy với seed cố định để kết quả lặp lại được. */
   let random = options.random ?? Math.random
   const config = options.config ?? DEFAULT_CONFIG
+  const enforceRules = options.enforceRules ?? false
   const getToday = () => market?.trading_date ?? toDateString(new Date())
 
   let parents: ParentOrder[] = []
@@ -328,6 +341,17 @@ export function createOrderEngine(options: EngineOptions = {}) {
   /** Gói luật đang áp cho mã: theo bảng giao dịch của mã trong ngày. */
   function rulesOfSymbol(symbol: string) {
     return rulesForQuote(getQuote(symbol), getToday()).rules
+  }
+
+  /** Ngữ cảnh kiểm tra lệnh theo thị trường engine đang thấy. */
+  function validationContext() {
+    return {
+      getQuote,
+      today: getToday(),
+      orderRules: config.getOrderRules(),
+      getAccount: (accountNo: string) => ({ isForeign: isForeignAccount(accountNo) }),
+      getSession: (symbol: string) => sessionOf(symbol),
+    }
   }
 
   function boardKey(symbol: string, state: MarketState) {
@@ -1312,9 +1336,15 @@ export function createOrderEngine(options: EngineOptions = {}) {
     if (isKillSwitched(request.account_no)) {
       throw new EngineError('Tài khoản đang bị dừng bởi kill switch, chưa đặt được lệnh mới')
     }
-    // Luật đặt lệnh của cấu hình hệ thống chỉ áp cho lệnh mới; lệnh đang chạy giữ tham số lúc đặt.
-    const ruleErrors = validateOrderRules(fromCreateOrderRequest(request), config.getOrderRules())
-    if (ruleErrors.length > 0) throw new EngineError(ruleErrors[0].message, 422)
+    // Một đường kiểm tra duy nhất (như backend thật): luật giao dịch theo gói luật của mã + luật đặt lệnh
+    // của cấu hình hệ thống (chỉ áp cho lệnh mới; lệnh đang chạy giữ tham số lúc đặt).
+    // Chưa có giá của mã (engine chưa nhận nhịp nào) thì chỉ kiểm được luật cấu hình.
+    // Test đơn vị của engine tắt enforceRules để đặt được lệnh giá ngoài biên (lệnh con không khớp).
+    const values = fromCreateOrderRequest(request)
+    const ruleErrors = enforceRules && getQuote(request.symbol)
+      ? validateOrderValues(values, validationContext())
+      : validateOrderRules(values, config.getOrderRules())
+    if (ruleErrors.length > 0) throw new EngineError(ruleErrors[0].message, 422, ruleErrors)
     const today = getToday()
     const now = nowIso()
     orderSequence += 1
@@ -1481,7 +1511,13 @@ export function createOrderEngine(options: EngineOptions = {}) {
     const checkBandOnly = getTriggeredCondition(parent) !== undefined || parent.executed_qty >= parent.total_qty
     const activeNames = new Set<string>(before.map((field) => field.name))
     const errors = checkBandOnly
-      ? after.map((field) => validatePrice(field.value, quote.ref_price)).filter((message) => message !== null)
+      ? after
+          .map((field) => {
+            const rule = buildRuleContext(quote, getToday())
+            const violation = checkPrice(field.value, rule.rules, rule.symbol)[0]
+            return violation ? ruleMessage(violation) : null
+          })
+          .filter((message) => message !== null)
       : validateOrderValues(
           fromCreateOrderRequest({
             client_request_id: parent.client_request_id,

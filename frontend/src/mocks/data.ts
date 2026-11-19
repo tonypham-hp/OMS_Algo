@@ -77,6 +77,7 @@ export const DEMO_USERS: DemoUser[] = [
     display_name: 'Dealer demo',
     role: 'DEALER',
     accounts: ['058C123456', '058C234567', '058C345678'],
+    foreign_accounts: ['058C345678'],
   },
   {
     username: 'vanhanh',

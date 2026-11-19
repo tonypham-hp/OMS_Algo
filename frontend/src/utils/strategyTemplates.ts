@@ -2,7 +2,10 @@ import { STRATEGIES, formatStrategyFieldValue, type StrategyFieldName } from '@/
 import { STRATEGY_TEMPLATES, type StrategyTemplate, type TemplateValue } from '@/config/strategyTemplates'
 import { formatClock } from '@/lib/format'
 import type { Role, StrategyType, SymbolQuote } from '@/types'
+import { ruleMessage } from '@/explain/reasons'
+import { symbolInfoFromQuote } from '@/rules/context'
 import { expirySeconds, marketOpenSeconds, sessionSpans } from '@/rules/session'
+import { checkPrice, checkQty } from '@/rules/validate'
 import type { RulePack, SecType } from '@/rules/types'
 import { getTickSize, rulesForQuote, stepPrice } from './hose'
 
@@ -57,6 +60,8 @@ export interface TemplateFormValues {
   side?: 'BUY' | 'SELL'
   total_qty?: number
   values: Partial<Record<StrategyFieldName, number | string>>
+  /** Giá điền sẵn vẫn sai luật (ví dụ mã đang ngừng giao dịch): câu lỗi của bộ kiểm tra, để hiện ngay trên phiếu. */
+  warnings: string[]
 }
 
 /**
@@ -91,11 +96,20 @@ export function applyTemplate(
   }
 
   const values: TemplateFormValues['values'] = {}
+  const warnings: string[] = []
+  const symbol = symbolInfoFromQuote(quote)
   for (const field of fields) {
     const value = template.params[field.name]
-    if (value !== undefined) values[field.name] = resolve(field.name, value)
+    if (value === undefined) continue
+    const resolved = resolve(field.name, value)
+    values[field.name] = resolved
+    // Mẫu đi qua đúng bộ kiểm tra của phiếu lệnh (src/rules/validate.ts).
+    if (field.kind === 'price' && typeof resolved === 'number') {
+      warnings.push(...checkPrice(resolved, rules, symbol).map(ruleMessage))
+    }
   }
-  return { strategy_type: template.strategy_type, side: template.side, total_qty: template.total_qty, values }
+  if (template.total_qty !== undefined) warnings.push(...checkQty(template.total_qty, 'ROUND', rules).map(ruleMessage))
+  return { strategy_type: template.strategy_type, side: template.side, total_qty: template.total_qty, values, warnings }
 }
 
 /** Các dòng "tham số mặc định" của mẫu để hiển thị, giá tính theo quote nếu có, không có thì mô tả tương đối. */

@@ -31,6 +31,7 @@ import { useUiStore } from '@/store/ui.store'
 import type { OrderRules, PersistenceMode, Side, StrategyType } from '@/types'
 import { getDisplayPrice, getTickSize, isAuctionSession, isMtlAllowed } from '@/utils/hose'
 import { applyTemplate, getVisibleTemplates } from '@/utils/strategyTemplates'
+import { sessionForQuote } from '@/rules/context'
 import { ConfirmDialog } from './ConfirmDialog'
 import { createOrderSchema, toCreateOrderRequest, type OrderFormValues } from './orderSchema'
 import { StrategyFields } from './StrategyFields'
@@ -44,11 +45,18 @@ interface OrderResolverContext {
 // Luôn đọc giá và luật đặt lệnh mới nhất ở thời điểm kiểm tra, không giữ bản cũ.
 const orderResolver: Resolver<OrderFormValues, OrderResolverContext> = (values, context, options) =>
   zodResolver(
-    createOrderSchema(() => ({
-      getQuote: (symbol) => useMarketStore.getState().quotes.find((quote) => quote.symbol === symbol),
-      today: useMarketStore.getState().trading_date,
-      orderRules: context?.orderRules,
-    })),
+    createOrderSchema(() => {
+      const market = useMarketStore.getState()
+      const findQuote = (symbol: string) => market.quotes.find((quote) => quote.symbol === symbol)
+      const foreign = useAuthStore.getState().user?.foreign_accounts ?? []
+      return {
+        getQuote: findQuote,
+        today: market.trading_date,
+        orderRules: context?.orderRules,
+        getAccount: (accountNo: string) => ({ isForeign: foreign.includes(accountNo) }),
+        getSession: (symbol: string) => sessionForQuote(findQuote(symbol), market),
+      }
+    }),
   )(values, context, options)
 
 const PERSISTENCE_MODES = Object.keys(PERSISTENCE_LABELS) as PersistenceMode[]

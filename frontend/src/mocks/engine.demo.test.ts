@@ -96,10 +96,12 @@ describe('Stop Limit có KL mỗi phần (slice_qty)', () => {
 
   it('không có slice_qty thì như cũ: một lệnh con cho toàn bộ KL', () => {
     const env = openEnv()
+    // Môi trường Demo kiểm lệnh như app (Đợt 8A): Stop mua phải đặt giá kích hoạt trên giá khớp, rồi giá chạm mới kích hoạt.
     const id = env.engine.createOrder(
-      order({ strategy_type: 'STOP_LIMIT', limit_price: 119_000, parameters: [int('trigger_price', 118_500)] }),
+      order({ strategy_type: 'STOP_LIMIT', limit_price: 119_000, parameters: [int('trigger_price', 118_600)] }),
       'tester',
     ).parent_order_id
+    env.simulator.pushTrade('FPT', 118_600, 100)
     env.simulator.advance(1)
     expect(env.engine.getChildren(id).map((child) => child.quantity)).toEqual([30_000])
   })

@@ -36,7 +36,7 @@ export function createDemoContext(): DemoContext {
  */
 export function createDemoEnv(options: { startDate?: Date; account?: string } = {}): DemoEnv {
   const simulator = createMarketSimulator({ startDate: options.startDate ?? new Date(2026, 10, 12), random: () => 0.5 })
-  const engine = createOrderEngine()
+  const engine = createOrderEngine({ enforceRules: true })
   const tape = createMarketTape()
   const recorded = new Set<string>()
 
