@@ -315,3 +315,25 @@ Màn Lịch sử và đối soát cần dữ liệu mà ERD hiện không có. E
 Mã dòng chênh lệch phải ổn định giữa các lần đối soát (`<loại>:<lệnh con hoặc lệnh cha>`, dòng theo event dùng
 `event_id`), để quyết định đã ghi vẫn gắn đúng dòng. `OVERFILL` phải luôn bằng 0: nếu backend phát hiện thì cần cảnh báo
 ngay cho vận hành, không chỉ hiện trên màn.
+
+## 14. Luật giao dịch theo KRX, gói luật theo bảng × ngày (Đợt 8A)
+
+Frontend đọc luật giao dịch từ gói luật (`src/rules/`) thay vì viết cứng. Bản giả lập tự giữ các gói luật và dữ liệu
+dưới đây; backend thật phải cung cấp.
+
+| Cần có | Vì sao | Gợi ý |
+|---|---|---|
+| **API gói luật theo bảng giao dịch × ngày hiệu lực** | Phiên, loại lệnh theo phiên và lô, biên độ (thường, ngày đầu), bước giá theo loại chứng khoán, lô, KL tối đa, chính sách sửa/hủy, giờ hết hiệu lực, cờ chưa kiểm chứng. Đổi luật không phải phát hành lại frontend | `GET /rules?date=YYYY-MM-DD` trả mảng `RulePack` (kiểu ở `src/rules/types.ts`), hoặc `GET /rules/{board}?date=`. Có `verified`, `flags[].verified` để giao diện gắn nhãn "Chưa kiểm chứng" / "Giả định" |
+| **Bảng giao dịch của mã theo ngày** | Mã niêm yết HNX là STX tới 23/12/2026, ngừng giao dịch 24–25/12, STO từ 28/12/2026 (TT 139/2025/TT-BTC) | Trường `board` (STO/STX/UPX/null) và `sec_type` (STOCK/CLOSED_FUND/ETF/CW) trên dữ liệu giá; danh mục mã có sở niêm yết gốc và lịch chuyển sàn |
+| **Room ngoại realtime** theo mã | Lệnh mua của nhà đầu tư nước ngoài bị trừ room ngay khi đặt; vượt room còn lại bị từ chối | Trường `foreign_room` trên luồng giá (cập nhật realtime), và API giữ/trả room khi đặt, sửa, hủy, hết hạn. Cờ nhà đầu tư nước ngoài theo tài khoản (`foreign_accounts` của người dùng) |
+| **Lịch ngày nghỉ** | Ngày giao dịch, "5 phiên gần nhất", sang ngày mới | `GET /calendar/holidays?year=`. Bản giả lập dùng danh sách mẫu `src/rules/config/holidays.ts` |
+| Trường mới của lệnh | Lô lẻ, sửa tại chỗ, hết hiệu lực | `ParentOrder.lot_type` (ROUND/ODD), `ParentOrder.expire_reason`, `ParentOrder.foreign_room_held`; `ChildOrder.priority_at` (mốc ưu tiên thời gian); `OrderEvent.amend_kind` (PRICE/QTY_UP/QTY_DOWN) ở event MODIFY |
+| Loại lệnh LIMIT | Lệnh LO thường, dùng cho lô lẻ | `strategy_type = LIMIT`: một lệnh con LO đủ KL tại giá đặt |
+| **Mã lỗi kiểm tra lệnh** | Câu báo lỗi có số cụ thể, frontend đối chiếu theo mã | Lỗi 422 trả `errors: [{ field, message, code }]`, `code` thuộc `RuleCode` (`src/rules/types.ts`): `PRICE_OUT_OF_BAND`, `PRICE_TICK`, `LOT_ODD_RANGE`, `FOREIGN_ROOM_EXCEEDED`, `AMEND_ONE_FIELD`, `SYMBOL_TRANSFER_HALT`… |
+| Sửa lệnh một trường | KRX: mỗi lần chỉ giá HOẶC KL; đổi giá, tăng KL mất ưu tiên, giảm KL giữ | Backend từ chối đổi cả hai (`AMEND_ONE_FIELD`), sửa lệnh con LO tại chỗ (không hủy rồi đặt lại) và trả `priority_at` mới |
+| MTL phần còn lại | KRX chuyển phần chưa khớp thành LO giá khớp gần nhất ± 1 bước | Event DECISION `old_value = MTL`, `new_value = MTL_TO_LO:<giá>`, `reason_code = MTL_REMAINDER_TO_LO` |
+| Phiên thỏa thuận sau giờ | `SessionCode` thêm `PUT_THROUGH` (14:45–15:00) | Luồng phiên trả `PUT_THROUGH`; lệnh trong ngày hết hiệu lực lúc 14:45 (`DAY_END`) |
+| Phiên theo bảng | HNX, UPCoM có lịch phiên khác HOSE | `board_sessions` trên trạng thái thị trường |
+
+Để Đợt 8B: mã bị hạn chế (khớp định kỳ 15 phút, khóa sửa/hủy cuối lượt), phiên mở lại sau tạm ngừng, lệnh thỏa thuận.
+Các trường `restricted`, `haltResume`, `putThrough` của `RulePack` đã chừa sẵn.
