@@ -8,7 +8,24 @@ import { explainChild } from '@/explain/explain'
 import { formatDateTime, formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { ChildOrder, ChildOrderStatus, OrderEvent } from '@/types'
+import { REASON_TEXT } from '@/explain/reasonText'
 import { NUMBER_CELL, SCROLL_TABLE, STICKY_HEADER } from './tableStyles'
+
+/** KRX: lệnh con MTL khớp một phần thì phần còn lại chuyển LO giá khớp gần nhất ± 1 bước giá. */
+function MtlRemainderNote({ child, events }: { child: ChildOrder; events: OrderEvent[] }) {
+  const event = events.find((item) => item.child_order_id === child.child_order_id && item.new_value?.startsWith('MTL_TO_LO:'))
+  if (!event) return null
+  const price = Number(event.new_value?.split(':')[1])
+  return (
+    <span
+      className="text-muted-foreground block text-[11px] whitespace-normal"
+      title={REASON_TEXT.MTL_REMAINDER_TO_LO}
+      data-demo-id={`mtl-remainder-${child.child_order_id}`}
+    >
+      MTL → phần còn lại chuyển LO giá {formatNumber(price)}. {REASON_TEXT.MTL_REMAINDER_TO_LO}
+    </span>
+  )
+}
 
 const ALERT_STATUSES: ReadonlySet<ChildOrderStatus> = new Set(['UNKNOWN', 'REJECTED'])
 const COLUMN_COUNT = 9
@@ -81,7 +98,10 @@ export function ChildOrderTimeline({ items, events = [] }: ChildOrderTimelinePro
                   </TableCell>
                   <TableCell className={NUMBER_CELL}>{child.cycle_no}</TableCell>
                   <TableCell>{SIDE_LABELS[child.side]}</TableCell>
-                  <TableCell>{child.order_type}</TableCell>
+                  <TableCell>
+                    {child.order_type}
+                    <MtlRemainderNote child={child} events={events} />
+                  </TableCell>
                   <TableCell className={NUMBER_CELL}>{child.price === null ? '—' : formatNumber(child.price)}</TableCell>
                   <TableCell className={NUMBER_CELL}>{formatNumber(child.quantity)}</TableCell>
                   <TableCell className={NUMBER_CELL}>{formatNumber(child.filled_qty)}</TableCell>

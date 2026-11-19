@@ -45,7 +45,9 @@ import type {
 import { formatDate, formatNumber } from '@/lib/format'
 import { ruleMessage } from '@/explain/reasons'
 import { buildRuleContext } from '@/rules/context'
-import { checkPrice } from '@/rules/validate'
+import { mtlRemainderPrice } from '@/rules/price'
+import type { AmendKind } from '@/rules/types'
+import { checkPrice, classifyAmend, losesPriority } from '@/rules/validate'
 import { isAuctionSession, isMatchingOver, parseTimeToSeconds, rulesForQuote } from '@/utils/hose'
 import {
   getAllowedActions,
@@ -178,7 +180,7 @@ interface ParentRuntime {
 }
 
 /** Thông tin thêm của một event, ngoài các trường ERD. */
-type EventExtra = Pick<OrderEvent, 'fill_detail' | 'reason' | 'sweep_plan' | 'template_id' | 'reason_code' | 'reject_code'>
+type EventExtra = Pick<OrderEvent, 'fill_detail' | 'reason' | 'sweep_plan' | 'template_id' | 'reason_code' | 'reject_code' | 'amend_kind'>
 
 /** Nguyên nhân lệnh cha hết hạn. */
 type ExpireReasonCode = Extract<EventReasonCode, 'DAY_END' | 'VALID_TO_REACHED' | 'WINDOW_END' | 'HUNT_MAX_WAIT' | 'HUNT_NO_LEVEL'>
@@ -539,6 +541,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
       core_order_id: null,
       created_at: nowIso(),
       sent_at: null,
+      priority_at: nowIso(),
     })
     logEvent(parent.parent_order_id, childId, 'CHILD_CREATE', null, 'CREATED')
     return childId
@@ -572,6 +575,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
       setChildStatus(child, 'EXPIRED', isAwaitingCore(child) ? 'RECOVERY' : 'DECISION', undefined, { reason_code: reasonCode })
     }
     cancelConditions(parent, null)
+    parent.expire_reason = reasonCode
     setParentStatus(parent, 'EXPIRED', 'DECISION', undefined, { reason_code: reasonCode })
   }
 
@@ -835,7 +839,29 @@ export function createOrderEngine(options: EngineOptions = {}) {
       }
       if (!isMarketable(child, quote.last_price)) continue
       fillChild(child, quote.last_price, (1 + Math.floor(random() * MAX_FILL_LOTS_PER_TICK)) * LOT)
+      if (child.order_type === 'MTL' && child.status === 'PARTIAL_FILLED') convertMtlRemainder(parent, child, quote)
     }
+  }
+
+  /**
+   * KRX: MTL khớp một phần thì phần còn lại chuyển thành LO tại giá khớp gần nhất + 1 bước giá (mua) / − 1 bước (bán),
+   * kẹp trong trần – sàn. Pack nào để mtlRemainder = CANCEL thì hủy phần còn lại.
+   */
+  function convertMtlRemainder(parent: ParentOrder, child: ChildOrder, quote: SymbolQuote) {
+    const { rules, secType } = rulesForQuote(quote, getToday())
+    if (rules.mtlRemainder === 'CANCEL') {
+      setChildStatus(child, 'CANCELLED', 'CANCEL')
+      return
+    }
+    const price = mtlRemainderPrice(quote.last_price, child.side, secType, rules, {
+      ceiling: quote.ceiling_price,
+      floor: Math.max(quote.floor_price, rules.minPrice),
+    })
+    child.order_type = 'LO'
+    child.price = price
+    logEvent(parent.parent_order_id, child.child_order_id, 'DECISION', 'MTL', `MTL_TO_LO:${price}`, 'SYSTEM', {
+      reason_code: 'MTL_REMAINDER_TO_LO',
+    })
   }
 
   /** Hết phiên ATO, ATC: khớp một lần duy nhất tại giá khớp định kỳ, lệnh đủ điều kiện khớp hết. */
@@ -1433,6 +1459,15 @@ export function createOrderEngine(options: EngineOptions = {}) {
 
     const hasLimitPrice = STRATEGIES[parent.strategy_type].fields.some((field) => field.name === 'limit_price')
     const limitPrice = hasLimitPrice ? request.limit_price : null
+    // KRX: mỗi lần sửa chỉ đổi giá HOẶC khối lượng (amendPolicy của pack).
+    const rules = rulesOfSymbol(parent.symbol)
+    const kind = classifyAmend({ price: parent.limit_price, qty: parent.total_qty }, { price: limitPrice, qty: request.total_qty })
+    if ((kind === 'BOTH' && rules.amendPolicy.oneFieldPerAmend) || kind === 'NONE') {
+      const code = kind === 'BOTH' ? 'AMEND_ONE_FIELD' : 'AMEND_NO_CHANGE'
+      const message = ruleMessage({ code, params: {} })
+      throw new EngineError(message, 422, [{ field: kind === 'BOTH' ? 'limit_price' : 'total_qty', message, code }])
+    }
+    const amendKind = kind === 'BOTH' ? undefined : kind
     const isBracket = parent.strategy_type === 'BRACKET'
     if (isBracket && parent.executed_qty >= parent.total_qty && workingOf(parent) === 0) {
       throw new EngineError('Lệnh Bracket đã vào đủ, không sửa được nữa')
@@ -1466,21 +1501,78 @@ export function createOrderEngine(options: EngineOptions = {}) {
     }
 
     const oldValue = JSON.stringify({ total_qty: parent.total_qty, limit_price: parent.limit_price })
-    cancelOpenChildren(parent, userId)
+    const oldLimit = parent.limit_price
     parent.total_qty = request.total_qty
     parent.limit_price = limitPrice
     parent.version += 1
     parent.updated_at = nowIso()
-    logEvent(  
+    logEvent(
       parent.parent_order_id,
       null,
       'MODIFY',
       oldValue,
       JSON.stringify({ total_qty: parent.total_qty, limit_price: parent.limit_price }),
       userId,
+      amendKind ? { amend_kind: amendKind } : undefined,
     )
+    amendOpenChildren(parent, amendKind, oldLimit, losesPriority(amendKind ?? 'PRICE', rules), userId)
     settleParent(parent)
     return parent
+  }
+
+  /**
+   * Sửa lệnh con LO đang chờ TẠI CHỖ thay vì hủy rồi sinh lại (KRX):
+   * - đổi giá: lệnh con đặt ở giá giới hạn cũ đổi sang giá mới, mất ưu tiên thời gian;
+   * - giảm KL: cắt bớt từ lệnh con mới nhất cho vừa phần còn lại, giữ ưu tiên;
+   * - tăng KL: lệnh LO thường (LIMIT) tăng KL lệnh con và mất ưu tiên; lệnh thuật toán tự sinh thêm lệnh con.
+   * Lệnh con không phải LO (MTL, ATO, ATC) vẫn hủy và sinh lại như trước. Lệnh con đang chờ Core giữ nguyên.
+   */
+  function amendOpenChildren(
+    parent: ParentOrder,
+    kind: AmendKind | undefined,
+    oldLimit: number | null,
+    losesQueue: boolean,
+    userId: string,
+  ) {
+    const amendable = childrenOf(parent).filter(
+      (child) =>
+        !isExitChild(parent, child) &&
+        (child.status === 'CREATED' || child.status === 'ACKNOWLEDGED' || child.status === 'PARTIAL_FILLED'),
+    )
+    const now = nowIso()
+    const logChild = (child: ChildOrder, before: object, after: object, amend: AmendKind) =>
+      logEvent(parent.parent_order_id, child.child_order_id, 'MODIFY', JSON.stringify(before), JSON.stringify(after), userId, {
+        amend_kind: amend,
+      })
+    for (const child of amendable) {
+      if (child.order_type !== 'LO') setChildStatus(child, 'CANCELLED', 'CANCEL', userId)
+    }
+    const lo = amendable.filter((child) => child.order_type === 'LO' && isChildLive(child.status))
+    if (kind === 'PRICE' && parent.limit_price !== null) {
+      for (const child of lo) {
+        if (child.price !== oldLimit) continue
+        logChild(child, { price: child.price }, { price: parent.limit_price }, 'PRICE')
+        child.price = parent.limit_price
+        if (losesQueue) child.priority_at = now
+      }
+    } else if (kind === 'QTY_DOWN') {
+      let excess = workingOf(parent) - (parent.total_qty - parent.executed_qty)
+      for (const child of [...lo].reverse()) {
+        if (excess <= 0) break
+        const cut = Math.min(excess, child.quantity - child.filled_qty)
+        excess -= cut
+        const quantity = child.quantity - cut
+        logChild(child, { quantity: child.quantity }, { quantity }, 'QTY_DOWN')
+        if (quantity <= child.filled_qty) setChildStatus(child, 'CANCELLED', 'CANCEL', userId)
+        else child.quantity = quantity
+      }
+    } else if (kind === 'QTY_UP' && parent.strategy_type === 'LIMIT' && lo.length > 0) {
+      const child = lo[lo.length - 1]
+      const quantity = child.quantity + allowedOf(parent)
+      logChild(child, { quantity: child.quantity }, { quantity }, 'QTY_UP')
+      child.quantity = quantity
+      if (losesQueue) child.priority_at = now
+    }
   }
 
   /** Các giá cần sửa của lệnh đang tạm dừng vì giá ngoài biên độ. */

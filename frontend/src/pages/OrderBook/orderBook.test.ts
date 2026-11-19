@@ -94,8 +94,13 @@ describe('kiểm tra form Sửa', () => {
   const fields = (...args: Parameters<typeof validateEditOrder>) =>
     validateEditOrder(...args).map((error) => error.field)
 
-  it('hợp lệ', () => {
-    expect(fields({ total_qty: 2_000, limit_price: 100_100 }, order({}), QUOTE)).toEqual([])
+  it('hợp lệ: mỗi lần chỉ đổi giá hoặc khối lượng', () => {
+    expect(fields({ total_qty: 2_000, limit_price: 100_000 }, order({}), QUOTE)).toEqual([])
+    expect(fields({ total_qty: 1_000, limit_price: 100_100 }, order({}), QUOTE)).toEqual([])
+  })
+
+  it('KRX: đổi cả giá lẫn khối lượng trong một lần sửa thì báo lỗi', () => {
+    expect(fields({ total_qty: 2_000, limit_price: 100_100 }, order({}), QUOTE)).toEqual(['limit_price'])
   })
 
   it('KL sai luật HOSE hoặc nhỏ hơn phần đã khớp', () => {

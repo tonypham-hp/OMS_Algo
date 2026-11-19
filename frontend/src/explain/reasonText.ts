@@ -24,4 +24,5 @@ export const REASON_TEXT: Record<EventReasonCode, string> = {
   POV_THROTTLED: 'Đã chạm tỷ lệ tham gia tối đa, chờ thị trường khớp thêm.',
   HUNT_WAITING_LEVEL: 'Chưa có mức giá trong giới hạn để quét.',
   COMPLETED: 'Đã khớp đủ khối lượng.',
+  MTL_REMAINDER_TO_LO: 'Phần chưa khớp của lệnh MTL chuyển thành lệnh LO tại giá khớp gần nhất cộng (mua) hoặc trừ (bán) 1 bước giá.',
 }

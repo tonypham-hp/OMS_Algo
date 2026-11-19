@@ -64,7 +64,7 @@ const OrderRow = memo(function OrderRow({ order, showAccount, isBusy, role, onEd
         {order.limit_price === null ? '—' : formatNumber(order.limit_price)}
       </TableCell>
       <TableCell>
-        <OrderStatusBadge status={order.status} explain={explainOrderBrief(order, market, role)} />
+        <OrderStatusBadge status={order.status} order={order} explain={explainOrderBrief(order, market, role)} />
       </TableCell>
       <TableCell>
         <OrderActions

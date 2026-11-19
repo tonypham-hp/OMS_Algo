@@ -61,6 +61,8 @@ export interface ParentOrder {
   template_id?: string
   /** Ngoài ERD (Đợt 8A): lô chẵn hay lô lẻ (1–99 CP, chỉ LO). Không có là lô chẵn. */
   lot_type?: LotKind
+  /** Ngoài ERD (Đợt 8A): lý do hết hạn khi status = EXPIRED (DAY_END: hết hiệu lực lúc hết khớp lệnh trong ngày). */
+  expire_reason?: 'DAY_END' | 'VALID_TO_REACHED' | 'WINDOW_END' | 'HUNT_MAX_WAIT' | 'HUNT_NO_LEVEL'
   version: number
   created_at: string
   updated_at: string
@@ -116,6 +118,11 @@ export interface ChildOrder {
   core_order_id: string | null
   created_at: string
   sent_at: string | null
+  /**
+   * Ngoài ERD (Đợt 8A): mốc ưu tiên thời gian của lệnh con trên sổ lệnh của sàn. Sửa giá hoặc tăng KL thì đặt lại
+   * (mất ưu tiên), giảm KL thì giữ. Không có: bằng created_at.
+   */
+  priority_at?: string
 }
 
 export interface Execution {

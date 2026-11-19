@@ -1,3 +1,4 @@
+import type { AmendKind } from '@/rules/types'
 export type OrderEventAction =
   | 'CREATE'
   | 'MODIFY'
@@ -47,6 +48,8 @@ export type EventReasonCode =
   | 'POV_THROTTLED'
   | 'HUNT_WAITING_LEVEL'
   | 'COMPLETED'
+  /** Đợt 8A: phần chưa khớp của lệnh con MTL chuyển thành LO tại giá khớp gần nhất ± 1 bước giá. */
+  | 'MTL_REMAINDER_TO_LO'
 
 /** Lý do Core từ chối lệnh con (ngoài ERD). */
 export type CoreRejectCode = 'LOT_SIZE' | 'TICK_SIZE' | 'MAX_QTY' | 'PRICE_BAND' | 'OTHER'
@@ -117,6 +120,8 @@ export interface OrderEvent {
   reason_code?: EventReasonCode
   /** Ngoài ERD: lý do Core từ chối, chỉ có khi reason_code = CORE_REJECT. */
   reject_code?: CoreRejectCode
+  /** Ngoài ERD (Đợt 8A): loại sửa của event MODIFY: chỉ giá, tăng KL, giảm KL. */
+  amend_kind?: AmendKind
 }
 
 export type NotificationType =

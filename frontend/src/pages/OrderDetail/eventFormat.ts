@@ -77,6 +77,7 @@ export function formatEventValue(value: string | null, event: Pick<OrderEvent, '
     return detail === 'ALL' ? 'Kill switch toàn hệ thống' : `Kill switch tài khoản ${detail.replace('ACCOUNT:', '')}`
   }
   if (prefix === 'SESSION') return `Phiên ${formatDate(detail)}`
+  if (prefix === 'MTL_TO_LO') return `Phần còn lại chuyển LO giá ${formatNumber(Number(detail))}`
   if (prefix === 'CARRY_OVER') return `Mang sang phiên sau ${formatNumber(Number(detail))} CP`
   if (prefix === 'PRICE_OUT_OF_BAND') {
     const band = Object.fromEntries(detail.split(',').map((part) => part.split('=')))
