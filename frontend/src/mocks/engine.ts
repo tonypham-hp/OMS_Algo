@@ -5,6 +5,9 @@ import { DEFAULT_ORDER_RULES, SYSTEM_PARAM_DEFAULTS } from '@/config/systemParam
 import { formatClock, toDateString } from '@/lib/format'
 import { fromCreateOrderRequest, validateOrderRules, validateOrderValues } from '@/pages/PlaceOrder/orderSchema'
 import type {
+  CreatePutThroughRequest,
+  PutThroughDeal,
+  PutThroughStatus,
   ChildOrder,
   ChildOrderStatus,
   ChildOrderType,
@@ -48,6 +51,7 @@ import { buildRuleContext, symbolInfoFromQuote } from '@/rules/context'
 import { mtlRemainderPrice } from '@/rules/price'
 import type { AmendKind } from '@/rules/types'
 import { checkForeignRoom, checkPrice, classifyAmend, losesPriority } from '@/rules/validate'
+import { validatePutThrough } from '@/rules/putThrough'
 import { isAuctionSession, isMatchingOver, parseTimeToSeconds, rulesForQuote } from '@/utils/hose'
 import {
   getAllowedActions,
@@ -228,6 +232,10 @@ export interface EngineState {
   coreSequence: number
   /** Sổ phía Core. Tùy chọn để bản lưu cũ vẫn đọc được: thiếu thì dựng lại từ lệnh con. */
   coreLedger?: CoreLedgerEntry[]
+  /** Lệnh thỏa thuận và nhật ký của chúng (Đợt 8B). Tùy chọn cho bản lưu cũ. */
+  putThroughs?: PutThroughDeal[]
+  putThroughEvents?: OrderEvent[]
+  putThroughSequence?: number
 }
 
 /** Trạng thái OMS mà Core cũng ghi y như vậy khi lệnh con đổi trạng thái. */
@@ -312,6 +320,10 @@ export function createOrderEngine(options: EngineOptions = {}) {
   let eventSequence = 0
   let matchSequence = 0
   let coreSequence = 0
+  /** Lệnh thỏa thuận: danh sách, nhật ký và bộ đếm riêng, không trộn với lệnh cha, lệnh con, khớp lệnh. */
+  let putThroughs: PutThroughDeal[] = []
+  let putThroughEvents: OrderEvent[] = []
+  let putThroughSequence = 0
   /**
    * Room ngoại lệnh mua của nhà đầu tư nước ngoài vừa giữ (âm) hoặc trả lại (dương), chờ runtime ghi vào bộ giả lập.
    * `roomInFlight`: phần đã chuyển cho bộ giả lập nhưng engine chưa thấy trong nhịp giá mới.
@@ -814,6 +826,121 @@ export function createOrderEngine(options: EngineOptions = {}) {
    * Mã tạm ngừng giao dịch: lệnh cha đang chạy của mã chuyển PAUSED_SYSTEM (SYMBOL_HALTED), hủy lệnh con chờ.
    * Mã giao dịch lại: lệnh tự chạy lại (SYMBOL_RESUMED), vào phiên khớp định kỳ sau tạm ngừng.
    */
+  // ===== Lệnh thỏa thuận (Đợt 8B) =====
+
+  /** Phiên của bảng giao dịch của mã (lệnh thỏa thuận theo giờ của bảng, không theo lượt định kỳ riêng của mã). */
+  function boardSessionOf(symbol: string, state: MarketState | null = market): SessionCode {
+    if (!state) return 'CLOSED'
+    const quote = state.quotes.find((item) => item.symbol === symbol)
+    if (!quote || quote.board === null) return 'CLOSED'
+    return state.board_sessions?.[quote.board ?? 'STO'] ?? state.session
+  }
+
+  function logPutThroughEvent(deal: PutThroughDeal, action: OrderEventAction, oldValue: string | null, newValue: string, userId: string) {
+    putThroughEvents.push({
+      event_id: `PTE-${String(putThroughEvents.length + 1).padStart(6, '0')}`,
+      parent_order_id: deal.deal_id,
+      child_order_id: null,
+      action,
+      user_id: userId,
+      channel: userId === 'SYSTEM' ? 'ENGINE' : 'WEB',
+      old_value: oldValue,
+      new_value: newValue,
+      event_time: nowIso(),
+    })
+  }
+
+  function setPutThroughStatus(deal: PutThroughDeal, next: PutThroughStatus, action: OrderEventAction, userId: string) {
+    const previous = deal.status
+    deal.status = next
+    deal.updated_at = nowIso()
+    if (next === 'MATCHED') deal.matched_at = deal.updated_at
+    logPutThroughEvent(deal, action, previous, next, userId)
+  }
+
+  function ruleError(violations: ReturnType<typeof validatePutThrough>) {
+    const errors = violations.map((item) => ({ field: item.field, message: ruleMessage(item), code: item.code }))
+    return new EngineError(errors[0].message, 422, errors)
+  }
+
+  /** Gửi lệnh thỏa thuận: kiểm theo gói luật của mã (KL tối thiểu, bước giá 1 đ, biên, phiên), chờ bên đối ứng xác nhận. */
+  function createPutThrough(request: CreatePutThroughRequest, userId: string): PutThroughDeal {
+    const quote = getQuote(request.symbol)
+    if (!quote) throw new EngineError('Mã chứng khoán không hợp lệ', 422)
+    const rule = buildRuleContext(quote, getToday())
+    const violations = validatePutThrough(
+      { side: request.side, qty: request.qty, price: request.price, accountNo: request.account_no, counterparty: request.counterparty_account },
+      rule.rules,
+      boardSessionOf(request.symbol),
+      rule.symbol,
+    )
+    if (violations.length > 0) throw ruleError(violations)
+    putThroughSequence += 1
+    const now = nowIso()
+    const deal: PutThroughDeal = {
+      deal_id: `PT-${getToday().replaceAll('-', '')}-${String(putThroughSequence).padStart(4, '0')}`,
+      account_no: request.account_no,
+      counterparty_account: request.counterparty_account.trim(),
+      symbol: request.symbol,
+      side: request.side,
+      qty: request.qty,
+      price: request.price,
+      status: 'PENDING_CONFIRM',
+      user_id: userId,
+      created_at: now,
+      updated_at: now,
+      matched_at: null,
+    }
+    putThroughs.push(deal)
+    logPutThroughEvent(deal, 'CREATE', null, 'PENDING_CONFIRM', userId)
+    return deal
+  }
+
+  function requirePutThrough(dealId: string) {
+    const deal = putThroughs.find((item) => item.deal_id === dealId)
+    if (!deal) throw new EngineError('Không tìm thấy lệnh thỏa thuận', 404)
+    return deal
+  }
+
+  /**
+   * Bên đối ứng (mô phỏng) xác nhận thì khớp ngay; từ chối thì kết thúc. Khớp thỏa thuận không vào `executions`,
+   * không ghi băng tick, không đụng sổ lệnh: OrderBook3 và VWAP khớp lệnh của báo cáo không đổi.
+   */
+  function decidePutThrough(dealId: string, next: 'MATCHED' | 'REJECTED', userId: string) {
+    const deal = requirePutThrough(dealId)
+    if (deal.status !== 'PENDING_CONFIRM') {
+      throw ruleError([{ code: 'PT_NOT_PENDING', field: 'session', severity: 'error', params: { deal: deal.deal_id, status: deal.status } }])
+    }
+    setPutThroughStatus(deal, next, next === 'MATCHED' ? 'FILL' : 'REJECT', userId)
+    return deal
+  }
+
+  /** Chỉ hủy được lệnh thỏa thuận chưa khớp; đã khớp thì không sửa, không hủy. */
+  function cancelPutThrough(dealId: string, userId: string) {
+    const deal = requirePutThrough(dealId)
+    if (deal.status === 'MATCHED') {
+      throw ruleError([{ code: 'PT_MATCHED_LOCKED', field: 'session', severity: 'error', params: { deal: deal.deal_id } }])
+    }
+    if (deal.status !== 'PENDING_CONFIRM') {
+      throw ruleError([{ code: 'PT_NOT_PENDING', field: 'session', severity: 'error', params: { deal: deal.deal_id, status: deal.status } }])
+    }
+    setPutThroughStatus(deal, 'CANCELLED', 'CANCEL', userId)
+    return deal
+  }
+
+  /** Lệnh thỏa thuận chưa khớp hết hiệu lực lúc `putThrough.expiryTime` của pack, hoặc khi sang ngày. */
+  function expirePutThroughs(state: MarketState) {
+    for (const deal of putThroughs) {
+      if (deal.status !== 'PENDING_CONFIRM') continue
+      const quote = state.quotes.find((item) => item.symbol === deal.symbol)
+      const rules = rulesForQuote(quote, state.trading_date).rules
+      const expiry = parseTimeToSeconds(rules.putThrough?.expiryTime ?? '15:00') ?? Number.POSITIVE_INFINITY
+      if (deal.created_at.slice(0, 10) < state.trading_date || state.sim_seconds >= expiry) {
+        setPutThroughStatus(deal, 'EXPIRED', 'DECISION', 'SYSTEM')
+      }
+    }
+  }
+
   function checkSymbolHalts(state: MarketState) {
     for (const parent of parents) {
       const halted = sessionOf(parent.symbol, state) === 'HALTED'
@@ -1324,6 +1451,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
     processAcks()
     checkMarketData(state)
     checkSymbolHalts(state)
+    expirePutThroughs(state)
     if (isSameMoment) return
 
     const previousOf = previousSessions
@@ -1999,6 +2127,9 @@ export function createOrderEngine(options: EngineOptions = {}) {
     closedBoards.clear()
     orderSequence = seed.orders.length
     eventSequence = seed.events.length
+    putThroughs = []
+    putThroughEvents = []
+    putThroughSequence = 0
   }
 
   function exportState(): EngineState {
@@ -2027,6 +2158,9 @@ export function createOrderEngine(options: EngineOptions = {}) {
       matchSequence,
       coreSequence,
       coreLedger: [...coreLedger.values()],
+      putThroughs,
+      putThroughEvents,
+      putThroughSequence,
     }
   }
 
@@ -2059,6 +2193,9 @@ export function createOrderEngine(options: EngineOptions = {}) {
     eventSequence = state.eventSequence
     matchSequence = state.matchSequence
     coreSequence = state.coreSequence
+    putThroughs = state.putThroughs ?? []
+    putThroughEvents = state.putThroughEvents ?? []
+    putThroughSequence = state.putThroughSequence ?? 0
     coreLedger.clear()
     ;(state.coreLedger ?? buildCoreLedger(children)).forEach((entry) => coreLedger.set(entry.child_order_id, entry))
   }
@@ -2080,6 +2217,12 @@ export function createOrderEngine(options: EngineOptions = {}) {
     },
     /** Room ngoại còn lại của mã theo engine (gồm phần vừa giữ). */
     getForeignRoom: (symbol: string) => roomQuote(symbol)?.foreign_room,
+    createPutThrough,
+    confirmPutThrough: (dealId: string, userId: string) => decidePutThrough(dealId, 'MATCHED', userId),
+    rejectPutThrough: (dealId: string, userId: string) => decidePutThrough(dealId, 'REJECTED', userId),
+    cancelPutThrough,
+    listPutThroughs: () => putThroughs,
+    listPutThroughEvents: () => putThroughEvents,
     applyExecution,
     createOrder,
     pauseOrder,

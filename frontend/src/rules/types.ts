@@ -79,11 +79,20 @@ export interface HaltResumeSpec {
   orderTypes: SessionOrderTypes
 }
 
-/** Lệnh thỏa thuận. 8A chỉ dùng `window` để hiện trên đồng hồ phiên, chưa có phiếu thỏa thuận. */
+/** Lệnh thỏa thuận (Đợt 8B). */
 export interface PutThroughSpec {
-  window: { start: string; end: string }
-  /** Có cho thỏa thuận trong giờ khớp lệnh hay không (8B). */
+  /** Phiên thỏa thuận sau giờ (hiện trên đồng hồ phiên); không có là bảng không có phiên này. */
+  window?: { start: string; end: string }
+  /** Có cho thỏa thuận trong giờ khớp lệnh hay không. */
   duringContinuous?: boolean
+  /** KL tối thiểu một lệnh thỏa thuận, cổ phiếu. */
+  minQty: number
+  /** Bước giá của lệnh thỏa thuận, đồng. */
+  tick: number
+  /** Phiên của bảng nhận lệnh thỏa thuận. */
+  sessions: SessionCode[]
+  /** Giờ lệnh thỏa thuận chưa khớp hết hiệu lực, "HH:MM". */
+  expiryTime: string
 }
 
 export interface RulePack {
@@ -140,6 +149,12 @@ export type RuleCode =
   | 'RESTRICTED_NO_HUNT'
   | 'RESTRICTED_LOCKED'
   | 'SYMBOL_TRADING_HALTED'
+  | 'PT_MIN_QTY'
+  | 'PT_PRICE_TICK'
+  | 'PT_SESSION_CLOSED'
+  | 'PT_COUNTERPARTY_REQUIRED'
+  | 'PT_MATCHED_LOCKED'
+  | 'PT_NOT_PENDING'
   | 'BOARD_CLOSED'
   | 'ORDER_TYPE_NOT_IN_SESSION'
   | 'ORDER_TYPE_DISABLED'

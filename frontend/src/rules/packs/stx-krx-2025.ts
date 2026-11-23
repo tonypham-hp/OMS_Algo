@@ -43,6 +43,13 @@ export const STX_KRX_2025: RulePack = {
   },
   verified: false,
   sourceNote: 'Quy chế giao dịch của HNX (công bố công khai); Thông tư 139/2025/TT-BTC về chuyển cổ phiếu niêm yết sang HOSE.',
-  putThrough: { window: { start: '14:45', end: '15:00' } },
+  putThrough: {
+    window: { start: '14:45', end: '15:00' },
+    duringContinuous: true,
+    minQty: 5_000,
+    tick: 1,
+    sessions: ['CONTINUOUS', 'ATC', 'PUT_THROUGH'],
+    expiryTime: '15:00',
+  },
   haltResume: { reopenAuctionMinutes: 15, orderTypes: { round: ['LO'], odd: ['LO'] } },
 }

@@ -405,6 +405,12 @@ export const RULE_REASONS: Record<RuleCode, (p: RuleParams) => string> = {
   RESTRICTED_LOCKED: (p) =>
     `Mã ${p.symbol} bị hạn chế giao dịch: khóa sửa, hủy ${num(p.lockMinutes)} phút cuối lượt, lượt này khớp lúc ${p.callEnd}.`,
   SYMBOL_TRADING_HALTED: (p) => `Mã ${p.symbol} đang tạm ngừng giao dịch: chưa nhận lệnh mới, khi giao dịch lại sẽ có phiên khớp định kỳ 15 phút.`,
+  PT_MIN_QTY: (p) => `Lệnh thỏa thuận trên ${board(p)} tối thiểu ${num(p.min)} CP (đang nhập ${num(p.qty)} CP).`,
+  PT_PRICE_TICK: (p) => `Giá thỏa thuận phải là số nguyên đồng lớn hơn 0, bước giá ${num(p.tick)} đ (đang nhập ${p.price}).`,
+  PT_SESSION_CLOSED: (p) => `Bảng ${board(p)} không nhận lệnh thỏa thuận trong ${session(p)}.`,
+  PT_COUNTERPARTY_REQUIRED: () => 'Nhập tài khoản đối ứng, khác tài khoản đặt lệnh.',
+  PT_MATCHED_LOCKED: (p) => `Lệnh thỏa thuận ${p.deal} đã khớp: không sửa, không hủy được.`,
+  PT_NOT_PENDING: (p) => `Lệnh thỏa thuận ${p.deal} không còn chờ xác nhận (${p.status}).`,
   BOARD_CLOSED: (p) => `Bảng ${board(p)} không nhận lệnh trong ${session(p)}.`,
   ORDER_TYPE_NOT_IN_SESSION: (p) =>
     `Lệnh ${p.orderType} không đặt được trong ${session(p)} của bảng ${board(p)} (nhận: ${p.allowed || 'không có'}).`,

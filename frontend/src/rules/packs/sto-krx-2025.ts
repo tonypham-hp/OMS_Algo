@@ -68,7 +68,14 @@ export const STO_KRX_2025: RulePack = {
   },
   verified: true,
   sourceNote: 'Quy chế giao dịch của HOSE theo hệ thống KRX (công bố công khai, áp dụng từ 05/05/2025).',
-  putThrough: { window: { start: '14:45', end: '15:00' } },
+  putThrough: {
+    window: { start: '14:45', end: '15:00' },
+    duringContinuous: true,
+    minQty: 20_000,
+    tick: 1,
+    sessions: ['ATO', 'CONTINUOUS', 'ATC', 'PUT_THROUGH'],
+    expiryTime: '15:00',
+  },
   haltResume: { reopenAuctionMinutes: 15, orderTypes: { round: ['LO'], odd: ['LO'] } },
   restricted: {
     callIntervalMinutes: 15,

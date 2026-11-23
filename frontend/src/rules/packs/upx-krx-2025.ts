@@ -34,6 +34,7 @@ export const UPX_KRX_2025: RulePack = {
   auctionPriorityOverLimit: false,
   referencePrice: 'VWAP_PREV',
   flags: {},
+  putThrough: { duringContinuous: true, minQty: 5_000, tick: 1, sessions: ['CONTINUOUS'], expiryTime: '15:00' },
   haltResume: { reopenAuctionMinutes: 15, orderTypes: { round: ['LO'], odd: ['LO'] } },
   verified: false,
   sourceNote: 'Quy chế giao dịch UPCoM của HNX (công bố công khai).',

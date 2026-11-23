@@ -7,6 +7,7 @@ import type {
   ChangeRequestStatus,
   CreateChangeRequest,
   CreateOrderRequest,
+  CreatePutThroughRequest,
   DashboardData,
   DecideChangeRequest,
   DemoUser,
@@ -22,7 +23,7 @@ import type {
   UpdateOrderRequest,
 } from '@/types'
 import { apiGroupOf, getE2eFlags } from '@/testing/e2eHooks'
-import { canSeeOrder } from './access'
+import { canSeeAccount, canSeeOrder } from './access'
 import { DEMO_USERS } from './data'
 import { EngineError } from './engine'
 import { buildHistory, createReconApi, parseRange, type ReconDecisionBody } from './historyApi'
@@ -344,6 +345,40 @@ export const handlers = [
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
     return HttpResponse.json(orders)
   }),
+
+  // ===== Lệnh thỏa thuận (Đợt 8B) =====
+  http.get('*/api/put-through', ({ request }) =>
+    handleUser(request, (user) => {
+      const deals = orderEngine.listPutThroughs().filter((deal) => canSeeAccount(user, deal.account_no))
+      const ids = new Set(deals.map((deal) => deal.deal_id))
+      return { deals, events: orderEngine.listPutThroughEvents().filter((event) => ids.has(event.parent_order_id)) }
+    }),
+  ),
+  http.post('*/api/put-through', async ({ request }) => {
+    const body = (await request.json()) as CreatePutThroughRequest
+    return handleUser(request, (user) => {
+      if (!canSeeAccount(user, body.account_no)) throw new EngineError('Không có quyền đặt lệnh trên tài khoản này', 403)
+      return orderEngine.createPutThrough(body, user.username)
+    })
+  }),
+  http.post('*/api/put-through/:id/:action', ({ request, params }) =>
+    handleUser(request, (user) => {
+      const id = String(params.id)
+      const deal = orderEngine.listPutThroughs().find((item) => item.deal_id === id)
+      if (!deal || !canSeeAccount(user, deal.account_no)) throw new EngineError('Không tìm thấy lệnh thỏa thuận', 404)
+      switch (params.action) {
+        // Bên đối ứng là mô phỏng: người xem được lệnh bấm thay bên đối ứng.
+        case 'confirm':
+          return orderEngine.confirmPutThrough(id, 'DOI_UNG')
+        case 'reject':
+          return orderEngine.rejectPutThrough(id, 'DOI_UNG')
+        case 'cancel':
+          return orderEngine.cancelPutThrough(id, user.username)
+        default:
+          throw new EngineError('Thao tác không hợp lệ', 400)
+      }
+    }),
+  ),
 
   http.post('*/api/orders', async ({ request }) => {
     const user = getUser(request)
