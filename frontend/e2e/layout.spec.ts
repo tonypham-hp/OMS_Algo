@@ -86,7 +86,7 @@ test.describe('Màn hẹp', () => {
 test.describe('Thanh trên', () => {
   test('tên màn ở breadcrumb không bị cắt trên mọi route', async ({ page }) => {
     await loginAs(page, 'OPS')
-    const paths = ['/trung-tam', '/dat-lenh', '/mau-chien-luoc', '/so-lenh', '/bao-cao/hieu-qua', '/bao-cao/lich-su', '/thuat-ngu', '/van-hanh', '/cau-hinh', '/cau-hinh/luat']
+    const paths = ['/trung-tam', '/dat-lenh', '/mau-chien-luoc', '/so-lenh', '/bao-cao/hieu-qua', '/bao-cao/lich-su', '/thuat-ngu', '/van-hanh', '/cau-hinh', '/cau-hinh/luat', '/so-lenh?tab=thoa-thuan']
     await navigate(page, '/so-lenh')
     const firstRow = page.locator('[data-demo-id^="order-row-"]').first()
     await expect(firstRow).toBeVisible()
