@@ -367,6 +367,8 @@ const SESSION_NAMES: Record<string, string> = {
   ATC: 'phiên ATC',
   PUT_THROUGH: 'phiên thỏa thuận sau giờ',
   CLOSED: 'giờ đóng cửa',
+  PERIODIC: 'lượt khớp định kỳ',
+  PERIODIC_LOCK: '5 phút cuối lượt khớp định kỳ',
 }
 const BOARD_NAMES: Record<string, string> = { STO: 'HOSE', STX: 'HNX', UPX: 'UPCoM' }
 const SEC_TYPE_NAMES: Record<string, string> = { STOCK: 'cổ phiếu', CLOSED_FUND: 'chứng chỉ quỹ đóng', ETF: 'ETF', CW: 'chứng quyền' }
@@ -384,6 +386,11 @@ const band = (p: RuleParams) =>
 export const RULE_REASONS: Record<RuleCode, (p: RuleParams) => string> = {
   SYMBOL_TRANSFER_HALT: (p) =>
     `Mã ${p.symbol} ngừng giao dịch hôm nay để chuyển từ HNX sang HOSE (giao dịch lại trên HOSE từ ${formatDate(TRANSFER_FIRST_DATE)}).`,
+  RESTRICTED_ROUND_LOT_ONLY: (p) => `Mã ${p.symbol} bị hạn chế giao dịch: chỉ nhận lô chẵn (bội số ${num(p.lot)} CP), không nhận lô lẻ.`,
+  RESTRICTED_NO_MTL: (p) => `Mã ${p.symbol} bị hạn chế giao dịch, chỉ khớp định kỳ: không nhận lệnh MTL (${p.orderType}).`,
+  RESTRICTED_NO_HUNT: (p) => `Mã ${p.symbol} bị hạn chế giao dịch, chỉ khớp định kỳ 15 phút một lần: không đặt được lệnh HUNT.`,
+  RESTRICTED_LOCKED: (p) =>
+    `Mã ${p.symbol} bị hạn chế giao dịch: khóa sửa, hủy ${num(p.lockMinutes)} phút cuối lượt, lượt này khớp lúc ${p.callEnd}.`,
   BOARD_CLOSED: (p) => `Bảng ${board(p)} không nhận lệnh trong ${session(p)}.`,
   ORDER_TYPE_NOT_IN_SESSION: (p) =>
     `Lệnh ${p.orderType} không đặt được trong ${session(p)} của bảng ${board(p)} (nhận: ${p.allowed || 'không có'}).`,

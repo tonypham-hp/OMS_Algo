@@ -30,6 +30,7 @@ export const SYMBOL_LISTINGS: readonly SymbolListing[] = [
   { symbol: 'XUA', name: 'Cổ phiếu UPCoM A (mô phỏng)', listing: 'UPCOM', secType: 'STOCK' },
   { symbol: 'XUB', name: 'Cổ phiếu UPCoM B (mô phỏng)', listing: 'UPCOM', secType: 'STOCK' },
   { symbol: 'XETF30', name: 'Quỹ ETF 30 (mô phỏng)', listing: 'HOSE', secType: 'ETF' },
+  { symbol: 'XRS', name: 'Cổ phiếu hạn chế GD (mô phỏng)', listing: 'HOSE', secType: 'STOCK' },
   {
     symbol: 'CFPT2699',
     name: 'Chứng quyền FPT (mô phỏng)',

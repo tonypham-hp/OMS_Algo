@@ -5,7 +5,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { useMarketStore } from '@/store/market.store'
+import { useSymbolSession } from '@/hooks/useSymbolSession'
 import type { ParentOrder } from '@/types'
 import { getOrderActionItems } from '@/utils/orderActions'
 
@@ -19,8 +19,9 @@ interface OrderActionsProps {
 }
 
 export function OrderActions({ order, isBusy, onEdit, onCancel, onPause, onResume }: OrderActionsProps) {
-  const session = useMarketStore((state) => state.session)
-  const items = getOrderActionItems(order.status, session, order.reason_code)
+  // Phiên theo mã: mã hạn chế có lượt khớp định kỳ, khóa sửa, hủy 5 phút cuối lượt.
+  const { session, rules, phase } = useSymbolSession(order.symbol)
+  const items = getOrderActionItems(order.status, session, order.reason_code, rules, phase)
   const handlers = { edit: onEdit, cancel: onCancel, pause: onPause, resume: onResume }
   const hasAllowedAction = items.some((item) => item.availability.allowed)
 

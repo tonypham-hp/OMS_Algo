@@ -9,6 +9,8 @@ export const SESSION_LABELS: Record<SessionCode, string> = {
   LUNCH: 'Nghỉ trưa',
   ATC: 'Phiên ATC',
   PUT_THROUGH: 'Thỏa thuận sau giờ',
+  PERIODIC: 'Khớp định kỳ',
+  PERIODIC_LOCK: 'Khớp định kỳ · khóa sửa/hủy',
   CLOSED: 'Đã đóng cửa',
 }
 

@@ -57,9 +57,38 @@ export function getSessionAt(secondsOfDay: number, rules: RulePack): SessionCode
   return spans.find((item) => secondsOfDay >= item.start && secondsOfDay < item.end)?.code ?? 'CLOSED'
 }
 
-/** Phiên khớp lệnh định kỳ: chỉ có giá dự kiến, khớp một lần lúc hết phiên. */
+/** Phiên khớp lệnh định kỳ: chỉ có giá dự kiến, khớp một lần lúc hết phiên (gồm lượt định kỳ của mã hạn chế). */
 export function isAuctionSession(session: SessionCode): boolean {
-  return session === 'ATO' || session === 'ATC'
+  return session === 'ATO' || session === 'ATC' || session === 'PERIODIC' || session === 'PERIODIC_LOCK'
+}
+
+export interface RestrictedPhase {
+  session: SessionCode
+  /** Giây trong ngày lúc khớp lượt hiện tại; null khi không trong lượt nào (nghỉ trưa, ngoài giờ). */
+  callEnd: number | null
+  /** Mã của lượt: đổi là đã sang lượt mới (lượt trước vừa khớp). */
+  callId: string | null
+}
+
+/**
+ * Phiên của một mã bị hạn chế giao dịch lúc `secondsOfDay` (hàm thuần): ATO giữ nguyên; giờ khớp liên tục chia thành các
+ * lượt định kỳ `callIntervalMinutes` phút tính từ đầu mỗi khung liên tục (lượt cuối kẹp ở cuối khung), `lockSecondsBeforeCall`
+ * giây cuối mỗi lượt là PERIODIC_LOCK; ATC giữ nguyên. Pack không có `restricted` thì trả phiên thường.
+ */
+export function restrictedPhaseAt(secondsOfDay: number, rules: RulePack): RestrictedPhase {
+  const base = getSessionAt(secondsOfDay, rules)
+  const spec = rules.restricted
+  const span = sessionSpans(rules).find((item) => secondsOfDay >= item.start && secondsOfDay < item.end)
+  if (!spec || !span) return { session: base, callEnd: null, callId: null }
+  if (base === 'ATO' || base === 'ATC') {
+    return { session: base, callEnd: span.end, callId: `${base}-${span.end}` }
+  }
+  if (base !== 'CONTINUOUS') return { session: base, callEnd: null, callId: null }
+  const interval = spec.callIntervalMinutes * 60
+  const index = Math.floor((secondsOfDay - span.start) / interval)
+  const callEnd = Math.min(span.start + (index + 1) * interval, span.end)
+  const locked = secondsOfDay >= callEnd - spec.lockSecondsBeforeCall
+  return { session: locked ? 'PERIODIC_LOCK' : 'PERIODIC', callEnd, callId: `P-${callEnd}` }
 }
 
 /** Đã hết khớp lệnh trong ngày: thỏa thuận sau giờ hoặc đóng cửa. */
@@ -72,8 +101,12 @@ export function sessionEndAt(secondsOfDay: number, rules: RulePack): number | nu
   return sessionSpans(rules).find((item) => secondsOfDay >= item.start && secondsOfDay < item.end)?.end ?? null
 }
 
-/** Loại lệnh nhận trong phiên theo lô; cờ MOK_MAK tắt thì bỏ MOK, MAK. */
-export function allowedOrderTypes(rules: RulePack, session: SessionCode, lot: LotKind): OrderType[] {
+/**
+ * Loại lệnh nhận trong phiên theo lô; cờ MOK_MAK tắt thì bỏ MOK, MAK.
+ * Mã hạn chế giao dịch: theo `rules.restricted.orderTypes`, chỉ lô chẵn.
+ */
+export function allowedOrderTypes(rules: RulePack, session: SessionCode, lot: LotKind, restricted = false): OrderType[] {
+  if (restricted && rules.restricted) return lot === 'ROUND' ? (rules.restricted.orderTypes[session] ?? []) : []
   const entry = rules.orderTypesBySession[session]
   if (!entry) return []
   const types = lot === 'ODD' ? entry.odd : entry.round

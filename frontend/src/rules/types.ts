@@ -19,8 +19,11 @@ export type LotKind = 'ROUND' | 'ODD'
 /** Loại một lần sửa lệnh: mỗi lần chỉ đổi giá hoặc khối lượng. */
 export type AmendKind = 'PRICE' | 'QTY_UP' | 'QTY_DOWN'
 
-/** Phiên có giờ bắt đầu, kết thúc trong pack (không gồm PRE_OPEN, CLOSED là phần ngoài các phiên). */
-export type TradingSessionCode = Exclude<SessionCode, 'PRE_OPEN' | 'CLOSED'>
+/**
+ * Phiên có giờ bắt đầu, kết thúc trong pack (không gồm PRE_OPEN, CLOSED là phần ngoài các phiên;
+ * phiên riêng theo mã như lượt khớp định kỳ của mã hạn chế không khai trong `sessions`).
+ */
+export type TradingSessionCode = Exclude<SessionCode, 'PRE_OPEN' | 'CLOSED' | 'PERIODIC' | 'PERIODIC_LOCK'>
 
 /** Một phiên trong ngày. Giờ dạng "HH:MM", gồm giờ bắt đầu, không gồm giờ kết thúc. */
 export interface SessionWindow {
@@ -53,14 +56,19 @@ export interface FlagState {
   note: string
 }
 
-// ===== Chừa chỗ cho Đợt 8B: chưa có pack nào dùng, engine chưa đọc =====
+// ===== Phiên giao dịch đặc biệt (Đợt 8B) =====
 
-/** Mã bị hạn chế giao dịch: chỉ khớp định kỳ theo lượt, khóa sửa, hủy cuối mỗi lượt. */
+/**
+ * Mã bị hạn chế giao dịch: chỉ khớp định kỳ, chỉ lô chẵn. ATO, rồi các lượt định kỳ `callIntervalMinutes` phút trong giờ
+ * khớp liên tục (chỉ LO), rồi ATC. Khóa sửa, hủy `lockSecondsBeforeCall` giây cuối mỗi lượt.
+ */
 export interface RestrictedSpec {
-  /** Độ dài một lượt khớp định kỳ, phút (dự kiến 15). */
+  /** Độ dài một lượt khớp định kỳ, phút. */
   callIntervalMinutes: number
   /** Số giây cuối lượt không được sửa, hủy. */
   lockSecondsBeforeCall: number
+  /** Loại lệnh nhận theo phiên của mã hạn chế (chỉ lô chẵn). */
+  orderTypes: Partial<Record<SessionCode, OrderType[]>>
 }
 
 /** Phiên mở lại sau khi tạm ngừng giao dịch (ngắt mạch, sự cố). */
@@ -125,6 +133,10 @@ export interface RulePack {
 
 export type RuleCode =
   | 'SYMBOL_TRANSFER_HALT'
+  | 'RESTRICTED_ROUND_LOT_ONLY'
+  | 'RESTRICTED_NO_MTL'
+  | 'RESTRICTED_NO_HUNT'
+  | 'RESTRICTED_LOCKED'
   | 'BOARD_CLOSED'
   | 'ORDER_TYPE_NOT_IN_SESSION'
   | 'ORDER_TYPE_DISABLED'
@@ -169,6 +181,10 @@ export interface SymbolInfo {
   halted: boolean
   /** Room ngoại còn lại, cổ phiếu. Không có là không giới hạn. */
   foreignRoom?: number
+  /** Mã bị hạn chế giao dịch: chỉ khớp định kỳ, chỉ lô chẵn, không MTL, không HUNT. */
+  restricted?: boolean
+  /** Giờ khớp của lượt định kỳ hiện tại (giây trong ngày), để câu khóa sửa, hủy nêu giờ. */
+  callEnd?: number
 }
 
 export interface AccountInfo {

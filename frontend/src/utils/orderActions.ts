@@ -2,7 +2,8 @@ import { SESSION_LABELS } from '@/config/hose'
 import { defaultRules } from '@/rules/registry'
 import { isAmendAllowed, isCancelAllowed } from '@/rules/session'
 import type { RulePack } from '@/rules/types'
-import type { OrderReasonCode, ParentOrderStatus, SessionCode } from '@/types'
+import { formatClock } from '@/lib/format'
+import type { OrderReasonCode, ParentOrderStatus, SessionCode, SymbolPhase } from '@/types'
 
 export type OrderAction = 'edit' | 'cancel' | 'pause' | 'resume'
 
@@ -61,14 +62,24 @@ export interface OrderActionItem {
   availability: ActionAvailability
 }
 
+/** Lý do khóa sửa, hủy theo phiên; mã hạn chế nêu giờ khớp của lượt định kỳ. */
+function lockReason(session: SessionCode, rules: RulePack, phase?: SymbolPhase): string {
+  if (session === 'PERIODIC_LOCK' && phase?.call_end != null) {
+    const minutes = Math.round((rules.restricted?.lockSecondsBeforeCall ?? 0) / 60)
+    return `Khóa sửa, hủy ${minutes} phút cuối lượt khớp định kỳ (khớp lúc ${formatClock(phase.call_end).slice(0, 5)})`
+  }
+  return `Không được sửa, hủy lệnh trong ${SESSION_LABELS[session]}`
+}
+
 /** Danh sách nút hành động của một lệnh, dùng chung cho Sổ lệnh và Chi tiết lệnh. */
 export function getOrderActionItems(
   status: ParentOrderStatus,
   session: SessionCode,
   reasonCode: OrderReasonCode | null = null,
   rules: RulePack = defaultRules(),
+  phase?: SymbolPhase,
 ): OrderActionItem[] {
-  const actions = getAllowedActions(status, session, reasonCode, rules)
+  const actions = getAllowedActions(status, session, reasonCode, rules, phase)
   const isPaused = status === 'PAUSED_USER' || status === 'PAUSED_SYSTEM'
   return [
     { action: 'edit', label: isRepriceRequired(status, reasonCode) ? 'Sửa giá' : 'Sửa', availability: actions.edit },
@@ -88,10 +99,11 @@ export function getAllowedActions(
   session: SessionCode,
   reasonCode: OrderReasonCode | null = null,
   rules: RulePack = defaultRules(),
+  phase?: SymbolPhase,
 ): Record<OrderAction, ActionAvailability> {
   const sessionLock: ActionAvailability = {
     allowed: false,
-    reason: `Không được sửa, hủy lệnh trong ${SESSION_LABELS[session]}`,
+    reason: lockReason(session, rules, phase),
   }
   const amendOpen = isAmendAllowed(rules, session)
   const cancelOpen = isCancelAllowed(rules, session)

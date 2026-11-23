@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { usePauseOrder, useResumeOrder } from '@/hooks/useOrders'
 import { CancelOrderDialog } from '@/pages/OrderBook/CancelOrderDialog'
 import { EditOrderDialog } from '@/pages/OrderBook/EditOrderDialog'
-import { useMarketStore } from '@/store/market.store'
+import { useSymbolSession } from '@/hooks/useSymbolSession'
 import type { ParentOrder } from '@/types'
 import { getOrderActionItems, isRepriceRequired, isTerminalStatus, type OrderAction } from '@/utils/orderActions'
 
@@ -12,7 +12,7 @@ import { getOrderActionItems, isRepriceRequired, isTerminalStatus, type OrderAct
  * nên không hiện nút Sửa ở đây nữa. Lệnh đã kết thúc không còn hành động nào.
  */
 export function OrderDetailActions({ order }: { order: ParentOrder }) {
-  const session = useMarketStore((state) => state.session)
+  const { session, rules, phase } = useSymbolSession(order.symbol)
   const pauseOrder = usePauseOrder()
   const resumeOrder = useResumeOrder()
   // Giữ bản chụp lúc mở form: nếu lấy lệnh mới nhất, version đổi theo và mất tác dụng phát hiện sửa trùng.
@@ -29,7 +29,7 @@ export function OrderDetailActions({ order }: { order: ParentOrder }) {
   }
   const isBusy = pauseOrder.isPending || resumeOrder.isPending
   const error = pauseOrder.error?.message ?? resumeOrder.error?.message
-  const items = getOrderActionItems(order.status, session, order.reason_code).filter(
+  const items = getOrderActionItems(order.status, session, order.reason_code, rules, phase).filter(
     (item) => !(item.action === 'edit' && isRepriceRequired(order.status, order.reason_code)),
   )
 

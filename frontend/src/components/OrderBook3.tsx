@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import type { BookLevel, OrderBookDepth, SessionCode, SymbolQuote } from '@/types'
 import { buildBookRows, getSpread } from '@/utils/orderBook'
 import { isAuctionSession } from '@/utils/hose'
+import { CallCountdown, SymbolStatusBadge } from './SymbolStatusBadge'
 
 interface OrderBook3Props {
   quote: SymbolQuote | undefined
@@ -209,9 +210,15 @@ export function OrderBook3({ quote, session, depth, highlightPrice = null, onPic
       <CardHeader>
         <CardTitle className="flex items-baseline justify-between gap-2">
           <span>Sổ lệnh 3 mức</span>
-          {quote && <span className="text-muted-foreground text-xs font-normal">{quote.symbol}</span>}
+          {quote && (
+            <span className="text-muted-foreground flex items-center gap-1.5 text-xs font-normal">
+              <SymbolStatusBadge quote={quote} />
+              {quote.symbol}
+            </span>
+          )}
         </CardTitle>
         {note && <p className="text-muted-foreground text-xs">{note}</p>}
+        {quote && <CallCountdown symbol={quote.symbol} className="text-muted-foreground text-xs" />}
       </CardHeader>
       <CardContent>{body}</CardContent>
     </Card>

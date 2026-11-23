@@ -269,6 +269,11 @@ export function validateOrderValues(
   const crossErrors = validateCrossFields(onlyValidFields(values, invalid), quote)
   errors.push(...crossErrors)
 
+  // Mã hạn chế giao dịch chỉ khớp định kỳ 15 phút một lần: HUNT (săn giá, quét sổ lệnh) không có ý nghĩa, bị chặn.
+  if (rule.symbol.restricted && values.strategy_type === 'HUNT') {
+    errors.push({ field: 'strategy_type', message: ruleMessage({ code: 'RESTRICTED_NO_HUNT', params: { symbol: values.symbol } }) })
+  }
+
   // Lô lẻ chỉ đặt lệnh LO thường (LIMIT), không đặt lệnh thuật toán.
   if (lot === 'ODD' && values.strategy_type !== 'LIMIT' && !errors.some((error) => error.field === 'strategy_type')) {
     errors.push({ field: 'strategy_type', message: ruleMessage({ code: 'ODD_LOT_LO_ONLY', params: { orderType: STRATEGIES[values.strategy_type].label } }) })

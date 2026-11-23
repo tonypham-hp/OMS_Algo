@@ -305,6 +305,8 @@ export function createOrderEngine(options: EngineOptions = {}) {
   let currentDate: string | null = null
   let previousSession: SessionCode | null = null
   let previousSessions = new Map<string, SessionCode>()
+  /** Lượt khớp của nhịp trước theo mã (mã hạn chế khớp định kỳ theo lượt 15 phút). Không cần lưu: chỉ so hai nhịp liền nhau. */
+  let previousCallKeys = new Map<string, string>()
   const closedBoards = new Set<string>()
   let orderSequence = 0
   let eventSequence = 0
@@ -370,7 +372,15 @@ export function createOrderEngine(options: EngineOptions = {}) {
     if (!state) return 'CLOSED'
     const quote = state.quotes.find((item) => item.symbol === symbol)
     if (quote?.board === null) return 'CLOSED'
+    // Phiên riêng của mã (mã hạn chế: lượt khớp định kỳ) đè phiên của bảng.
+    if (quote?.phase) return quote.phase.session
     return state.board_sessions?.[quote?.board ?? 'STO'] ?? state.session
+  }
+
+  /** Khóa "lượt khớp" của mã: mã lượt định kỳ (mã hạn chế), không thì tên phiên. Đổi khóa là lượt trước vừa khớp. */
+  function callKeyOf(symbol: string, state: MarketState) {
+    const quote = state.quotes.find((item) => item.symbol === symbol)
+    return quote?.phase?.call_id ?? sessionOf(symbol, state)
   }
 
   /** Gói luật đang áp cho mã: theo bảng giao dịch của mã trong ngày. */
@@ -557,7 +567,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
     if (quantity <= 0) return undefined
     // MTL không hợp lệ trong ATO, ATC: lệnh không có giá ở hai phiên này là lệnh ATO, ATC.
     const session = sessionOf(parent.symbol)
-    const finalType = orderType === 'MTL' && session && isAuctionSession(session) ? (session as ChildOrderType) : orderType
+    const finalType = orderType === 'MTL' && (session === 'ATO' || session === 'ATC') ? (session as ChildOrderType) : orderType
     const runtime = runtimeOf(parent)
     runtime.cycleNo += 1
     const childId = `${parent.parent_order_id}-CH${String(runtime.cycleNo).padStart(3, '0')}`
@@ -989,7 +999,9 @@ export function createOrderEngine(options: EngineOptions = {}) {
   function checkConditions(parent: ParentOrder, side: Side, last: number) {
     if (runtimeOf(parent).triggeredConditionId !== null) return
     // Trong ATO, ATC chưa có giao dịch mới nên giá khớp chỉ là giá cũ, không được dùng để kích hoạt.
-    if (sessionOf(parent.symbol) !== 'CONTINUOUS') return
+    // Mã hạn chế không có phiên liên tục: giá chỉ đổi lúc khớp lượt định kỳ, nên điều kiện xét cả trong lượt.
+    const conditionSession = sessionOf(parent.symbol)
+    if (conditionSession !== 'CONTINUOUS' && conditionSession !== 'PERIODIC' && conditionSession !== 'PERIODIC_LOCK') return
     for (const condition of conditions) {
       if (condition.parent_order_id !== parent.parent_order_id || condition.status !== 'ACTIVE') continue
       if (condition.trigger_price === null) continue
@@ -1296,6 +1308,8 @@ export function createOrderEngine(options: EngineOptions = {}) {
     const previousFallback = previousSession
     previousSession = state.session
     previousSessions = new Map(state.quotes.map((quote) => [quote.symbol, sessionOf(quote.symbol, state)]))
+    const previousKeysOf = previousCallKeys
+    previousCallKeys = new Map(state.quotes.map((quote) => [quote.symbol, callKeyOf(quote.symbol, state)]))
     currentDate = state.trading_date
     const prevOf = (parent: ParentOrder) => previousOf.get(parent.symbol) ?? previousFallback
     const nowOf = (parent: ParentOrder) => sessionOf(parent.symbol, state)
@@ -1312,7 +1326,9 @@ export function createOrderEngine(options: EngineOptions = {}) {
     // Vừa hết phiên ATO, ATC của bảng giao dịch: bộ giả lập đã chốt giá khớp định kỳ ở nhịp này.
     for (const parent of liveParents) {
       const previous = prevOf(parent)
-      if (previous === null || !isAuctionSession(previous) || nowOf(parent) === previous) continue
+      // Hết phiên định kỳ: phiên đổi, hoặc (mã hạn chế) sang lượt định kỳ mới.
+      const sameCall = nowOf(parent) === previous && (previousKeysOf.get(parent.symbol) ?? previous) === callKeyOf(parent.symbol, state)
+      if (previous === null || !isAuctionSession(previous) || sameCall) continue
       const quote = getQuote(parent.symbol)
       if (quote && isRunning(parent)) matchAuctionChildren(parent, quote)
     }
@@ -1362,7 +1378,13 @@ export function createOrderEngine(options: EngineOptions = {}) {
   // ===== Thao tác của người dùng =====
 
   function assertAllowed(parent: ParentOrder, action: OrderAction) {
-    const availability = getAllowedActions(parent.status, sessionOf(parent.symbol), parent.reason_code, rulesOfSymbol(parent.symbol))[action]
+    const availability = getAllowedActions(
+      parent.status,
+      sessionOf(parent.symbol),
+      parent.reason_code,
+      rulesOfSymbol(parent.symbol),
+      getQuote(parent.symbol)?.phase,
+    )[action]
     if (!availability.allowed) throw new EngineError(availability.reason ?? 'Không được phép thao tác')
   }
 

@@ -1,7 +1,20 @@
 import type { Board, SecType } from '@/rules/types'
 
 /** PUT_THROUGH: thỏa thuận sau giờ 14:45–15:00, không còn khớp lệnh (8A chỉ hiện trên đồng hồ). */
-export type SessionCode = 'PRE_OPEN' | 'ATO' | 'CONTINUOUS' | 'LUNCH' | 'ATC' | 'PUT_THROUGH' | 'CLOSED'
+/**
+ * PERIODIC, PERIODIC_LOCK (Đợt 8B): lượt khớp định kỳ của mã bị hạn chế giao dịch; PERIODIC_LOCK là 5 phút cuối lượt,
+ * khóa sửa, hủy. Hai phiên này chỉ có theo từng mã (SymbolQuote.phase), không phải phiên của cả bảng.
+ */
+export type SessionCode =
+  | 'PRE_OPEN'
+  | 'ATO'
+  | 'CONTINUOUS'
+  | 'LUNCH'
+  | 'ATC'
+  | 'PUT_THROUGH'
+  | 'CLOSED'
+  | 'PERIODIC'
+  | 'PERIODIC_LOCK'
 
 export type SimSpeed = 1 | 10 | 60
 
@@ -31,6 +44,21 @@ export interface SymbolQuote {
   transferred?: boolean
   /** Room ngoại còn lại, cổ phiếu. Không có: không giới hạn. */
   foreign_room?: number
+  /** Trạng thái giao dịch của mã (Đợt 8B). Không có: bình thường. */
+  trading_status?: SymbolTradingStatus
+  /**
+   * Phiên riêng của mã khi khác phiên của bảng (mã hạn chế: lượt khớp định kỳ). Có thì engine, phiếu lệnh dùng phiên này.
+   * `call_end`: giây trong ngày lúc khớp lượt hiện tại; `call_id` đổi là đã sang lượt mới.
+   */
+  phase?: SymbolPhase
+}
+
+export type SymbolTradingStatus = 'NORMAL' | 'RESTRICTED'
+
+export interface SymbolPhase {
+  session: SessionCode
+  call_end: number | null
+  call_id: string | null
 }
 
 /** Một mức giá trong sổ lệnh. */

@@ -12,6 +12,8 @@ export function symbolInfoFromQuote(quote: SymbolQuote): SymbolInfo {
     floor: quote.floor_price,
     halted: quote.board === null,
     ...(quote.foreign_room !== undefined ? { foreignRoom: quote.foreign_room } : {}),
+    ...(quote.trading_status === 'RESTRICTED' ? { restricted: true } : {}),
+    ...(quote.phase?.call_end != null ? { callEnd: quote.phase.call_end } : {}),
   }
 }
 
@@ -33,9 +35,10 @@ export function buildRuleContext(quote: SymbolQuote, date?: string): RuleContext
 
 /** Phiên của bảng giao dịch của mã, từ trạng thái thị trường. Mã ngừng giao dịch coi như đóng cửa. */
 export function sessionForQuote(
-  quote: Pick<SymbolQuote, 'board'> | undefined,
+  quote: Pick<SymbolQuote, 'board' | 'phase'> | undefined,
   market: { session: SessionCode; board_sessions?: Partial<Record<'STO' | 'STX' | 'UPX', SessionCode>> },
 ): SessionCode {
   if (quote?.board === null) return 'CLOSED'
+  if (quote?.phase) return quote.phase.session
   return market.board_sessions?.[quote?.board ?? 'STO'] ?? market.session
 }
