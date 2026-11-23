@@ -1478,8 +1478,9 @@ export function createOrderEngine(options: EngineOptions = {}) {
     // Vừa hết phiên ATO, ATC của bảng giao dịch: bộ giả lập đã chốt giá khớp định kỳ ở nhịp này.
     for (const parent of liveParents) {
       const previous = prevOf(parent)
-      // Hết phiên định kỳ: phiên đổi, hoặc (mã hạn chế) sang lượt định kỳ mới.
-      const sameCall = nowOf(parent) === previous && (previousKeysOf.get(parent.symbol) ?? previous) === callKeyOf(parent.symbol, state)
+      // Hết phiên định kỳ: khóa lượt đổi. Mã thường: khóa là tên phiên. Mã hạn chế: khóa là mã lượt, nên chuyển từ
+      // PERIODIC sang PERIODIC_LOCK (cùng lượt, 5 phút cuối) không phải lúc khớp.
+      const sameCall = (previousKeysOf.get(parent.symbol) ?? previous) === callKeyOf(parent.symbol, state)
       if (previous === null || !isAuctionSession(previous) || sameCall) continue
       const quote = getQuote(parent.symbol)
       if (quote && isRunning(parent)) matchAuctionChildren(parent, quote)
