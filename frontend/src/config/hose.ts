@@ -11,6 +11,8 @@ export const SESSION_LABELS: Record<SessionCode, string> = {
   PUT_THROUGH: 'Thỏa thuận sau giờ',
   PERIODIC: 'Khớp định kỳ',
   PERIODIC_LOCK: 'Khớp định kỳ · khóa sửa/hủy',
+  HALTED: 'Tạm ngừng giao dịch',
+  REOPEN: 'Khớp định kỳ sau tạm ngừng',
   CLOSED: 'Đã đóng cửa',
 }
 

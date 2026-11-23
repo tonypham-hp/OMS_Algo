@@ -50,6 +50,14 @@ export function useInjectFault() {
   return useMutation({ mutationFn: runFault, onSuccess: invalidate })
 }
 
+export function useSymbolHalt() {
+  const invalidate = useInvalidateOps()
+  return useMutation({
+    mutationFn: ({ symbol, action }: { symbol: string; action: 'halt' | 'resume' }) => opsService.setSymbolHalt(symbol, action),
+    onSuccess: invalidate,
+  })
+}
+
 export function useActivateKillSwitch() {
   const invalidate = useInvalidateOps()
   return useMutation({ mutationFn: opsService.activateKillSwitch, onSuccess: invalidate })

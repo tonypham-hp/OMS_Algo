@@ -166,6 +166,17 @@ export const REASONS: Record<ExplainCode, ReasonDef> = {
     ],
   },
 
+  SYMBOL_HALTED: {
+    code: 'SYMBOL_HALTED',
+    appliesTo: ['PAUSED_SYSTEM'],
+    title: 'Vì sao lệnh này đang dừng?',
+    template: (ctx) =>
+      `Mã ${ctx.symbol} đang tạm ngừng giao dịch${ctx.halted_at ? ` từ ${ctx.halted_at}` : ''}. Lệnh tạm dừng để không gửi lệnh con, ` +
+      `lệnh con chưa khớp đã bị hủy. Khi mã giao dịch lại, lệnh tự chạy lại qua phiên khớp định kỳ 15 phút (chỉ LO, không sửa, hủy). ${progress(ctx)}`,
+    actions: [SCROLL_LOG],
+    sources: (ctx) => [`Trạng thái giao dịch của mã ${ctx.symbol}`, ...eventSource(ctx)],
+  },
+
   KILL_SWITCH: {
     code: 'KILL_SWITCH',
     appliesTo: ['PAUSED_SYSTEM'],
@@ -369,6 +380,8 @@ const SESSION_NAMES: Record<string, string> = {
   CLOSED: 'giờ đóng cửa',
   PERIODIC: 'lượt khớp định kỳ',
   PERIODIC_LOCK: '5 phút cuối lượt khớp định kỳ',
+  HALTED: 'thời gian tạm ngừng giao dịch',
+  REOPEN: 'phiên khớp định kỳ sau tạm ngừng',
 }
 const BOARD_NAMES: Record<string, string> = { STO: 'HOSE', STX: 'HNX', UPX: 'UPCoM' }
 const SEC_TYPE_NAMES: Record<string, string> = { STOCK: 'cổ phiếu', CLOSED_FUND: 'chứng chỉ quỹ đóng', ETF: 'ETF', CW: 'chứng quyền' }
@@ -391,6 +404,7 @@ export const RULE_REASONS: Record<RuleCode, (p: RuleParams) => string> = {
   RESTRICTED_NO_HUNT: (p) => `Mã ${p.symbol} bị hạn chế giao dịch, chỉ khớp định kỳ 15 phút một lần: không đặt được lệnh HUNT.`,
   RESTRICTED_LOCKED: (p) =>
     `Mã ${p.symbol} bị hạn chế giao dịch: khóa sửa, hủy ${num(p.lockMinutes)} phút cuối lượt, lượt này khớp lúc ${p.callEnd}.`,
+  SYMBOL_TRADING_HALTED: (p) => `Mã ${p.symbol} đang tạm ngừng giao dịch: chưa nhận lệnh mới, khi giao dịch lại sẽ có phiên khớp định kỳ 15 phút.`,
   BOARD_CLOSED: (p) => `Bảng ${board(p)} không nhận lệnh trong ${session(p)}.`,
   ORDER_TYPE_NOT_IN_SESSION: (p) =>
     `Lệnh ${p.orderType} không đặt được trong ${session(p)} của bảng ${board(p)} (nhận: ${p.allowed || 'không có'}).`,

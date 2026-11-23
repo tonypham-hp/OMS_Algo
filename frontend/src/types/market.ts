@@ -15,6 +15,10 @@ export type SessionCode =
   | 'CLOSED'
   | 'PERIODIC'
   | 'PERIODIC_LOCK'
+  /** Đợt 8B: mã đang tạm ngừng giao dịch (phiên riêng theo mã). */
+  | 'HALTED'
+  /** Đợt 8B: phiên khớp định kỳ khi mã giao dịch lại sau tạm ngừng; chỉ nhận LO, cấm sửa/hủy. */
+  | 'REOPEN'
 
 export type SimSpeed = 1 | 10 | 60
 
@@ -51,6 +55,16 @@ export interface SymbolQuote {
    * `call_end`: giây trong ngày lúc khớp lượt hiện tại; `call_id` đổi là đã sang lượt mới.
    */
   phase?: SymbolPhase
+  /** Mã đang tạm ngừng, hoặc đang trong phiên khớp định kỳ sau tạm ngừng (Đợt 8B). Không có: bình thường. */
+  halt?: SymbolHalt
+}
+
+/** Tạm ngừng giao dịch một mã. `since`, `reopen_end`: giây trong ngày theo đồng hồ giả lập. */
+export interface SymbolHalt {
+  status: 'HALTED' | 'REOPEN'
+  since: number
+  /** Giờ khớp của phiên định kỳ sau khi giao dịch lại; null khi đang tạm ngừng. */
+  reopen_end: number | null
 }
 
 export type SymbolTradingStatus = 'NORMAL' | 'RESTRICTED'

@@ -40,8 +40,8 @@ export const STO_KRX_2025: RulePack = {
   minPrice: 10,
   lots: { round: 100, odd: { min: 1, max: 99 } },
   maxQty: { round: 500_000, odd: 99 },
-  amendPolicy: { oneFieldPerAmend: true, lockedSessions: ['ATO', 'ATC', 'PERIODIC_LOCK'], losesPriority: ['PRICE', 'QTY_UP'] },
-  cancelPolicy: { lockedSessions: ['ATO', 'ATC', 'PERIODIC_LOCK'] },
+  amendPolicy: { oneFieldPerAmend: true, lockedSessions: ['ATO', 'ATC', 'PERIODIC_LOCK', 'REOPEN'], losesPriority: ['PRICE', 'QTY_UP'] },
+  cancelPolicy: { lockedSessions: ['ATO', 'ATC', 'PERIODIC_LOCK', 'REOPEN'] },
   expiryTime: '14:45',
   mtlRemainder: 'LO_LAST_PLUS_TICK',
   auctionPriorityOverLimit: false,
@@ -69,6 +69,7 @@ export const STO_KRX_2025: RulePack = {
   verified: true,
   sourceNote: 'Quy chế giao dịch của HOSE theo hệ thống KRX (công bố công khai, áp dụng từ 05/05/2025).',
   putThrough: { window: { start: '14:45', end: '15:00' } },
+  haltResume: { reopenAuctionMinutes: 15, orderTypes: { round: ['LO'], odd: ['LO'] } },
   restricted: {
     callIntervalMinutes: 15,
     lockSecondsBeforeCall: 300,

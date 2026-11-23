@@ -23,7 +23,7 @@ export type AmendKind = 'PRICE' | 'QTY_UP' | 'QTY_DOWN'
  * Phiên có giờ bắt đầu, kết thúc trong pack (không gồm PRE_OPEN, CLOSED là phần ngoài các phiên;
  * phiên riêng theo mã như lượt khớp định kỳ của mã hạn chế không khai trong `sessions`).
  */
-export type TradingSessionCode = Exclude<SessionCode, 'PRE_OPEN' | 'CLOSED' | 'PERIODIC' | 'PERIODIC_LOCK'>
+export type TradingSessionCode = Exclude<SessionCode, 'PRE_OPEN' | 'CLOSED' | 'PERIODIC' | 'PERIODIC_LOCK' | 'HALTED' | 'REOPEN'>
 
 /** Một phiên trong ngày. Giờ dạng "HH:MM", gồm giờ bắt đầu, không gồm giờ kết thúc. */
 export interface SessionWindow {
@@ -71,10 +71,12 @@ export interface RestrictedSpec {
   orderTypes: Partial<Record<SessionCode, OrderType[]>>
 }
 
-/** Phiên mở lại sau khi tạm ngừng giao dịch (ngắt mạch, sự cố). */
+/** Phiên khớp định kỳ khi mã giao dịch lại sau tạm ngừng: chỉ nhận LO, cấm sửa/hủy (REOPEN trong lockedSessions). */
 export interface HaltResumeSpec {
-  /** Phiên khớp định kỳ khi mở lại, phút. */
+  /** Độ dài phiên khớp định kỳ khi mở lại, phút. */
   reopenAuctionMinutes: number
+  /** Loại lệnh nhận trong phiên mở lại. */
+  orderTypes: SessionOrderTypes
 }
 
 /** Lệnh thỏa thuận. 8A chỉ dùng `window` để hiện trên đồng hồ phiên, chưa có phiếu thỏa thuận. */
@@ -137,6 +139,7 @@ export type RuleCode =
   | 'RESTRICTED_NO_MTL'
   | 'RESTRICTED_NO_HUNT'
   | 'RESTRICTED_LOCKED'
+  | 'SYMBOL_TRADING_HALTED'
   | 'BOARD_CLOSED'
   | 'ORDER_TYPE_NOT_IN_SESSION'
   | 'ORDER_TYPE_DISABLED'
@@ -185,6 +188,8 @@ export interface SymbolInfo {
   restricted?: boolean
   /** Giờ khớp của lượt định kỳ hiện tại (giây trong ngày), để câu khóa sửa, hủy nêu giờ. */
   callEnd?: number
+  /** Mã đang tạm ngừng giao dịch (vận hành tạm ngừng; khác `halted` là ngừng cả ngày vì chuyển sàn). */
+  tradingHalted?: boolean
 }
 
 export interface AccountInfo {

@@ -22,6 +22,8 @@ const SESSION_DOT: Record<SessionCode, string> = {
   PUT_THROUGH: 'bg-slate-500',
   PERIODIC: 'bg-price-ref',
   PERIODIC_LOCK: 'bg-price-ref',
+  HALTED: 'bg-price-down',
+  REOPEN: 'bg-price-ref',
   CLOSED: 'bg-price-down',
 }
 

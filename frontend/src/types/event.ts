@@ -50,6 +50,10 @@ export type EventReasonCode =
   | 'COMPLETED'
   /** Đợt 8A: phần chưa khớp của lệnh con MTL chuyển thành LO tại giá khớp gần nhất ± 1 bước giá. */
   | 'MTL_REMAINDER_TO_LO'
+  /** Đợt 8B: mã tạm ngừng giao dịch, lệnh cha hệ thống tạm dừng. */
+  | 'SYMBOL_HALTED'
+  /** Đợt 8B: mã giao dịch lại, lệnh cha tự chạy lại (qua phiên khớp định kỳ sau tạm ngừng). */
+  | 'SYMBOL_RESUMED'
 
 /** Lý do Core từ chối lệnh con (ngoài ERD). */
 export type CoreRejectCode = 'LOT_SIZE' | 'TICK_SIZE' | 'MAX_QTY' | 'PRICE_BAND' | 'OTHER'

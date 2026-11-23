@@ -260,6 +260,21 @@ export const handlers = [
     return handleOps(request, () => orderEngine.injectDuplicateFill(parent_order_id))
   }),
 
+  // Tạm ngừng / giao dịch lại một mã (mô phỏng, chỉ OPS). Engine tự tạm dừng, chạy lại lệnh cha của mã ở nhịp kế tiếp.
+  http.post('*/api/ops/symbols/:symbol/:action', ({ request, params }) =>
+    handleOps(request, () => {
+      const symbol = String(params.symbol)
+      try {
+        if (params.action === 'halt') marketSimulator.haltSymbol(symbol)
+        else if (params.action === 'resume') marketSimulator.resumeSymbol(symbol)
+        else throw new Error('Thao tác không hợp lệ')
+      } catch (error) {
+        throw new EngineError(error instanceof Error ? error.message : 'Không đổi được trạng thái mã', 409)
+      }
+      return marketSimulator.getState().quotes.find((quote) => quote.symbol === symbol)
+    }),
+  ),
+
   http.post('*/api/ops/faults/market-data', async ({ request }) => {
     const { stale } = (await request.json()) as { stale: boolean }
     return handleOps(request, () => {

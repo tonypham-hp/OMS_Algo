@@ -13,6 +13,7 @@ export function symbolInfoFromQuote(quote: SymbolQuote): SymbolInfo {
     halted: quote.board === null,
     ...(quote.foreign_room !== undefined ? { foreignRoom: quote.foreign_room } : {}),
     ...(quote.trading_status === 'RESTRICTED' ? { restricted: true } : {}),
+    ...(quote.halt?.status === 'HALTED' ? { tradingHalted: true } : {}),
     ...(quote.phase?.call_end != null ? { callEnd: quote.phase.call_end } : {}),
   }
 }

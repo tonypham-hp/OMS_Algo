@@ -90,6 +90,7 @@ export function validateOrder(
   account: AccountInfo,
 ): RuleViolation[] {
   if (symbolInfo.halted) return [violation('SYMBOL_TRANSFER_HALT', 'symbol', { symbol: symbolInfo.symbol })]
+  if (symbolInfo.tradingHalted) return [violation('SYMBOL_TRADING_HALTED', 'symbol', { symbol: symbolInfo.symbol })]
   const errors: RuleViolation[] = []
   const { orderType, lot } = input
   // Mã hạn chế giao dịch: chỉ lô chẵn, không MTL (kể cả lệnh thuật toán sẽ sinh MTL), lượt định kỳ chỉ nhận LO.

@@ -6,7 +6,7 @@ import { resolveRules, rulesFor } from '@/rules/registry'
 import { getSessionAt, isAuctionSession, parseTimeToSeconds, restrictedPhaseAt, sessionEndAt } from '@/rules/session'
 import { getListing, symbolBoardStatus } from '@/rules/symbols'
 import type { Board, RulePack, SecType } from '@/rules/types'
-import type { MarketState, MarketTrade, OrderBookDepth, SessionCode, SimSpeed, SymbolPhase, SymbolQuote } from '@/types'
+import type { MarketState, MarketTrade, OrderBookDepth, SessionCode, SimSpeed, SymbolHalt, SymbolPhase, SymbolQuote } from '@/types'
 import { getDisplayPrice } from '@/utils/hose'
 import { ALL_SYMBOLS, EXTRA_SYMBOLS, FOREIGN_ROOM, RESTRICTED_SYMBOLS, SPECIAL_SYMBOLS } from './data'
 import { type BookSide, consumeLevel, createDepthRandom, generateDepth, rebaseDepth, replenishDepth } from './depth'
@@ -196,6 +196,10 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
    * Không có: mã theo phiên của bảng.
    */
   function phaseOf(quote: SymbolQuote, seconds: number): SymbolPhase | undefined {
+    // Tạm ngừng, phiên khớp định kỳ sau tạm ngừng đè mọi lịch phiên khác của mã.
+    const halt = activeHalt(quote, seconds)
+    if (halt?.status === 'HALTED') return { session: 'HALTED', call_end: null, call_id: 'HALTED' }
+    if (halt?.status === 'REOPEN') return { session: 'REOPEN', call_end: halt.reopen_end, call_id: `R-${halt.reopen_end}` }
     if (quote.trading_status !== 'RESTRICTED' || !quote.board) return undefined
     const rules = rulesFor(quote.board, tradingDate)
     if (!rules.restricted) return undefined
@@ -214,9 +218,23 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
     return phaseOf(quote, seconds)?.call_id ?? quoteSession(quote, sessions, seconds)
   }
 
+  /** Tạm ngừng còn hiệu lực lúc `seconds`: phiên mở lại đã hết giờ thì coi như mã giao dịch bình thường. */
+  function activeHalt(quote: SymbolQuote, seconds: number): SymbolHalt | undefined {
+    const halt = quote.halt
+    if (!halt) return undefined
+    if (halt.status === 'REOPEN' && halt.reopen_end !== null && seconds >= halt.reopen_end) return undefined
+    return halt
+  }
+
   function withPhase(quote: SymbolQuote): SymbolQuote {
     const phase = phaseOf(quote, simSeconds)
-    return phase ? { ...quote, phase } : quote
+    const halt = activeHalt(quote, simSeconds)
+    const base = quote.halt && !halt ? { ...quote, halt: undefined } : quote
+    return phase ? { ...base, phase } : base
+  }
+
+  function haltRules(quote: SymbolQuote) {
+    return rulesFor(quote.board ?? 'STO', tradingDate)
   }
 
   function getState(): MarketState {
@@ -343,6 +361,8 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
       }
       return { ...quote, tick_direction: 0 }
     })
+    // Phiên mở lại đã khớp xong: bỏ dấu tạm ngừng.
+    quotes = quotes.map((quote) => (quote.halt && !activeHalt(quote, simSeconds) ? { ...quote, halt: undefined } : quote))
     emitTrades(before)
     notify()
   }
@@ -425,6 +445,34 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
           ? { ...quote, foreign_room: Math.max(0, quote.foreign_room + delta) }
           : quote,
       )
+    },
+    /**
+     * Vận hành tạm ngừng giao dịch một mã (mô phỏng): giá, sổ lệnh đứng yên; engine tạm dừng lệnh cha của mã.
+     * Ném lỗi khi mã không có hoặc đang tạm ngừng.
+     */
+    haltSymbol(symbol: string) {
+      const quote = quotes.find((item) => item.symbol === symbol)
+      if (!quote) throw new Error(`Không có mã ${symbol}`)
+      if (activeHalt(quote, simSeconds)?.status === 'HALTED') throw new Error(`Mã ${symbol} đang tạm ngừng giao dịch`)
+      quotes = quotes.map((item) =>
+        item.symbol === symbol ? { ...item, halt: { status: 'HALTED', since: simSeconds, reopen_end: null }, indicative_price: null } : item,
+      )
+      notify()
+    },
+    /**
+     * Giao dịch lại sau tạm ngừng: phiên khớp định kỳ `reopenAuctionMinutes` phút (chỉ LO, cấm sửa/hủy),
+     * khớp một lần lúc hết phiên rồi về lịch bình thường của mã.
+     */
+    resumeSymbol(symbol: string) {
+      const quote = quotes.find((item) => item.symbol === symbol)
+      if (!quote) throw new Error(`Không có mã ${symbol}`)
+      if (activeHalt(quote, simSeconds)?.status !== 'HALTED') throw new Error(`Mã ${symbol} không ở trạng thái tạm ngừng`)
+      const minutes = haltRules(quote).haltResume?.reopenAuctionMinutes ?? 15
+      const end = Math.min(simSeconds + minutes * 60, END_SECONDS)
+      quotes = quotes.map((item) =>
+        item.symbol === symbol ? { ...item, halt: { status: 'REOPEN', since: simSeconds, reopen_end: end } } : item,
+      )
+      notify()
     },
     /** Nhảy tới giờ giả lập (giây trong ngày), phát trạng thái để engine chạy một nhịp. */
     jumpTo(seconds: number) {

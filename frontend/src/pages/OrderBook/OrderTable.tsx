@@ -42,6 +42,7 @@ const OrderRow = memo(function OrderRow({ order, showAccount, isBusy, role, onEd
   const market = useBriefMarket(order.symbol)
   // Chỉ chọn trạng thái (chuỗi) để dòng không vẽ lại mỗi nhịp giá.
   const tradingStatus = useMarketStore((state) => state.quotes.find((quote) => quote.symbol === order.symbol)?.trading_status)
+  const haltStatus = useMarketStore((state) => state.quotes.find((quote) => quote.symbol === order.symbol)?.halt?.status)
   return (
     <TableRow data-order-id={order.parent_order_id} data-demo-id={`order-row-${order.parent_order_id}`}>
       <TableCell>
@@ -53,7 +54,13 @@ const OrderRow = memo(function OrderRow({ order, showAccount, isBusy, role, onEd
       <TableCell className="font-semibold">
         <span className="flex items-center gap-1.5">
           {order.symbol}
-          <SymbolStatusBadge quote={{ symbol: order.symbol, trading_status: tradingStatus }} />
+          <SymbolStatusBadge
+            quote={{
+              symbol: order.symbol,
+              trading_status: tradingStatus,
+              halt: haltStatus ? { status: haltStatus, since: 0, reopen_end: null } : undefined,
+            }}
+          />
         </span>
       </TableCell>
       <TableCell className={cn('font-medium', order.side === 'BUY' ? 'text-price-up' : 'text-price-down')}>

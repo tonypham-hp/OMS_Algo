@@ -5,6 +5,7 @@ export const REASON_LABELS: Record<OrderReasonCode, string> = {
   CHILD_REJECTED_REPEAT: 'Core từ chối lặp lại',
   MARKET_DATA_STALE: 'Dữ liệu giá trễ',
   KILL_SWITCH: 'Kill switch',
+  SYMBOL_HALTED: 'Mã tạm ngừng giao dịch',
 }
 
 const DANGER = 'bg-red-500/20 text-red-300'

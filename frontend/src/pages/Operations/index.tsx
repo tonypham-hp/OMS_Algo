@@ -7,6 +7,7 @@ import { KillSwitchPanel } from './KillSwitchPanel'
 import { OpsAlertList } from './OpsAlertList'
 import { OpsStatCards } from './OpsStatCards'
 import { PausedOrdersPanel } from './PausedOrdersPanel'
+import { SymbolHaltPanel } from './SymbolHaltPanel'
 
 export default function Operations() {
   const overview = useOpsOverview()
@@ -61,6 +62,16 @@ export default function Operations() {
               </CardContent>
             </Card>
           </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                <h2>Tạm ngừng mã (mô phỏng)</h2>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <SymbolHaltPanel />
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader>
               <CardTitle>

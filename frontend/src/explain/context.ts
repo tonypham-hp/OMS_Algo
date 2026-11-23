@@ -124,6 +124,7 @@ export function buildExplainContext(
 
   const killEvent = lastOf(ownEvents, (event) => (event.new_value ?? '').startsWith('KILL_SWITCH:'))
   const killScope = killEvent?.new_value?.slice('KILL_SWITCH:'.length) ?? null
+  const haltEvent = lastOf(ownEvents, (event) => event.reason_code === 'SYMBOL_HALTED' && event.child_order_id === null)
 
   // Điều kiện kích hoạt: Trailing Stop không có giá cố định nên không có ở đây.
   const isTriggered = ownEvents.some((event) => event.action === 'TRIGGER')
@@ -192,6 +193,7 @@ export function buildExplainContext(
     max_delay_seconds: market.max_delay_seconds,
     kill_switch_scope: killScope,
     kill_switch_at: killEvent ? formatDateTime(killEvent.event_time) : null,
+    halted_at: haltEvent ? formatDateTime(haltEvent.event_time) : null,
     last_reject: lastReject,
     reject_streak: streak,
     max_rejects: market.max_rejects,

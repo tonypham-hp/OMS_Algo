@@ -59,7 +59,7 @@ export function getSessionAt(secondsOfDay: number, rules: RulePack): SessionCode
 
 /** Phiên khớp lệnh định kỳ: chỉ có giá dự kiến, khớp một lần lúc hết phiên (gồm lượt định kỳ của mã hạn chế). */
 export function isAuctionSession(session: SessionCode): boolean {
-  return session === 'ATO' || session === 'ATC' || session === 'PERIODIC' || session === 'PERIODIC_LOCK'
+  return session === 'ATO' || session === 'ATC' || session === 'PERIODIC' || session === 'PERIODIC_LOCK' || session === 'REOPEN'
 }
 
 export interface RestrictedPhase {
@@ -106,6 +106,7 @@ export function sessionEndAt(secondsOfDay: number, rules: RulePack): number | nu
  * Mã hạn chế giao dịch: theo `rules.restricted.orderTypes`, chỉ lô chẵn.
  */
 export function allowedOrderTypes(rules: RulePack, session: SessionCode, lot: LotKind, restricted = false): OrderType[] {
+  if (session === 'REOPEN') return rules.haltResume ? (lot === 'ODD' ? rules.haltResume.orderTypes.odd : rules.haltResume.orderTypes.round) : []
   if (restricted && rules.restricted) return lot === 'ROUND' ? (rules.restricted.orderTypes[session] ?? []) : []
   const entry = rules.orderTypesBySession[session]
   if (!entry) return []

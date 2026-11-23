@@ -810,6 +810,29 @@ export function createOrderEngine(options: EngineOptions = {}) {
   }
 
   /** Giá trễ thì lệnh đang chạy phải dừng, vì quyết định theo giá cũ. Có giá mới thì chỉ chạy lại lệnh dừng vì lý do này. */
+  /**
+   * Mã tạm ngừng giao dịch: lệnh cha đang chạy của mã chuyển PAUSED_SYSTEM (SYMBOL_HALTED), hủy lệnh con chờ.
+   * Mã giao dịch lại: lệnh tự chạy lại (SYMBOL_RESUMED), vào phiên khớp định kỳ sau tạm ngừng.
+   */
+  function checkSymbolHalts(state: MarketState) {
+    for (const parent of parents) {
+      const halted = sessionOf(parent.symbol, state) === 'HALTED'
+      if (halted && isRunning(parent)) {
+        pauseBySystem(parent, 'SYMBOL_HALTED', `mã ${parent.symbol} tạm ngừng giao dịch.`)
+      } else if (!halted && parent.status === 'PAUSED_SYSTEM' && parent.reason_code === 'SYMBOL_HALTED') {
+        const runtime = runtimeOf(parent)
+        runtime.lastVolume = null
+        runtime.povAccumulated = 0
+        parent.reason_code = null
+        setParentStatus(parent, parent.executed_qty > 0 ? 'PARTIALLY_EXECUTED' : 'ACTIVE', 'RESUME', undefined, {
+          reason_code: 'SYMBOL_RESUMED',
+        })
+        notify(parent.parent_order_id, 'PARENT_RESUMED', `Lệnh ${parent.parent_order_id} chạy lại: mã ${parent.symbol} giao dịch lại.`)
+        settleParent(parent)
+      }
+    }
+  }
+
   function checkMarketData(state: MarketState) {
     const isStale = isQuoteStale(state.quote_age_seconds)
     for (const parent of parents) {
@@ -1300,6 +1323,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
     processRecoveries()
     processAcks()
     checkMarketData(state)
+    checkSymbolHalts(state)
     if (isSameMoment) return
 
     const previousOf = previousSessions
