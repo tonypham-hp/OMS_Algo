@@ -51,6 +51,13 @@ VWAP, POV, HUNT). OMS tự chia thành lệnh con, gửi xuống Core, theo dõi
     "Đến 28/12/2026" để xem đổi luật mà không tải lại trang.
   - Trang `/cau-hinh/luat` (vận hành, chỉ đọc): các gói luật, trạng thái kiểm chứng, cờ; "Thử cấu hình bỏ nghỉ trưa".
   - Chi tiết: [docs/frontend-spec.md](docs/frontend-spec.md), mục 7.
+- **Phiên giao dịch đặc biệt** (Đợt 8B), cùng gói luật:
+  - Mã bị hạn chế giao dịch (mã mô phỏng XRS): chỉ khớp định kỳ 15 phút, chỉ lô chẵn, chỉ LO trong lượt; khóa sửa/hủy
+    5 phút cuối lượt; đồng hồ đếm ngược tới lần khớp kế tiếp; lô lẻ, MTL, HUNT bị chặn.
+  - Tạm ngừng và giao dịch lại (màn Vận hành, mô phỏng): lệnh cha đang chạy chuyển "Hệ thống tạm dừng"; giao dịch lại qua
+    phiên khớp định kỳ 15 phút chỉ nhận LO, cấm sửa/hủy, rồi lệnh tự chạy.
+  - Lệnh thỏa thuận cơ bản (Sổ lệnh, tab "Thỏa thuận"): tối thiểu 20.000 CP trên HOSE, bước giá 1 đ, trong biên; đối ứng
+    (mô phỏng) xác nhận thì khớp; chỉ hủy khi chưa khớp; không đổi sổ lệnh, không tính vào VWAP.
 - **Sổ lệnh 3 mức** (Đợt 4): 3 mức mua, 3 mức bán theo đúng luật HOSE.
   - Có ở màn Đặt lệnh (bấm một mức để điền giá vào lệnh) và ở Chi tiết lệnh.
   - Ô đổi giá trị nháy màu; KL lệnh của bạn vừa lấy hiện số âm màu vàng.
@@ -81,7 +88,8 @@ VWAP, POV, HUNT). OMS tự chia thành lệnh con, gửi xuống Core, theo dõi
 - **Hướng dẫn lần đầu** (Đợt 5): tour 5 bước khi mỗi vai trò đăng nhập lần đầu; xem lại ở menu tài khoản
   "Xem hướng dẫn". Không chạy khi đang Demo.
 - **Chế độ Demo**: app tự chạy 6 kịch bản E2E (Iceberg, Stop → Iceberg, POV, HUNT, Core mất ACK, OMS sập) và 3 kịch bản
-  luật KRX (sửa lệnh mất/giữ ưu tiên, lô lẻ khớp trong ATC, mã HNX sang HOSE ngày 28/12/2026).
+  luật KRX (sửa lệnh mất/giữ ưu tiên, lô lẻ khớp trong ATC, mã HNX sang HOSE ngày 28/12/2026), 3 kịch bản phiên đặc
+  biệt (mã hạn chế khớp định kỳ 15 phút, tạm ngừng và giao dịch lại, thỏa thuận sau giờ 14:45–15:00).
   - Mỗi bước có chú thích, tô sáng phần tử liên quan và tự chấm điều kiện kiểm tra.
   - Chạy trên dữ liệu riêng; thoát thì dữ liệu của bạn trở về nguyên vẹn.
   - Cách bật ở mục [Chế độ Demo](#chế-độ-demo).
@@ -101,6 +109,8 @@ hộp tìm nhanh Ctrl+K, một bước tour; ảnh 1440px),
 [docs/screenshots/dot7/](docs/screenshots/dot7/) (3 tab Lịch sử và đối soát, tài khoản vanhanh, 1440×900).
 Đợt 8A: [docs/screenshots/dot8a/](docs/screenshots/dot8a/) (phiếu lệnh lô lẻ, Sửa lệnh có cảnh báo ưu tiên, trang Luật
 giao dịch, mã HNX trước và sau 28/12/2026).
+Đợt 8B: [docs/screenshots/dot8b/](docs/screenshots/dot8b/) (mã hạn chế có đồng hồ đếm ngược, nút Hủy bị khóa, phiếu thỏa
+thuận, tab Thỏa thuận).
 
 ## Cấu trúc thư mục
 
@@ -158,13 +168,14 @@ Lệnh khác trong `frontend/`:
 | `npm run screenshots` | Chụp lại bộ ảnh vào `docs/screenshots/v0.1.0/` |
 | `npm run screenshots:dot7` | Chụp lại 3 ảnh màn Lịch sử và đối soát vào `docs/screenshots/dot7/` |
 | `npm run screenshots:dot8a` | Chụp lại 5 ảnh luật KRX vào `docs/screenshots/dot8a/` |
+| `npm run screenshots:dot8b` | Chụp lại 4 ảnh phiên đặc biệt vào `docs/screenshots/dot8b/` |
 
 Cấu hình qua biến môi trường: xem `frontend/.env.example` (`VITE_API_BASE_URL`, `VITE_USE_MOCK`, `VITE_DEMO_MODE`).
 
 ## Kiểm thử
 
 - **Vitest** (`src/**/*.test.ts`): luật giao dịch KRX (ma trận `validateOrder`, test thuộc tính trần/sàn), engine giả
-  lập, 9 kịch bản Demo chạy headless, định dạng, độ tương phản màu.
+  lập, phiên đặc biệt (mã hạn chế, tạm ngừng, thỏa thuận), 12 kịch bản Demo chạy headless, định dạng, độ tương phản màu.
 - **Playwright** (`frontend/e2e/`): chạy trên Chrome có sẵn trong máy (không có thì Edge); **không** tải trình duyệt
   riêng, nên không cần `npx playwright install`. Không có cả hai thì cấu hình dừng và báo rõ.
   - Đồng hồ cố định (thứ Hai 16/11/2026, 09:10) qua `page.clock`, `Math.random` có seed qua `?e2e=1&seed=…`: kết quả lặp lại
@@ -176,8 +187,8 @@ Cấu hình qua biến môi trường: xem `frontend/.env.example` (`VITE_API_BA
 
 ## Chế độ Demo
 
-App tự chạy 6 kịch bản E2E trong [TC-E2E.md](docs/test-cases/TC-E2E.md) và 3 kịch bản luật KRX (Đợt 8A), để trình
-bày mà không phải thao tác tay.
+App tự chạy 6 kịch bản E2E trong [TC-E2E.md](docs/test-cases/TC-E2E.md), 3 kịch bản luật KRX (Đợt 8A) và 3 kịch bản
+phiên đặc biệt (Đợt 8B), để trình bày mà không phải thao tác tay.
 
 **Bật Demo:**
 - Đăng nhập `vanhanh` (vai trò Vận hành), bấm **▶ Demo** trên thanh trên cùng, chọn một kịch bản.
@@ -220,9 +231,9 @@ khi cần người duyệt thứ hai.
 |---|---|---|---|
 | 0 | `/trung-tam` | Trung tâm lệnh | KPI, lệnh cần chú ý, hoạt động gần nhất. Trang mặc định sau đăng nhập |
 | 1 | `/dat-lenh` | Đặt lệnh nâng cao | Bảng giá thu gọn, sổ lệnh 3 mức (room ngoại), dải mẫu một chạm, ticket đặt 12 loại lệnh (gồm LO thường), lô chẵn/lô lẻ, nhãn sàn, kiểm tra luật KRX ngay khi nhập |
-| 2 | `/so-lenh` | Sổ lệnh nâng cao | Bảng lệnh cha, tiến độ, trạng thái, lọc; Sửa, Hủy, Tạm dừng, Tiếp tục |
+| 2 | `/so-lenh` | Sổ lệnh nâng cao | Bảng lệnh cha, tiến độ, trạng thái, lọc; Sửa, Hủy, Tạm dừng, Tiếp tục; tab Thỏa thuận (`?tab=thoa-thuan`) |
 | 3 | `/so-lenh/:id` | Chi tiết lệnh | Lệnh con, khớp, biểu đồ thực hiện so với kế hoạch, giá bình quân so với arrival, sổ lệnh 3 mức, khung HUNT quét từng mức, nhật ký |
-| 4 | `/van-hanh` | Giám sát hệ thống | Cảnh báo, lệnh hệ thống tạm dừng, kill switch, nút bơm lỗi demo |
+| 4 | `/van-hanh` | Giám sát hệ thống | Cảnh báo, lệnh hệ thống tạm dừng, kill switch, tạm ngừng / giao dịch lại mã (mô phỏng), nút bơm lỗi demo |
 | 5 | `/cau-hinh` | Cấu hình chiến lược | Tham số hệ thống, đổi theo maker-checker, lịch sử thay đổi |
 | 6 | `/bao-cao/hieu-qua` | Hiệu quả thực hiện | So giá BQ với arrival và VWAP, tỷ lệ tham gia, biểu đồ theo chiến lược, tên mẫu đã dùng, xuất CSV |
 | 7 | `/mau-chien-luoc` | Mẫu chiến lược | Lưới thẻ mẫu, tham số mặc định, "Phù hợp khi…", "Dùng mẫu này" mở Đặt lệnh đã điền sẵn |
@@ -238,4 +249,4 @@ khi cần người duyệt thứ hai.
 - [docs/backend-gaps.md](docs/backend-gaps.md): bảng, trường, API backend cần thêm ngoài ERD; tồn đọng kỹ thuật.
 - [docs/quality-report.md](docs/quality-report.md): kết quả kiểm thử, kích thước bundle, lỗi đã sửa và việc còn tồn của v0.1.0.
 - [docs/demo-checklist.md](docs/demo-checklist.md): checklist 10 mục trước buổi demo.
-- [CHANGELOG.md](CHANGELOG.md): thay đổi theo phiên bản, Đợt 1–8A.
+- [CHANGELOG.md](CHANGELOG.md): thay đổi theo phiên bản, Đợt 1–8B.

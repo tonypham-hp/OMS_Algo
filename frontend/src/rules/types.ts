@@ -19,8 +19,11 @@ export type LotKind = 'ROUND' | 'ODD'
 /** Loại một lần sửa lệnh: mỗi lần chỉ đổi giá hoặc khối lượng. */
 export type AmendKind = 'PRICE' | 'QTY_UP' | 'QTY_DOWN'
 
-/** Phiên có giờ bắt đầu, kết thúc trong pack (không gồm PRE_OPEN, CLOSED là phần ngoài các phiên). */
-export type TradingSessionCode = Exclude<SessionCode, 'PRE_OPEN' | 'CLOSED'>
+/**
+ * Phiên có giờ bắt đầu, kết thúc trong pack (không gồm PRE_OPEN, CLOSED là phần ngoài các phiên;
+ * phiên riêng theo mã như lượt khớp định kỳ của mã hạn chế không khai trong `sessions`).
+ */
+export type TradingSessionCode = Exclude<SessionCode, 'PRE_OPEN' | 'CLOSED' | 'PERIODIC' | 'PERIODIC_LOCK' | 'HALTED' | 'REOPEN'>
 
 /** Một phiên trong ngày. Giờ dạng "HH:MM", gồm giờ bắt đầu, không gồm giờ kết thúc. */
 export interface SessionWindow {
@@ -53,27 +56,43 @@ export interface FlagState {
   note: string
 }
 
-// ===== Chừa chỗ cho Đợt 8B: chưa có pack nào dùng, engine chưa đọc =====
+// ===== Phiên giao dịch đặc biệt (Đợt 8B) =====
 
-/** Mã bị hạn chế giao dịch: chỉ khớp định kỳ theo lượt, khóa sửa, hủy cuối mỗi lượt. */
+/**
+ * Mã bị hạn chế giao dịch: chỉ khớp định kỳ, chỉ lô chẵn. ATO, rồi các lượt định kỳ `callIntervalMinutes` phút trong giờ
+ * khớp liên tục (chỉ LO), rồi ATC. Khóa sửa, hủy `lockSecondsBeforeCall` giây cuối mỗi lượt.
+ */
 export interface RestrictedSpec {
-  /** Độ dài một lượt khớp định kỳ, phút (dự kiến 15). */
+  /** Độ dài một lượt khớp định kỳ, phút. */
   callIntervalMinutes: number
   /** Số giây cuối lượt không được sửa, hủy. */
   lockSecondsBeforeCall: number
+  /** Loại lệnh nhận theo phiên của mã hạn chế (chỉ lô chẵn). */
+  orderTypes: Partial<Record<SessionCode, OrderType[]>>
 }
 
-/** Phiên mở lại sau khi tạm ngừng giao dịch (ngắt mạch, sự cố). */
+/** Phiên khớp định kỳ khi mã giao dịch lại sau tạm ngừng: chỉ nhận LO, cấm sửa/hủy (REOPEN trong lockedSessions). */
 export interface HaltResumeSpec {
-  /** Phiên khớp định kỳ khi mở lại, phút. */
+  /** Độ dài phiên khớp định kỳ khi mở lại, phút. */
   reopenAuctionMinutes: number
+  /** Loại lệnh nhận trong phiên mở lại. */
+  orderTypes: SessionOrderTypes
 }
 
-/** Lệnh thỏa thuận. 8A chỉ dùng `window` để hiện trên đồng hồ phiên, chưa có phiếu thỏa thuận. */
+/** Lệnh thỏa thuận (Đợt 8B). */
 export interface PutThroughSpec {
-  window: { start: string; end: string }
-  /** Có cho thỏa thuận trong giờ khớp lệnh hay không (8B). */
+  /** Phiên thỏa thuận sau giờ (hiện trên đồng hồ phiên); không có là bảng không có phiên này. */
+  window?: { start: string; end: string }
+  /** Có cho thỏa thuận trong giờ khớp lệnh hay không. */
   duringContinuous?: boolean
+  /** KL tối thiểu một lệnh thỏa thuận, cổ phiếu. */
+  minQty: number
+  /** Bước giá của lệnh thỏa thuận, đồng. */
+  tick: number
+  /** Phiên của bảng nhận lệnh thỏa thuận. */
+  sessions: SessionCode[]
+  /** Giờ lệnh thỏa thuận chưa khớp hết hiệu lực, "HH:MM". */
+  expiryTime: string
 }
 
 export interface RulePack {
@@ -125,6 +144,17 @@ export interface RulePack {
 
 export type RuleCode =
   | 'SYMBOL_TRANSFER_HALT'
+  | 'RESTRICTED_ROUND_LOT_ONLY'
+  | 'RESTRICTED_NO_MTL'
+  | 'RESTRICTED_NO_HUNT'
+  | 'RESTRICTED_LOCKED'
+  | 'SYMBOL_TRADING_HALTED'
+  | 'PT_MIN_QTY'
+  | 'PT_PRICE_TICK'
+  | 'PT_SESSION_CLOSED'
+  | 'PT_COUNTERPARTY_REQUIRED'
+  | 'PT_MATCHED_LOCKED'
+  | 'PT_NOT_PENDING'
   | 'BOARD_CLOSED'
   | 'ORDER_TYPE_NOT_IN_SESSION'
   | 'ORDER_TYPE_DISABLED'
@@ -169,6 +199,12 @@ export interface SymbolInfo {
   halted: boolean
   /** Room ngoại còn lại, cổ phiếu. Không có là không giới hạn. */
   foreignRoom?: number
+  /** Mã bị hạn chế giao dịch: chỉ khớp định kỳ, chỉ lô chẵn, không MTL, không HUNT. */
+  restricted?: boolean
+  /** Giờ khớp của lượt định kỳ hiện tại (giây trong ngày), để câu khóa sửa, hủy nêu giờ. */
+  callEnd?: number
+  /** Mã đang tạm ngừng giao dịch (vận hành tạm ngừng; khác `halted` là ngừng cả ngày vì chuyển sàn). */
+  tradingHalted?: boolean
 }
 
 export interface AccountInfo {

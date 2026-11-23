@@ -20,6 +20,7 @@ export type ExplainCode =
   | 'SESSION_LOCKED'
   | 'STALE_MARKET_DATA'
   | 'KILL_SWITCH'
+  | 'SYMBOL_HALTED'
   | 'CHILD_REJECTED'
   | 'CHILD_UNKNOWN'
   | 'CONDITION_WAITING'
@@ -114,6 +115,8 @@ export interface ExplainContext {
   max_delay_seconds: number | null
   kill_switch_scope: string | null
   kill_switch_at: string | null
+  /** Lúc mã tạm ngừng giao dịch làm lệnh tạm dừng (Đợt 8B). */
+  halted_at: string | null
   last_reject: RejectInfo | null
   /** Số lệnh con bị từ chối liên tiếp ở cuối danh sách. */
   reject_streak: number

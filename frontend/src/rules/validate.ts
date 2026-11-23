@@ -67,8 +67,9 @@ export function checkSession(
   rules: RulePack,
   session: SessionCode,
   immediate: boolean,
+  restricted = false,
 ): RuleViolation[] {
-  const allowed = allowedOrderTypes(rules, session, lot)
+  const allowed = allowedOrderTypes(rules, session, lot, restricted)
   if (allowed.includes(orderType)) return []
   const severity = immediate ? 'error' : 'warn'
   const params = { orderType, session, board: rules.board, allowed: allowed.join(', ') }
@@ -89,8 +90,17 @@ export function validateOrder(
   account: AccountInfo,
 ): RuleViolation[] {
   if (symbolInfo.halted) return [violation('SYMBOL_TRANSFER_HALT', 'symbol', { symbol: symbolInfo.symbol })]
+  if (symbolInfo.tradingHalted) return [violation('SYMBOL_TRADING_HALTED', 'symbol', { symbol: symbolInfo.symbol })]
   const errors: RuleViolation[] = []
   const { orderType, lot } = input
+  // Mã hạn chế giao dịch: chỉ lô chẵn, không MTL (kể cả lệnh thuật toán sẽ sinh MTL), lượt định kỳ chỉ nhận LO.
+  if (symbolInfo.restricted && rules.restricted) {
+    if (lot === 'ODD') errors.push(violation('RESTRICTED_ROUND_LOT_ONLY', 'qty', { symbol: symbolInfo.symbol, lot: rules.lots.round }))
+    else if (orderType === 'MTL') errors.push(violation('RESTRICTED_NO_MTL', 'orderType', { symbol: symbolInfo.symbol, orderType }))
+    else errors.push(...checkSession(orderType, lot, rules, sessionNow, input.immediate ?? false, true))
+    errors.push(...priceAndQty(input, rules, symbolInfo, account, lot === 'ODD'))
+    return errors
+  }
   const mokMak = rules.flags.MOK_MAK
   if ((orderType === 'MOK' || orderType === 'MAK') && mokMak && !mokMak.enabled) {
     errors.push(violation('ORDER_TYPE_DISABLED', 'orderType', { orderType, board: rules.board, label: mokMak.label }))
@@ -100,6 +110,14 @@ export function validateOrder(
     errors.push(...checkSession(orderType, lot, rules, sessionNow, input.immediate ?? false))
   }
 
+  errors.push(...priceAndQty(input, rules, symbolInfo, account))
+  return errors
+}
+
+/** Giá theo loại lệnh, KL theo lô, room ngoại. `skipQty`: KL đã có lỗi riêng (lô lẻ trên mã hạn chế). */
+function priceAndQty(input: OrderInput, rules: RulePack, symbolInfo: SymbolInfo, account: AccountInfo, skipQty = false) {
+  const errors: RuleViolation[] = []
+  const { orderType, lot } = input
   if (MARKET_ORDER_TYPES.includes(orderType)) {
     if (input.price !== null) errors.push(violation('PRICE_NOT_ALLOWED', 'price', { orderType }))
   } else if (input.price === null) {
@@ -107,11 +125,23 @@ export function validateOrder(
   } else {
     errors.push(...checkPrice(input.price, rules, symbolInfo))
   }
-
+  if (skipQty) return errors
   const qtyErrors = checkQty(input.qty, lot, rules)
   errors.push(...qtyErrors)
   if (qtyErrors.length === 0) errors.push(...checkForeignRoom(input.side, input.qty, symbolInfo, account))
   return errors
+}
+
+/** Câu lỗi khóa sửa, hủy của mã hạn chế: kèm giờ khớp của lượt. */
+function restrictedLock(symbolInfo: SymbolInfo, rules: RulePack): RuleViolation {
+  const end = symbolInfo.callEnd ?? 0
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return violation('RESTRICTED_LOCKED', 'session', {
+    symbol: symbolInfo.symbol,
+    lockMinutes: Math.round((rules.restricted?.lockSecondsBeforeCall ?? 0) / 60),
+    callEnd: `${pad(Math.floor(end / 3600))}:${pad(Math.floor((end % 3600) / 60))}`,
+    session: 'PERIODIC_LOCK',
+  })
 }
 
 export type AmendClass = AmendKind | 'BOTH' | 'NONE'
@@ -148,6 +178,7 @@ export function validateAmend(
   const kind = classifyAmend(amend.from, amend.to)
   if (kind === 'BOTH' && rules.amendPolicy.oneFieldPerAmend) return [violation('AMEND_ONE_FIELD', 'price')]
   if (kind === 'NONE') return [violation('AMEND_NO_CHANGE', 'qty')]
+  if (sessionNow === 'PERIODIC_LOCK') return [restrictedLock(symbolInfo, rules)]
   if (!isAmendAllowed(rules, sessionNow)) return [violation('AMEND_LOCKED_SESSION', 'session', { session: sessionNow })]
   const errors: RuleViolation[] = []
   if (amend.to.price !== amend.from.price && amend.to.price !== null) errors.push(...checkPrice(amend.to.price, rules, symbolInfo))
@@ -161,7 +192,8 @@ export function validateAmend(
   return errors
 }
 
-export function validateCancel(rules: RulePack, sessionNow: SessionCode): RuleViolation[] {
+export function validateCancel(rules: RulePack, sessionNow: SessionCode, symbolInfo?: SymbolInfo): RuleViolation[] {
+  if (sessionNow === 'PERIODIC_LOCK' && symbolInfo) return [restrictedLock(symbolInfo, rules)]
   return isCancelAllowed(rules, sessionNow) ? [] : [violation('CANCEL_LOCKED_SESSION', 'session', { session: sessionNow })]
 }
 

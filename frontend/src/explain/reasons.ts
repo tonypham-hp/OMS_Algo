@@ -166,6 +166,17 @@ export const REASONS: Record<ExplainCode, ReasonDef> = {
     ],
   },
 
+  SYMBOL_HALTED: {
+    code: 'SYMBOL_HALTED',
+    appliesTo: ['PAUSED_SYSTEM'],
+    title: 'Vì sao lệnh này đang dừng?',
+    template: (ctx) =>
+      `Mã ${ctx.symbol} đang tạm ngừng giao dịch${ctx.halted_at ? ` từ ${ctx.halted_at}` : ''}. Lệnh tạm dừng để không gửi lệnh con, ` +
+      `lệnh con chưa khớp đã bị hủy. Khi mã giao dịch lại, lệnh tự chạy lại qua phiên khớp định kỳ 15 phút (chỉ LO, không sửa, hủy). ${progress(ctx)}`,
+    actions: [SCROLL_LOG],
+    sources: (ctx) => [`Trạng thái giao dịch của mã ${ctx.symbol}`, ...eventSource(ctx)],
+  },
+
   KILL_SWITCH: {
     code: 'KILL_SWITCH',
     appliesTo: ['PAUSED_SYSTEM'],
@@ -367,6 +378,10 @@ const SESSION_NAMES: Record<string, string> = {
   ATC: 'phiên ATC',
   PUT_THROUGH: 'phiên thỏa thuận sau giờ',
   CLOSED: 'giờ đóng cửa',
+  PERIODIC: 'lượt khớp định kỳ',
+  PERIODIC_LOCK: '5 phút cuối lượt khớp định kỳ',
+  HALTED: 'thời gian tạm ngừng giao dịch',
+  REOPEN: 'phiên khớp định kỳ sau tạm ngừng',
 }
 const BOARD_NAMES: Record<string, string> = { STO: 'HOSE', STX: 'HNX', UPX: 'UPCoM' }
 const SEC_TYPE_NAMES: Record<string, string> = { STOCK: 'cổ phiếu', CLOSED_FUND: 'chứng chỉ quỹ đóng', ETF: 'ETF', CW: 'chứng quyền' }
@@ -384,6 +399,18 @@ const band = (p: RuleParams) =>
 export const RULE_REASONS: Record<RuleCode, (p: RuleParams) => string> = {
   SYMBOL_TRANSFER_HALT: (p) =>
     `Mã ${p.symbol} ngừng giao dịch hôm nay để chuyển từ HNX sang HOSE (giao dịch lại trên HOSE từ ${formatDate(TRANSFER_FIRST_DATE)}).`,
+  RESTRICTED_ROUND_LOT_ONLY: (p) => `Mã ${p.symbol} bị hạn chế giao dịch: chỉ nhận lô chẵn (bội số ${num(p.lot)} CP), không nhận lô lẻ.`,
+  RESTRICTED_NO_MTL: (p) => `Mã ${p.symbol} bị hạn chế giao dịch, chỉ khớp định kỳ: không nhận lệnh MTL (${p.orderType}).`,
+  RESTRICTED_NO_HUNT: (p) => `Mã ${p.symbol} bị hạn chế giao dịch, chỉ khớp định kỳ 15 phút một lần: không đặt được lệnh HUNT.`,
+  RESTRICTED_LOCKED: (p) =>
+    `Mã ${p.symbol} bị hạn chế giao dịch: khóa sửa, hủy ${num(p.lockMinutes)} phút cuối lượt, lượt này khớp lúc ${p.callEnd}.`,
+  SYMBOL_TRADING_HALTED: (p) => `Mã ${p.symbol} đang tạm ngừng giao dịch: chưa nhận lệnh mới, khi giao dịch lại sẽ có phiên khớp định kỳ 15 phút.`,
+  PT_MIN_QTY: (p) => `Lệnh thỏa thuận trên ${board(p)} tối thiểu ${num(p.min)} CP (đang nhập ${num(p.qty)} CP).`,
+  PT_PRICE_TICK: (p) => `Giá thỏa thuận phải là số nguyên đồng lớn hơn 0, bước giá ${num(p.tick)} đ (đang nhập ${p.price}).`,
+  PT_SESSION_CLOSED: (p) => `Bảng ${board(p)} không nhận lệnh thỏa thuận trong ${session(p)}.`,
+  PT_COUNTERPARTY_REQUIRED: () => 'Nhập tài khoản đối ứng, khác tài khoản đặt lệnh.',
+  PT_MATCHED_LOCKED: (p) => `Lệnh thỏa thuận ${p.deal} đã khớp: không sửa, không hủy được.`,
+  PT_NOT_PENDING: (p) => `Lệnh thỏa thuận ${p.deal} không còn chờ xác nhận (${p.status}).`,
   BOARD_CLOSED: (p) => `Bảng ${board(p)} không nhận lệnh trong ${session(p)}.`,
   ORDER_TYPE_NOT_IN_SESSION: (p) =>
     `Lệnh ${p.orderType} không đặt được trong ${session(p)} của bảng ${board(p)} (nhận: ${p.allowed || 'không có'}).`,

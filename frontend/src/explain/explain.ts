@@ -19,6 +19,7 @@ const PAUSE_REASON_TO_CODE: Record<OrderReasonCode, ExplainCode> = {
   CHILD_REJECTED_REPEAT: 'CHILD_REJECTED',
   MARKET_DATA_STALE: 'STALE_MARKET_DATA',
   KILL_SWITCH: 'KILL_SWITCH',
+  SYMBOL_HALTED: 'SYMBOL_HALTED',
 }
 
 /** Loại lệnh chờ điều kiện giá rồi mới sinh lệnh con. */

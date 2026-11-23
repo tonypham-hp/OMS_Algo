@@ -203,6 +203,36 @@ export function runAction(env: DemoEnv, ctx: DemoContext, action: DemoAction) {
     case 'replayMissedFills':
       ctx.missedReports.splice(0).forEach((report) => engine.applyExecution(report))
       return
+    case 'haltSymbol':
+      return simulator.haltSymbol(action.params.symbol)
+    case 'resumeSymbol':
+      return simulator.resumeSymbol(action.params.symbol)
+    case 'putThrough': {
+      const params = action.params
+      return expecting(ctx, params.expectError, () => {
+        ctx.refs[params.ref] = engine.createPutThrough(
+          {
+            account_no: env.account,
+            counterparty_account: params.counterparty ?? '999C000001',
+            symbol: params.symbol,
+            side: params.side,
+            qty: params.qty,
+            price: params.price,
+          },
+          env.userId,
+        ).deal_id
+      })
+    }
+    case 'confirmPutThrough':
+    case 'rejectPutThrough':
+    case 'cancelPutThrough': {
+      const id = requireOrderId(ctx, action.params.ref)
+      return expecting(ctx, action.params.expectError, () => {
+        if (action.type === 'confirmPutThrough') engine.confirmPutThrough(id, 'DOI_UNG')
+        else if (action.type === 'rejectPutThrough') engine.rejectPutThrough(id, 'DOI_UNG')
+        else engine.cancelPutThrough(id, env.userId)
+      })
+    }
     case 'setDate':
       return simulator.setTradingDate(action.params.date, { allowPast: true })
     case 'amend':

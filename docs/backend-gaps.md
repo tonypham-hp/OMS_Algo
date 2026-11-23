@@ -337,3 +337,20 @@ dưới đây; backend thật phải cung cấp.
 
 Để Đợt 8B: mã bị hạn chế (khớp định kỳ 15 phút, khóa sửa/hủy cuối lượt), phiên mở lại sau tạm ngừng, lệnh thỏa thuận.
 Các trường `restricted`, `haltResume`, `putThrough` của `RulePack` đã chừa sẵn.
+
+## 15. Phiên giao dịch đặc biệt: mã hạn chế, tạm ngừng, lệnh thỏa thuận (Đợt 8B)
+
+Bản giả lập tự giữ các phần dưới đây trong bộ giả lập và engine; backend thật phải cung cấp.
+
+| Cần có | Vì sao | Gợi ý |
+|---|---|---|
+| **Danh sách mã bị hạn chế giao dịch realtime** | Mã hạn chế chỉ khớp định kỳ 15 phút, chỉ lô chẵn, không MTL, không HUNT; khóa sửa/hủy 5 phút cuối lượt | Trường `trading_status = RESTRICTED` trên luồng giá; danh sách theo ngày (bản giả lập: `RESTRICTED_SYMBOLS` trong `src/mocks/data.ts`) |
+| **Lịch lượt khớp định kỳ** của mã hạn chế | Đồng hồ đếm ngược, khóa sửa/hủy, khớp đúng giờ | Trường `phase { session, call_end, call_id }` trên dữ liệu giá, hoặc API lịch lượt; tham số lượt nằm ở `restricted` của gói luật (`callIntervalMinutes`, `lockSecondsBeforeCall`, `orderTypes`) |
+| **Trạng thái tạm ngừng realtime** của từng mã | Lệnh cha chuyển PAUSED_SYSTEM khi mã tạm ngừng, tự chạy lại khi mã giao dịch lại | Sự kiện tạm ngừng / giao dịch lại trên luồng giá (`halt { status: HALTED \| REOPEN, since, reopen_end }`); tham số phiên mở lại ở `haltResume` của gói luật |
+| Mã lý do mới | Giải thích lệnh, nhật ký | `OrderReasonCode` / `EventReasonCode`: `SYMBOL_HALTED`, `SYMBOL_RESUMED`. Mã lỗi kiểm tra (`RuleCode`): `RESTRICTED_ROUND_LOT_ONLY`, `RESTRICTED_NO_MTL`, `RESTRICTED_NO_HUNT`, `RESTRICTED_LOCKED`, `SYMBOL_TRADING_HALTED` |
+| **Luồng xác nhận lệnh thỏa thuận** với bên đối ứng | Gửi → đối ứng xác nhận / từ chối → khớp; chỉ hủy được khi chưa khớp | API tạo lệnh thỏa thuận, kênh nhận xác nhận của bên đối ứng (bản giả lập: nút "Đối ứng xác nhận / từ chối" mô phỏng). Trạng thái `PENDING_CONFIRM \| MATCHED \| REJECTED \| CANCELLED \| EXPIRED`; mã lệnh thỏa thuận riêng (`PT-YYYYMMDD-NNNN`), không dùng chung mã lệnh cha |
+| Luật lệnh thỏa thuận theo bảng | KL tối thiểu (HOSE 20.000, HNX/UPCoM 5.000), bước giá 1 đ, phiên nhận, giờ hết hiệu lực | `putThrough` của gói luật; mã lỗi `PT_MIN_QTY`, `PT_PRICE_TICK`, `PT_SESSION_CLOSED`, `PT_COUNTERPARTY_REQUIRED`, `PT_MATCHED_LOCKED`, `PT_NOT_PENDING` |
+| Tách thỏa thuận khỏi khớp lệnh | Không đổi sổ lệnh, không tính vào VWAP khớp lệnh của báo cáo | Giao dịch thỏa thuận ở bảng riêng, không vào bảng khớp lệnh hay băng tick khớp lệnh; nhật ký riêng |
+
+Chưa làm, để đợt sau: trừ room ngoại cho lệnh thỏa thuận mua của nhà đầu tư nước ngoài; quảng cáo thỏa thuận; thỏa thuận
+nhiều bên, lô lớn; ghi nhận tiền và chứng khoán của tài khoản đối ứng; sửa lệnh thỏa thuận chưa khớp.

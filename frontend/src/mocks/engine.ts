@@ -5,6 +5,9 @@ import { DEFAULT_ORDER_RULES, SYSTEM_PARAM_DEFAULTS } from '@/config/systemParam
 import { formatClock, toDateString } from '@/lib/format'
 import { fromCreateOrderRequest, validateOrderRules, validateOrderValues } from '@/pages/PlaceOrder/orderSchema'
 import type {
+  CreatePutThroughRequest,
+  PutThroughDeal,
+  PutThroughStatus,
   ChildOrder,
   ChildOrderStatus,
   ChildOrderType,
@@ -48,6 +51,7 @@ import { buildRuleContext, symbolInfoFromQuote } from '@/rules/context'
 import { mtlRemainderPrice } from '@/rules/price'
 import type { AmendKind } from '@/rules/types'
 import { checkForeignRoom, checkPrice, classifyAmend, losesPriority } from '@/rules/validate'
+import { validatePutThrough } from '@/rules/putThrough'
 import { isAuctionSession, isMatchingOver, parseTimeToSeconds, rulesForQuote } from '@/utils/hose'
 import {
   getAllowedActions,
@@ -228,6 +232,10 @@ export interface EngineState {
   coreSequence: number
   /** Sổ phía Core. Tùy chọn để bản lưu cũ vẫn đọc được: thiếu thì dựng lại từ lệnh con. */
   coreLedger?: CoreLedgerEntry[]
+  /** Lệnh thỏa thuận và nhật ký của chúng (Đợt 8B). Tùy chọn cho bản lưu cũ. */
+  putThroughs?: PutThroughDeal[]
+  putThroughEvents?: OrderEvent[]
+  putThroughSequence?: number
 }
 
 /** Trạng thái OMS mà Core cũng ghi y như vậy khi lệnh con đổi trạng thái. */
@@ -305,11 +313,17 @@ export function createOrderEngine(options: EngineOptions = {}) {
   let currentDate: string | null = null
   let previousSession: SessionCode | null = null
   let previousSessions = new Map<string, SessionCode>()
+  /** Lượt khớp của nhịp trước theo mã (mã hạn chế khớp định kỳ theo lượt 15 phút). Không cần lưu: chỉ so hai nhịp liền nhau. */
+  let previousCallKeys = new Map<string, string>()
   const closedBoards = new Set<string>()
   let orderSequence = 0
   let eventSequence = 0
   let matchSequence = 0
   let coreSequence = 0
+  /** Lệnh thỏa thuận: danh sách, nhật ký và bộ đếm riêng, không trộn với lệnh cha, lệnh con, khớp lệnh. */
+  let putThroughs: PutThroughDeal[] = []
+  let putThroughEvents: OrderEvent[] = []
+  let putThroughSequence = 0
   /**
    * Room ngoại lệnh mua của nhà đầu tư nước ngoài vừa giữ (âm) hoặc trả lại (dương), chờ runtime ghi vào bộ giả lập.
    * `roomInFlight`: phần đã chuyển cho bộ giả lập nhưng engine chưa thấy trong nhịp giá mới.
@@ -370,7 +384,15 @@ export function createOrderEngine(options: EngineOptions = {}) {
     if (!state) return 'CLOSED'
     const quote = state.quotes.find((item) => item.symbol === symbol)
     if (quote?.board === null) return 'CLOSED'
+    // Phiên riêng của mã (mã hạn chế: lượt khớp định kỳ) đè phiên của bảng.
+    if (quote?.phase) return quote.phase.session
     return state.board_sessions?.[quote?.board ?? 'STO'] ?? state.session
+  }
+
+  /** Khóa "lượt khớp" của mã: mã lượt định kỳ (mã hạn chế), không thì tên phiên. Đổi khóa là lượt trước vừa khớp. */
+  function callKeyOf(symbol: string, state: MarketState) {
+    const quote = state.quotes.find((item) => item.symbol === symbol)
+    return quote?.phase?.call_id ?? sessionOf(symbol, state)
   }
 
   /** Gói luật đang áp cho mã: theo bảng giao dịch của mã trong ngày. */
@@ -557,7 +579,7 @@ export function createOrderEngine(options: EngineOptions = {}) {
     if (quantity <= 0) return undefined
     // MTL không hợp lệ trong ATO, ATC: lệnh không có giá ở hai phiên này là lệnh ATO, ATC.
     const session = sessionOf(parent.symbol)
-    const finalType = orderType === 'MTL' && session && isAuctionSession(session) ? (session as ChildOrderType) : orderType
+    const finalType = orderType === 'MTL' && (session === 'ATO' || session === 'ATC') ? (session as ChildOrderType) : orderType
     const runtime = runtimeOf(parent)
     runtime.cycleNo += 1
     const childId = `${parent.parent_order_id}-CH${String(runtime.cycleNo).padStart(3, '0')}`
@@ -800,6 +822,144 @@ export function createOrderEngine(options: EngineOptions = {}) {
   }
 
   /** Giá trễ thì lệnh đang chạy phải dừng, vì quyết định theo giá cũ. Có giá mới thì chỉ chạy lại lệnh dừng vì lý do này. */
+  /**
+   * Mã tạm ngừng giao dịch: lệnh cha đang chạy của mã chuyển PAUSED_SYSTEM (SYMBOL_HALTED), hủy lệnh con chờ.
+   * Mã giao dịch lại: lệnh tự chạy lại (SYMBOL_RESUMED), vào phiên khớp định kỳ sau tạm ngừng.
+   */
+  // ===== Lệnh thỏa thuận (Đợt 8B) =====
+
+  /** Phiên của bảng giao dịch của mã (lệnh thỏa thuận theo giờ của bảng, không theo lượt định kỳ riêng của mã). */
+  function boardSessionOf(symbol: string, state: MarketState | null = market): SessionCode {
+    if (!state) return 'CLOSED'
+    const quote = state.quotes.find((item) => item.symbol === symbol)
+    if (!quote || quote.board === null) return 'CLOSED'
+    return state.board_sessions?.[quote.board ?? 'STO'] ?? state.session
+  }
+
+  function logPutThroughEvent(deal: PutThroughDeal, action: OrderEventAction, oldValue: string | null, newValue: string, userId: string) {
+    putThroughEvents.push({
+      event_id: `PTE-${String(putThroughEvents.length + 1).padStart(6, '0')}`,
+      parent_order_id: deal.deal_id,
+      child_order_id: null,
+      action,
+      user_id: userId,
+      channel: userId === 'SYSTEM' ? 'ENGINE' : 'WEB',
+      old_value: oldValue,
+      new_value: newValue,
+      event_time: nowIso(),
+    })
+  }
+
+  function setPutThroughStatus(deal: PutThroughDeal, next: PutThroughStatus, action: OrderEventAction, userId: string) {
+    const previous = deal.status
+    deal.status = next
+    deal.updated_at = nowIso()
+    if (next === 'MATCHED') deal.matched_at = deal.updated_at
+    logPutThroughEvent(deal, action, previous, next, userId)
+  }
+
+  function ruleError(violations: ReturnType<typeof validatePutThrough>) {
+    const errors = violations.map((item) => ({ field: item.field, message: ruleMessage(item), code: item.code }))
+    return new EngineError(errors[0].message, 422, errors)
+  }
+
+  /** Gửi lệnh thỏa thuận: kiểm theo gói luật của mã (KL tối thiểu, bước giá 1 đ, biên, phiên), chờ bên đối ứng xác nhận. */
+  function createPutThrough(request: CreatePutThroughRequest, userId: string): PutThroughDeal {
+    const quote = getQuote(request.symbol)
+    if (!quote) throw new EngineError('Mã chứng khoán không hợp lệ', 422)
+    const rule = buildRuleContext(quote, getToday())
+    const violations = validatePutThrough(
+      { side: request.side, qty: request.qty, price: request.price, accountNo: request.account_no, counterparty: request.counterparty_account },
+      rule.rules,
+      boardSessionOf(request.symbol),
+      rule.symbol,
+    )
+    if (violations.length > 0) throw ruleError(violations)
+    putThroughSequence += 1
+    const now = nowIso()
+    const deal: PutThroughDeal = {
+      deal_id: `PT-${getToday().replaceAll('-', '')}-${String(putThroughSequence).padStart(4, '0')}`,
+      account_no: request.account_no,
+      counterparty_account: request.counterparty_account.trim(),
+      symbol: request.symbol,
+      side: request.side,
+      qty: request.qty,
+      price: request.price,
+      status: 'PENDING_CONFIRM',
+      user_id: userId,
+      created_at: now,
+      updated_at: now,
+      matched_at: null,
+    }
+    putThroughs.push(deal)
+    logPutThroughEvent(deal, 'CREATE', null, 'PENDING_CONFIRM', userId)
+    return deal
+  }
+
+  function requirePutThrough(dealId: string) {
+    const deal = putThroughs.find((item) => item.deal_id === dealId)
+    if (!deal) throw new EngineError('Không tìm thấy lệnh thỏa thuận', 404)
+    return deal
+  }
+
+  /**
+   * Bên đối ứng (mô phỏng) xác nhận thì khớp ngay; từ chối thì kết thúc. Khớp thỏa thuận không vào `executions`,
+   * không ghi băng tick, không đụng sổ lệnh: OrderBook3 và VWAP khớp lệnh của báo cáo không đổi.
+   */
+  function decidePutThrough(dealId: string, next: 'MATCHED' | 'REJECTED', userId: string) {
+    const deal = requirePutThrough(dealId)
+    if (deal.status !== 'PENDING_CONFIRM') {
+      throw ruleError([{ code: 'PT_NOT_PENDING', field: 'session', severity: 'error', params: { deal: deal.deal_id, status: deal.status } }])
+    }
+    setPutThroughStatus(deal, next, next === 'MATCHED' ? 'FILL' : 'REJECT', userId)
+    return deal
+  }
+
+  /** Chỉ hủy được lệnh thỏa thuận chưa khớp; đã khớp thì không sửa, không hủy. */
+  function cancelPutThrough(dealId: string, userId: string) {
+    const deal = requirePutThrough(dealId)
+    if (deal.status === 'MATCHED') {
+      throw ruleError([{ code: 'PT_MATCHED_LOCKED', field: 'session', severity: 'error', params: { deal: deal.deal_id } }])
+    }
+    if (deal.status !== 'PENDING_CONFIRM') {
+      throw ruleError([{ code: 'PT_NOT_PENDING', field: 'session', severity: 'error', params: { deal: deal.deal_id, status: deal.status } }])
+    }
+    setPutThroughStatus(deal, 'CANCELLED', 'CANCEL', userId)
+    return deal
+  }
+
+  /** Lệnh thỏa thuận chưa khớp hết hiệu lực lúc `putThrough.expiryTime` của pack, hoặc khi sang ngày. */
+  function expirePutThroughs(state: MarketState) {
+    for (const deal of putThroughs) {
+      if (deal.status !== 'PENDING_CONFIRM') continue
+      const quote = state.quotes.find((item) => item.symbol === deal.symbol)
+      const rules = rulesForQuote(quote, state.trading_date).rules
+      const expiry = parseTimeToSeconds(rules.putThrough?.expiryTime ?? '15:00') ?? Number.POSITIVE_INFINITY
+      if (deal.created_at.slice(0, 10) < state.trading_date || state.sim_seconds >= expiry) {
+        setPutThroughStatus(deal, 'EXPIRED', 'DECISION', 'SYSTEM')
+      }
+    }
+  }
+
+  function checkSymbolHalts(state: MarketState) {
+    for (const parent of parents) {
+      const halted = sessionOf(parent.symbol, state) === 'HALTED'
+      if (halted && isRunning(parent)) {
+        pauseBySystem(parent, 'SYMBOL_HALTED', `mã ${parent.symbol} tạm ngừng giao dịch.`)
+      } else if (!halted && parent.status === 'PAUSED_SYSTEM' && parent.reason_code === 'SYMBOL_HALTED') {
+        const runtime = runtimeOf(parent)
+        runtime.lastVolume = null
+        runtime.povAccumulated = 0
+        parent.reason_code = null
+        setParentStatus(parent, parent.executed_qty > 0 ? 'PARTIALLY_EXECUTED' : 'ACTIVE', 'RESUME', undefined, {
+          reason_code: 'SYMBOL_RESUMED',
+        })
+        notify(parent.parent_order_id, 'PARENT_RESUMED', `Lệnh ${parent.parent_order_id} chạy lại: mã ${parent.symbol} giao dịch lại.`)
+        settleParent(parent)
+      }
+    }
+  }
+
   function checkMarketData(state: MarketState) {
     const isStale = isQuoteStale(state.quote_age_seconds)
     for (const parent of parents) {
@@ -989,7 +1149,9 @@ export function createOrderEngine(options: EngineOptions = {}) {
   function checkConditions(parent: ParentOrder, side: Side, last: number) {
     if (runtimeOf(parent).triggeredConditionId !== null) return
     // Trong ATO, ATC chưa có giao dịch mới nên giá khớp chỉ là giá cũ, không được dùng để kích hoạt.
-    if (sessionOf(parent.symbol) !== 'CONTINUOUS') return
+    // Mã hạn chế không có phiên liên tục: giá chỉ đổi lúc khớp lượt định kỳ, nên điều kiện xét cả trong lượt.
+    const conditionSession = sessionOf(parent.symbol)
+    if (conditionSession !== 'CONTINUOUS' && conditionSession !== 'PERIODIC' && conditionSession !== 'PERIODIC_LOCK') return
     for (const condition of conditions) {
       if (condition.parent_order_id !== parent.parent_order_id || condition.status !== 'ACTIVE') continue
       if (condition.trigger_price === null) continue
@@ -1288,6 +1450,8 @@ export function createOrderEngine(options: EngineOptions = {}) {
     processRecoveries()
     processAcks()
     checkMarketData(state)
+    checkSymbolHalts(state)
+    expirePutThroughs(state)
     if (isSameMoment) return
 
     const previousOf = previousSessions
@@ -1296,6 +1460,8 @@ export function createOrderEngine(options: EngineOptions = {}) {
     const previousFallback = previousSession
     previousSession = state.session
     previousSessions = new Map(state.quotes.map((quote) => [quote.symbol, sessionOf(quote.symbol, state)]))
+    const previousKeysOf = previousCallKeys
+    previousCallKeys = new Map(state.quotes.map((quote) => [quote.symbol, callKeyOf(quote.symbol, state)]))
     currentDate = state.trading_date
     const prevOf = (parent: ParentOrder) => previousOf.get(parent.symbol) ?? previousFallback
     const nowOf = (parent: ParentOrder) => sessionOf(parent.symbol, state)
@@ -1312,7 +1478,10 @@ export function createOrderEngine(options: EngineOptions = {}) {
     // Vừa hết phiên ATO, ATC của bảng giao dịch: bộ giả lập đã chốt giá khớp định kỳ ở nhịp này.
     for (const parent of liveParents) {
       const previous = prevOf(parent)
-      if (previous === null || !isAuctionSession(previous) || nowOf(parent) === previous) continue
+      // Hết phiên định kỳ: khóa lượt đổi. Mã thường: khóa là tên phiên. Mã hạn chế: khóa là mã lượt, nên chuyển từ
+      // PERIODIC sang PERIODIC_LOCK (cùng lượt, 5 phút cuối) không phải lúc khớp.
+      const sameCall = (previousKeysOf.get(parent.symbol) ?? previous) === callKeyOf(parent.symbol, state)
+      if (previous === null || !isAuctionSession(previous) || sameCall) continue
       const quote = getQuote(parent.symbol)
       if (quote && isRunning(parent)) matchAuctionChildren(parent, quote)
     }
@@ -1362,7 +1531,13 @@ export function createOrderEngine(options: EngineOptions = {}) {
   // ===== Thao tác của người dùng =====
 
   function assertAllowed(parent: ParentOrder, action: OrderAction) {
-    const availability = getAllowedActions(parent.status, sessionOf(parent.symbol), parent.reason_code, rulesOfSymbol(parent.symbol))[action]
+    const availability = getAllowedActions(
+      parent.status,
+      sessionOf(parent.symbol),
+      parent.reason_code,
+      rulesOfSymbol(parent.symbol),
+      getQuote(parent.symbol)?.phase,
+    )[action]
     if (!availability.allowed) throw new EngineError(availability.reason ?? 'Không được phép thao tác')
   }
 
@@ -1953,6 +2128,9 @@ export function createOrderEngine(options: EngineOptions = {}) {
     closedBoards.clear()
     orderSequence = seed.orders.length
     eventSequence = seed.events.length
+    putThroughs = []
+    putThroughEvents = []
+    putThroughSequence = 0
   }
 
   function exportState(): EngineState {
@@ -1981,6 +2159,9 @@ export function createOrderEngine(options: EngineOptions = {}) {
       matchSequence,
       coreSequence,
       coreLedger: [...coreLedger.values()],
+      putThroughs,
+      putThroughEvents,
+      putThroughSequence,
     }
   }
 
@@ -2013,6 +2194,9 @@ export function createOrderEngine(options: EngineOptions = {}) {
     eventSequence = state.eventSequence
     matchSequence = state.matchSequence
     coreSequence = state.coreSequence
+    putThroughs = state.putThroughs ?? []
+    putThroughEvents = state.putThroughEvents ?? []
+    putThroughSequence = state.putThroughSequence ?? 0
     coreLedger.clear()
     ;(state.coreLedger ?? buildCoreLedger(children)).forEach((entry) => coreLedger.set(entry.child_order_id, entry))
   }
@@ -2034,6 +2218,12 @@ export function createOrderEngine(options: EngineOptions = {}) {
     },
     /** Room ngoại còn lại của mã theo engine (gồm phần vừa giữ). */
     getForeignRoom: (symbol: string) => roomQuote(symbol)?.foreign_room,
+    createPutThrough,
+    confirmPutThrough: (dealId: string, userId: string) => decidePutThrough(dealId, 'MATCHED', userId),
+    rejectPutThrough: (dealId: string, userId: string) => decidePutThrough(dealId, 'REJECTED', userId),
+    cancelPutThrough,
+    listPutThroughs: () => putThroughs,
+    listPutThroughEvents: () => putThroughEvents,
     applyExecution,
     createOrder,
     pauseOrder,

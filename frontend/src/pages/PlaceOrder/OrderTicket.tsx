@@ -32,6 +32,7 @@ import type { OrderRules, PersistenceMode, Side, StrategyType } from '@/types'
 import { getDisplayPrice, getTickSize, isAuctionSession, isMtlAllowed, rulesForQuote } from '@/utils/hose'
 import { applyTemplate, getVisibleTemplates } from '@/utils/strategyTemplates'
 import { BoardBadge } from '@/components/BoardBadge'
+import { CallCountdown, SymbolStatusBadge } from '@/components/SymbolStatusBadge'
 import { sessionForQuote } from '@/rules/context'
 import { SEC_TYPE_LABELS } from '@/rules/symbols'
 import { ConfirmDialog } from './ConfirmDialog'
@@ -307,6 +308,7 @@ export function OrderTicket() {
               <Label htmlFor="symbol" className="flex items-center gap-2">
                 Mã
                 {quote && <BoardBadge quote={quote} />}
+                <SymbolStatusBadge quote={quote} />
               </Label>
               <Select value={selectedSymbol} onValueChange={setSelectedSymbol}>
                 <SelectTrigger id="symbol" className="w-full">
@@ -380,6 +382,7 @@ export function OrderTicket() {
                   {quote.board === null ? ' · Ngừng giao dịch hôm nay' : ` · ${SESSION_LABELS[symbolSession]}`}
                 </p>
               )}
+              <CallCountdown symbol={quote.symbol} className="text-muted-foreground col-span-5 text-[11px]" />
             </dl>
           )}
 

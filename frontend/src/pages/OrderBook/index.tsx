@@ -1,6 +1,8 @@
 import { ListOrdered, Plus, SearchX } from 'lucide-react'
 import { useCallback, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { PutThroughTab } from './PutThroughTab'
 import { SessionLockNotice } from '@/components/SessionLockNotice'
 import { EmptyState, ErrorState, LoadingState } from '@/components/states'
 import { Button } from '@/components/ui/button'
@@ -33,6 +35,18 @@ export default function OrderBook() {
   const [filters, setFilters] = useState(EMPTY_FILTERS)
   const [editing, setEditing] = useState<ParentOrder | null>(null)
   const [cancelling, setCancelling] = useState<ParentOrder | null>(null)
+  // Tab đang mở nằm trên URL (?tab=thoa-thuan) để tải lại trang vẫn giữ.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tab = searchParams.get('tab') === 'thoa-thuan' ? 'thoa-thuan' : 'lenh'
+  const changeTab = (next: string) =>
+    setSearchParams(
+      (params) => {
+        if (next === 'lenh') params.delete('tab')
+        else params.set('tab', next)
+        return params
+      },
+      { replace: true },
+    )
 
   const allOrders = orders.data ?? []
   const showAccount = hasPermission('multi_account') || hasPermission('operations')
@@ -75,49 +89,60 @@ export default function OrderBook() {
           <h1>Sổ lệnh nâng cao</h1>
         </CardTitle>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <OrderFilters
-          filters={filters}
-          onChange={setFilters}
-          symbols={symbols}
-          accounts={accounts}
-        />
+      <CardContent>
+        <Tabs value={tab} onValueChange={changeTab}>
+          <TabsList>
+            <TabsTrigger value="lenh">Lệnh</TabsTrigger>
+            <TabsTrigger value="thoa-thuan">Thỏa thuận</TabsTrigger>
+          </TabsList>
+          <TabsContent value="thoa-thuan" className="pt-4">
+            <PutThroughTab />
+          </TabsContent>
+          <TabsContent value="lenh" className="flex flex-col gap-4 pt-4">
+            <OrderFilters
+              filters={filters}
+              onChange={setFilters}
+              symbols={symbols}
+              accounts={accounts}
+            />
 
-        <SessionLockNotice />
-        {actionError && (
-          <p role="alert" className="text-destructive text-sm">
-            {actionError}
-          </p>
-        )}
-        {orders.error && (
-          <ErrorState
-            message={`Không tải được sổ lệnh: ${orders.error.message}`}
-            onRetry={() => void orders.refetch()}
-          />
-        )}
+            <SessionLockNotice />
+            {actionError && (
+              <p role="alert" className="text-destructive text-sm">
+                {actionError}
+              </p>
+            )}
+            {orders.error && (
+              <ErrorState
+                message={`Không tải được sổ lệnh: ${orders.error.message}`}
+                onRetry={() => void orders.refetch()}
+              />
+            )}
 
-        {orders.isPending ? (
-          <LoadingState />
-        ) : orders.error && !orders.data ? null : (
-          <OrderTable
-            orders={visibleOrders}
-            empty={empty}
-            showAccount={showAccount}
-            isBusy={pauseOrder.isPending || resumeOrder.isPending}
-            onEdit={setEditing}
-            onCancel={setCancelling}
-            onPause={onPause}
-            onResume={onResume}
-          />
-        )}
+            {orders.isPending ? (
+              <LoadingState />
+            ) : orders.error && !orders.data ? null : (
+              <OrderTable
+                orders={visibleOrders}
+                empty={empty}
+                showAccount={showAccount}
+                isBusy={pauseOrder.isPending || resumeOrder.isPending}
+                onEdit={setEditing}
+                onCancel={setCancelling}
+                onPause={onPause}
+                onResume={onResume}
+              />
+            )}
 
-        {editing &&
-          (isRepriceRequired(editing.status, editing.reason_code) ? (
-            <RepriceOrderDialog key={editing.parent_order_id} order={editing} onClose={() => setEditing(null)} />
-          ) : (
-            <EditOrderDialog key={editing.parent_order_id} order={editing} onClose={() => setEditing(null)} />
-          ))}
-        {cancelling && <CancelOrderDialog order={cancelling} onClose={() => setCancelling(null)} />}
+            {editing &&
+              (isRepriceRequired(editing.status, editing.reason_code) ? (
+                <RepriceOrderDialog key={editing.parent_order_id} order={editing} onClose={() => setEditing(null)} />
+              ) : (
+                <EditOrderDialog key={editing.parent_order_id} order={editing} onClose={() => setEditing(null)} />
+              ))}
+            {cancelling && <CancelOrderDialog order={cancelling} onClose={() => setCancelling(null)} />}
+          </TabsContent>
+        </Tabs>
       </CardContent>
     </Card>
   )

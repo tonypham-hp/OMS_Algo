@@ -3,12 +3,12 @@ import { formatClock, toDateString } from '@/lib/format'
 import { isTradingDay, nextTradingDate } from '@/rules/calendar'
 import { getTickSize, priceLimits, stepPrice } from '@/rules/price'
 import { resolveRules, rulesFor } from '@/rules/registry'
-import { getSessionAt, isAuctionSession, parseTimeToSeconds, sessionEndAt } from '@/rules/session'
+import { getSessionAt, isAuctionSession, parseTimeToSeconds, restrictedPhaseAt, sessionEndAt } from '@/rules/session'
 import { getListing, symbolBoardStatus } from '@/rules/symbols'
 import type { Board, RulePack, SecType } from '@/rules/types'
-import type { MarketState, MarketTrade, OrderBookDepth, SessionCode, SimSpeed, SymbolQuote } from '@/types'
+import type { MarketState, MarketTrade, OrderBookDepth, SessionCode, SimSpeed, SymbolHalt, SymbolPhase, SymbolQuote } from '@/types'
 import { getDisplayPrice } from '@/utils/hose'
-import { ALL_SYMBOLS, EXTRA_SYMBOLS, FOREIGN_ROOM } from './data'
+import { ALL_SYMBOLS, EXTRA_SYMBOLS, FOREIGN_ROOM, RESTRICTED_SYMBOLS, SPECIAL_SYMBOLS } from './data'
 import { type BookSide, consumeLevel, createDepthRandom, generateDepth, rebaseDepth, replenishDepth } from './depth'
 
 /** Mở app ở 09:10 (đang ATO) để demo được lúc chuyển sang phiên liên tục. */
@@ -96,6 +96,7 @@ function createInitialQuote(
     board: status.board,
     sec_type: secType,
     ...(status.transferred ? { transferred: true } : {}),
+    ...(RESTRICTED_SYMBOLS.includes(symbol) ? { trading_status: 'RESTRICTED' as const } : {}),
     ...(foreignRoom !== undefined ? { foreign_room: foreignRoom } : {}),
   }
   return status.halted ? quote : { ...quote, depth: generateDepth(quote, depthRandom) }
@@ -127,8 +128,22 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
   const extraSymbols = new Set(options.symbols ? [] : EXTRA_SYMBOLS.map((item) => item.symbol))
   const extraRandom = createDepthRandom(20_261_228)
   const extraDepthRandom = createDepthRandom(20_261_229)
-  const randomOf = (symbol: string) => (extraSymbols.has(symbol) ? extraRandom : random)
-  const depthRandomOf = (symbol: string) => (extraSymbols.has(symbol) ? extraDepthRandom : depthRandom)
+  // Mã thêm ở Đợt 8B: mỗi mã một dãy random riêng (seed theo tên mã).
+  const ownRandoms = new Map<string, { price: RandomFn; depth: RandomFn }>()
+  const specialSymbols = new Set(options.symbols ? [] : SPECIAL_SYMBOLS.map((item) => item.symbol))
+  const ownRandom = (symbol: string) => {
+    let entry = ownRandoms.get(symbol)
+    if (!entry) {
+      const seed = [...symbol].reduce((sum, char) => sum * 31 + char.charCodeAt(0), 7) >>> 0
+      entry = { price: createDepthRandom(seed), depth: createDepthRandom(seed + 1) }
+      ownRandoms.set(symbol, entry)
+    }
+    return entry
+  }
+  const randomOf = (symbol: string) =>
+    specialSymbols.has(symbol) ? ownRandom(symbol).price : extraSymbols.has(symbol) ? extraRandom : random
+  const depthRandomOf = (symbol: string) =>
+    specialSymbols.has(symbol) ? ownRandom(symbol).depth : extraSymbols.has(symbol) ? extraDepthRandom : depthRandom
 
   const getStartDate = () => toDateString(options.startDate ?? new Date())
   let tradingDate = getStartDate()
@@ -176,10 +191,50 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
     return result
   }
 
-  /** Phiên của một mã: theo bảng giao dịch của mã; mã ngừng giao dịch coi như đóng cửa. */
-  function quoteSession(quote: SymbolQuote, sessions: Partial<Record<Board, SessionCode>>): SessionCode {
+  /**
+   * Phiên riêng của mã khi khác phiên của bảng: mã bị hạn chế giao dịch chỉ khớp định kỳ theo lượt (`restrictedPhaseAt`).
+   * Không có: mã theo phiên của bảng.
+   */
+  function phaseOf(quote: SymbolQuote, seconds: number): SymbolPhase | undefined {
+    // Tạm ngừng, phiên khớp định kỳ sau tạm ngừng đè mọi lịch phiên khác của mã.
+    const halt = activeHalt(quote, seconds)
+    if (halt?.status === 'HALTED') return { session: 'HALTED', call_end: null, call_id: 'HALTED' }
+    if (halt?.status === 'REOPEN') return { session: 'REOPEN', call_end: halt.reopen_end, call_id: `R-${halt.reopen_end}` }
+    if (quote.trading_status !== 'RESTRICTED' || !quote.board) return undefined
+    const rules = rulesFor(quote.board, tradingDate)
+    if (!rules.restricted) return undefined
+    const phase = restrictedPhaseAt(seconds, rules)
+    return { session: phase.session, call_end: phase.callEnd, call_id: phase.callId }
+  }
+
+  /** Phiên của một mã: phiên riêng (mã hạn chế), không thì theo bảng; mã ngừng giao dịch coi như đóng cửa. */
+  function quoteSession(quote: SymbolQuote, sessions: Partial<Record<Board, SessionCode>>, seconds: number): SessionCode {
     if (quote.board === null) return 'CLOSED'
-    return sessions[quote.board ?? 'STO'] ?? 'CLOSED'
+    return phaseOf(quote, seconds)?.session ?? sessions[quote.board ?? 'STO'] ?? 'CLOSED'
+  }
+
+  /** Khóa nhận biết "vừa hết một lượt khớp": mã lượt với mã hạn chế, tên phiên với mã thường. */
+  function callKey(quote: SymbolQuote, sessions: Partial<Record<Board, SessionCode>>, seconds: number) {
+    return phaseOf(quote, seconds)?.call_id ?? quoteSession(quote, sessions, seconds)
+  }
+
+  /** Tạm ngừng còn hiệu lực lúc `seconds`: phiên mở lại đã hết giờ thì coi như mã giao dịch bình thường. */
+  function activeHalt(quote: SymbolQuote, seconds: number): SymbolHalt | undefined {
+    const halt = quote.halt
+    if (!halt) return undefined
+    if (halt.status === 'REOPEN' && halt.reopen_end !== null && seconds >= halt.reopen_end) return undefined
+    return halt
+  }
+
+  function withPhase(quote: SymbolQuote): SymbolQuote {
+    const phase = phaseOf(quote, simSeconds)
+    const halt = activeHalt(quote, simSeconds)
+    const base = quote.halt && !halt ? { ...quote, halt: undefined } : quote
+    return phase ? { ...base, phase } : base
+  }
+
+  function haltRules(quote: SymbolQuote) {
+    return rulesFor(quote.board ?? 'STO', tradingDate)
   }
 
   function getState(): MarketState {
@@ -190,7 +245,7 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
       session: getSessionAt(simSeconds, stoRules()),
       board_sessions: boardSessions(simSeconds),
       speed,
-      quotes,
+      quotes: quotes.map(withPhase),
     }
   }
 
@@ -264,6 +319,7 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
     // Chế độ có kịch bản (Demo): đồng hồ và giá chỉ đổi theo lệnh của kịch bản.
     if (scripted) return
     const previous = boardSessions(simSeconds)
+    const previousTime = simSeconds
     let next = Math.min(simSeconds + (elapsedMs / 1000) * speed, END_SECONDS)
     // Không tua vượt giờ khớp định kỳ của bảng nào, để luôn khớp đúng giờ (09:15:00, 14:45:00) ở mọi tốc độ.
     for (const board of BOARDS) {
@@ -272,6 +328,11 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
       if (!session || !rules || !isAuctionSession(session)) continue
       const end = sessionEndAt(simSeconds, rules)
       if (end !== null) next = Math.min(next, end)
+    }
+    // Mã hạn chế: không tua vượt giờ khớp của lượt định kỳ đang chạy.
+    for (const quote of quotes) {
+      const end = phaseOf(quote, simSeconds)?.call_end
+      if (end != null && end > simSeconds) next = Math.min(next, end)
     }
     simSeconds = next
 
@@ -285,11 +346,14 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
     quoteAgeMs = 0
     const current = boardSessions(simSeconds)
     const before = quotes
+    const previousSeconds = previousTime
     quotes = quotes.map((quote) => {
-      const was = quoteSession(quote, previous)
-      const now = quoteSession(quote, current)
+      const was = quoteSession(quote, previous, previousSeconds)
+      const now = quoteSession(quote, current, simSeconds)
       const depthRand = depthRandomOf(quote.symbol)
-      if (isAuctionSession(was) && now !== was) return withDepth(matchAuction(quote), depthRand)
+      // Hết phiên định kỳ (ATO, ATC, hoặc một lượt của mã hạn chế): khớp một lần theo giá dự kiến.
+      const callEnded = callKey(quote, previous, previousSeconds) !== callKey(quote, current, simSeconds)
+      if (isAuctionSession(was) && callEnded) return withDepth(matchAuction(quote), depthRand)
       if (isAuctionSession(now)) return nextIndicative(quote)
       if (now === 'CONTINUOUS') {
         const moved = withDepth(nextQuote(quote), depthRand)
@@ -297,6 +361,8 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
       }
       return { ...quote, tick_direction: 0 }
     })
+    // Phiên mở lại đã khớp xong: bỏ dấu tạm ngừng.
+    quotes = quotes.map((quote) => (quote.halt && !activeHalt(quote, simSeconds) ? { ...quote, halt: undefined } : quote))
     emitTrades(before)
     notify()
   }
@@ -379,6 +445,34 @@ export function createMarketSimulator(options: SimulatorOptions = {}) {
           ? { ...quote, foreign_room: Math.max(0, quote.foreign_room + delta) }
           : quote,
       )
+    },
+    /**
+     * Vận hành tạm ngừng giao dịch một mã (mô phỏng): giá, sổ lệnh đứng yên; engine tạm dừng lệnh cha của mã.
+     * Ném lỗi khi mã không có hoặc đang tạm ngừng.
+     */
+    haltSymbol(symbol: string) {
+      const quote = quotes.find((item) => item.symbol === symbol)
+      if (!quote) throw new Error(`Không có mã ${symbol}`)
+      if (activeHalt(quote, simSeconds)?.status === 'HALTED') throw new Error(`Mã ${symbol} đang tạm ngừng giao dịch`)
+      quotes = quotes.map((item) =>
+        item.symbol === symbol ? { ...item, halt: { status: 'HALTED', since: simSeconds, reopen_end: null }, indicative_price: null } : item,
+      )
+      notify()
+    },
+    /**
+     * Giao dịch lại sau tạm ngừng: phiên khớp định kỳ `reopenAuctionMinutes` phút (chỉ LO, cấm sửa/hủy),
+     * khớp một lần lúc hết phiên rồi về lịch bình thường của mã.
+     */
+    resumeSymbol(symbol: string) {
+      const quote = quotes.find((item) => item.symbol === symbol)
+      if (!quote) throw new Error(`Không có mã ${symbol}`)
+      if (activeHalt(quote, simSeconds)?.status !== 'HALTED') throw new Error(`Mã ${symbol} không ở trạng thái tạm ngừng`)
+      const minutes = haltRules(quote).haltResume?.reopenAuctionMinutes ?? 15
+      const end = Math.min(simSeconds + minutes * 60, END_SECONDS)
+      quotes = quotes.map((item) =>
+        item.symbol === symbol ? { ...item, halt: { status: 'REOPEN', since: simSeconds, reopen_end: end } } : item,
+      )
+      notify()
     },
     /** Nhảy tới giờ giả lập (giây trong ngày), phát trạng thái để engine chạy một nhịp. */
     jumpTo(seconds: number) {

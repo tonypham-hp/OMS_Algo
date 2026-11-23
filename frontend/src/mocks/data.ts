@@ -29,7 +29,16 @@ export const EXTRA_SYMBOLS: ReadonlyArray<{ symbol: string; ref_price: number }>
   { symbol: 'CFPT2699', ref_price: 1_230 },
 ]
 
-export const ALL_SYMBOLS = [...DEMO_SYMBOLS, ...EXTRA_SYMBOLS]
+/**
+ * Mã MÔ PHỎNG thêm ở Đợt 8B. Mỗi mã sinh giá bằng dãy random riêng của nó, nên giá các mã cũ không đổi.
+ * XRS: cổ phiếu HOSE bị hạn chế giao dịch (chỉ khớp định kỳ 15 phút).
+ */
+export const SPECIAL_SYMBOLS: ReadonlyArray<{ symbol: string; ref_price: number }> = [{ symbol: 'XRS', ref_price: 14_250 }]
+
+export const ALL_SYMBOLS = [...DEMO_SYMBOLS, ...EXTRA_SYMBOLS, ...SPECIAL_SYMBOLS]
+
+/** Mã đang bị hạn chế giao dịch (mô phỏng danh sách Sở công bố). Đánh dấu thêm mã ở đây. */
+export const RESTRICTED_SYMBOLS: readonly string[] = ['XRS']
 
 /** Room ngoại còn lại lúc đầu ngày (cổ phiếu), mô phỏng. Mã không có trong bảng: không giới hạn. */
 export const FOREIGN_ROOM: Readonly<Record<string, number>> = {
@@ -50,6 +59,7 @@ export const FOREIGN_ROOM: Readonly<Record<string, number>> = {
   XUB: 20_000,
   XETF30: 500_000,
   CFPT2699: 1_000_000,
+  XRS: 300_000,
 }
 
 /** Thuộc tính tài khoản demo. Chỉ có cờ nhà đầu tư nước ngoài; tài khoản không có trong bảng là trong nước. */

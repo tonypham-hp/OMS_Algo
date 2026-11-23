@@ -1,4 +1,13 @@
-import type { ChildOrder, CoreRejectCode, KillSwitchRequest, KillSwitchState, OpsOverview, ParentOrder, ReopenOrderRequest } from '@/types'
+import type {
+  ChildOrder,
+  CoreRejectCode,
+  KillSwitchRequest,
+  KillSwitchState,
+  OpsOverview,
+  ParentOrder,
+  ReopenOrderRequest,
+  SymbolQuote,
+} from '@/types'
 import { http } from './http'
 
 const injectInto = (path: string) => (parentOrderId: string) =>
@@ -18,4 +27,6 @@ export const opsService = {
   reopenOrder: (parentOrderId: string, request: ReopenOrderRequest) =>
     http.post<ParentOrder>(`/api/ops/orders/${parentOrderId}/reopen`, request),
   reconcileChild: (childOrderId: string) => http.post<ChildOrder>(`/api/ops/children/${childOrderId}/reconcile`),
+  /** Tạm ngừng (halt) hoặc cho giao dịch lại (resume) một mã – mô phỏng. */
+  setSymbolHalt: (symbol: string, action: 'halt' | 'resume') => http.post<SymbolQuote>(`/api/ops/symbols/${symbol}/${action}`),
 }

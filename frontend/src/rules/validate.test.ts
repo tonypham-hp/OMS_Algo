@@ -12,7 +12,21 @@ import { blocking, checkPrice, classifyAmend, validateAmend, validateCancel, val
 
 const DATE = '2026-11-16'
 const BOARDS: Board[] = ['STO', 'STX', 'UPX']
-const SESSIONS: SessionCode[] = ['PRE_OPEN', 'ATO', 'CONTINUOUS', 'LUNCH', 'ATC', 'PUT_THROUGH', 'CLOSED']
+// Đợt 8B thêm phiên riêng theo mã: lượt định kỳ của mã hạn chế (PERIODIC, PERIODIC_LOCK), tạm ngừng (HALTED),
+// phiên khớp định kỳ sau tạm ngừng (REOPEN). Với mã thường: PERIODIC*, HALTED không nhận lệnh; REOPEN chỉ nhận LO.
+const SESSIONS: SessionCode[] = [
+  'PRE_OPEN',
+  'ATO',
+  'CONTINUOUS',
+  'LUNCH',
+  'ATC',
+  'PUT_THROUGH',
+  'CLOSED',
+  'PERIODIC',
+  'PERIODIC_LOCK',
+  'HALTED',
+  'REOPEN',
+]
 const ORDER_TYPES: OrderType[] = ['LO', 'MTL', 'ATO', 'ATC', 'MOK', 'MAK']
 const LOTS: LotKind[] = ['ROUND', 'ODD']
 const SEC_TYPES: SecType[] = ['STOCK', 'CLOSED_FUND', 'ETF', 'CW']
@@ -38,8 +52,8 @@ const CELLS = BOARDS.flatMap((board) =>
 )
 
 describe('validateOrder: ma trận bảng × phiên × loại lệnh × lô × loại chứng khoán', () => {
-  it('phủ đủ 3 × 7 × 6 × 2 × 4 ô, có cả ô được phép và ô bị cấm ở mỗi bảng', () => {
-    expect(CELLS).toHaveLength(3 * 7 * 6 * 2 * 4)
+  it('phủ đủ 3 × 11 × 6 × 2 × 4 ô, có cả ô được phép và ô bị cấm ở mỗi bảng', () => {
+    expect(CELLS).toHaveLength(3 * 11 * 6 * 2 * 4)
     for (const board of BOARDS) {
       const rules = rulesFor(board, DATE)
       const allowed = CELLS.filter((cell) => cell[0] === board && isAllowed(rules, cell[1], cell[2], cell[3]))

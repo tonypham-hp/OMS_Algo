@@ -1,7 +1,24 @@
 import type { Board, SecType } from '@/rules/types'
 
 /** PUT_THROUGH: thỏa thuận sau giờ 14:45–15:00, không còn khớp lệnh (8A chỉ hiện trên đồng hồ). */
-export type SessionCode = 'PRE_OPEN' | 'ATO' | 'CONTINUOUS' | 'LUNCH' | 'ATC' | 'PUT_THROUGH' | 'CLOSED'
+/**
+ * PERIODIC, PERIODIC_LOCK (Đợt 8B): lượt khớp định kỳ của mã bị hạn chế giao dịch; PERIODIC_LOCK là 5 phút cuối lượt,
+ * khóa sửa, hủy. Hai phiên này chỉ có theo từng mã (SymbolQuote.phase), không phải phiên của cả bảng.
+ */
+export type SessionCode =
+  | 'PRE_OPEN'
+  | 'ATO'
+  | 'CONTINUOUS'
+  | 'LUNCH'
+  | 'ATC'
+  | 'PUT_THROUGH'
+  | 'CLOSED'
+  | 'PERIODIC'
+  | 'PERIODIC_LOCK'
+  /** Đợt 8B: mã đang tạm ngừng giao dịch (phiên riêng theo mã). */
+  | 'HALTED'
+  /** Đợt 8B: phiên khớp định kỳ khi mã giao dịch lại sau tạm ngừng; chỉ nhận LO, cấm sửa/hủy. */
+  | 'REOPEN'
 
 export type SimSpeed = 1 | 10 | 60
 
@@ -31,6 +48,31 @@ export interface SymbolQuote {
   transferred?: boolean
   /** Room ngoại còn lại, cổ phiếu. Không có: không giới hạn. */
   foreign_room?: number
+  /** Trạng thái giao dịch của mã (Đợt 8B). Không có: bình thường. */
+  trading_status?: SymbolTradingStatus
+  /**
+   * Phiên riêng của mã khi khác phiên của bảng (mã hạn chế: lượt khớp định kỳ). Có thì engine, phiếu lệnh dùng phiên này.
+   * `call_end`: giây trong ngày lúc khớp lượt hiện tại; `call_id` đổi là đã sang lượt mới.
+   */
+  phase?: SymbolPhase
+  /** Mã đang tạm ngừng, hoặc đang trong phiên khớp định kỳ sau tạm ngừng (Đợt 8B). Không có: bình thường. */
+  halt?: SymbolHalt
+}
+
+/** Tạm ngừng giao dịch một mã. `since`, `reopen_end`: giây trong ngày theo đồng hồ giả lập. */
+export interface SymbolHalt {
+  status: 'HALTED' | 'REOPEN'
+  since: number
+  /** Giờ khớp của phiên định kỳ sau khi giao dịch lại; null khi đang tạm ngừng. */
+  reopen_end: number | null
+}
+
+export type SymbolTradingStatus = 'NORMAL' | 'RESTRICTED'
+
+export interface SymbolPhase {
+  session: SessionCode
+  call_end: number | null
+  call_id: string | null
 }
 
 /** Một mức giá trong sổ lệnh. */
