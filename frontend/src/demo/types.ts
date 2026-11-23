@@ -82,6 +82,15 @@ export type DemoAction =
   | { type: 'setDate'; params: { date: string } }
   /** Sửa lệnh (một lần một trường theo KRX). expectError: phải bị từ chối, lưu câu lỗi vào ctx.lastError. */
   | { type: 'amend'; params: { order: string; total_qty?: number; limit_price?: number; expectError?: boolean } }
+  /** Vận hành tạm ngừng / cho giao dịch lại một mã (Đợt 8B). */
+  | { type: 'haltSymbol' | 'resumeSymbol'; params: { symbol: string } }
+  /** Gửi lệnh thỏa thuận; `ref` để các bước sau chỉ tới deal. expectError: phải bị từ chối. */
+  | {
+      type: 'putThrough'
+      params: { ref: string; symbol: string; side: Side; qty: number; price: number; counterparty?: string; expectError?: boolean }
+    }
+  /** Bên đối ứng (mô phỏng) xác nhận / từ chối, hoặc hủy lệnh thỏa thuận. */
+  | { type: 'confirmPutThrough' | 'rejectPutThrough' | 'cancelPutThrough'; params: { ref: string; expectError?: boolean } }
 
 /** Dữ liệu riêng của một lần chạy kịch bản. */
 export interface DemoContext {
