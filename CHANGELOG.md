@@ -4,6 +4,34 @@ Ghi các thay đổi đáng chú ý của frontend OMS Algo theo từng đợt p
 [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/), đánh số phiên bản theo [SemVer](https://semver.org/lang/vi/).
 Bản 0.x là bản demo chạy với dữ liệu giả lập, chưa có backend.
 
+## [0.2.1] – 2026-11-23 · Đợt 8B: Phiên giao dịch đặc biệt theo KRX
+
+Bổ sung vào gói luật của Đợt 8A ba nhóm luật: mã bị hạn chế giao dịch, phiên sau tạm ngừng, lệnh thỏa thuận cơ bản.
+
+### Thêm
+- **Mã bị hạn chế giao dịch** (HOSE): chỉ khớp định kỳ, chỉ lô chẵn: ATO, các lượt 15 phút trong giờ khớp liên tục (chỉ LO),
+  ATC; khóa sửa/hủy 5 phút cuối lượt. Tham số nằm ở `restricted` của pack STO. Mã mô phỏng `XRS`. Nhãn "Hạn chế GD" trên
+  phiếu lệnh, OrderBook3, Sổ lệnh; đồng hồ đếm ngược tới lần khớp kế tiếp; nút Sửa/Hủy bị khóa kèm lý do. Lô lẻ, MTL (kể
+  cả lệnh thuật toán sinh MTL), HUNT bị chặn với mã lý do riêng; lệnh thuật toán không sinh lệnh con lúc nghỉ trưa.
+- **Phiên sau tạm ngừng**: màn Vận hành có "Tạm ngừng mã" / "Giao dịch lại" (mô phỏng). Tạm ngừng thì lệnh cha đang chạy
+  chuyển "Hệ thống tạm dừng" (mã lý do `SYMBOL_HALTED`, có câu giải thích), lệnh mới bị từ chối. Giao dịch lại thì một phiên
+  khớp định kỳ 15 phút chỉ nhận LO, cấm sửa/hủy; lệnh tự chạy lại (`SYMBOL_RESUMED`), hết phiên khớp một lần rồi về bình
+  thường. Trạng thái mã: Tạm ngừng → Khớp định kỳ sau tạm ngừng → Bình thường.
+- **Lệnh thỏa thuận cơ bản**: tab "Thỏa thuận" trong Sổ lệnh, phiếu lệnh thỏa thuận (mã, chiều, KL, giá, tài khoản đối ứng
+  mô phỏng). Tối thiểu 20.000 CP trên HOSE (5.000 trên HNX/UPCoM), bước giá 1 đ, trong biên của mã, trong giờ giao dịch và
+  phiên 14:45–15:00; chưa khớp hết hiệu lực lúc 15:00. Gửi → đối ứng xác nhận hoặc từ chối → khớp; chỉ hủy được khi chưa
+  khớp. Không đổi sổ lệnh 3 mức, không tính vào VWAP khớp lệnh của báo cáo.
+- Demo: kịch bản 10 "Mã hạn chế khớp định kỳ 15 phút", 11 "Tạm ngừng và giao dịch lại", 12 "Thỏa thuận sau giờ 14:45–15:00".
+- Test: lượt khớp đúng mốc 15 phút, khóa đúng 5 phút cuối, chặn lô lẻ/MTL/HUNT; phiên sau tạm ngừng; kiểm tra và luồng thỏa
+  thuận, VWAP không đổi; ma trận `validateOrder` thêm phiên mới; Playwright `krx-special.spec`. Ảnh
+  [docs/screenshots/dot8b/](docs/screenshots/dot8b/).
+
+### Sửa
+- Lệnh của mã hạn chế không còn bị khớp sớm khi vào 5 phút cuối lượt; chỉ khớp lúc hết lượt.
+
+### Đổi
+- Dữ liệu đã lưu trong trình duyệt của bản cũ bị bỏ (phiên bản trạng thái 10).
+
 ## [0.2.0] – 2026-11-19 · Đợt 8A: Luật giao dịch theo KRX
 
 HOSE chạy hệ thống KRX từ 05/05/2025; cổ phiếu niêm yết HNX giao dịch trên HOSE từ 28/12/2026 (TT 139/2025/TT-BTC).

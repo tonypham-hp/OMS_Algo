@@ -206,8 +206,41 @@ pack. Giá dùng số nguyên đồng; hiển thị kiểu Việt Nam: 1.000.000
 - Trang `/cau-hinh/luat` (chỉ OPS, chỉ đọc): bảng các pack, ngày hiệu lực, kiểm chứng, cờ, nguồn; nút "Thử cấu hình bỏ
   nghỉ trưa".
 
-### Ngoài phạm vi 8A (để 8B, schema đã chừa chỗ)
-- Mã bị hạn chế giao dịch (khớp định kỳ 15 phút, khóa sửa/hủy cuối lượt), phiên mở lại sau tạm ngừng, phiếu lệnh thỏa thuận.
+### Mã bị hạn chế giao dịch (Đợt 8B, HOSE)
+- Chỉ khớp định kỳ, chỉ lô chẵn: ATO, rồi các lượt định kỳ 15 phút trong giờ khớp liên tục (chỉ LO), rồi ATC.
+  Lượt tính từ đầu mỗi khung liên tục: kết thúc 09:30, 09:45 … 11:30 và 13:15 … 14:30.
+- Khóa sửa, hủy 5 phút cuối mỗi lượt. Độ dài lượt, thời gian khóa, loại lệnh theo phiên nằm ở `restricted` của pack STO.
+- Hàm thuần `restrictedPhaseAt(seconds, rules)` (`src/rules/session.ts`) trả phiên riêng của mã: `PERIODIC`,
+  `PERIODIC_LOCK` (5 phút cuối), giờ khớp và mã lượt. Bảng giá gắn vào `SymbolQuote.phase`.
+- Engine (adapter mỏng): lệnh của mã hạn chế chỉ khớp khi mã lượt đổi (hết lượt), như ATO/ATC; lệnh thuật toán chỉ sinh
+  lệnh con trong cửa sổ nhận lệnh (không trong nghỉ trưa).
+- Bị chặn với mã lý do riêng: lô lẻ (`RESTRICTED_ROUND_LOT_ONLY`), MTL kể cả lệnh thuật toán sẽ sinh MTL
+  (`RESTRICTED_NO_MTL`), HUNT (`RESTRICTED_NO_HUNT`), sửa/hủy trong cửa sổ khóa (`RESTRICTED_LOCKED`, câu nêu giờ khớp).
+- Giao diện: nhãn "Hạn chế GD" trên phiếu lệnh, OrderBook3, Sổ lệnh; đồng hồ "Khớp kế tiếp 09:45 · còn 07:12"; nút
+  Sửa/Hủy bị vô hiệu kèm lý do "Khóa sửa, hủy 5 phút cuối lượt khớp định kỳ (khớp lúc …)".
+- Dữ liệu mô phỏng: mã `XRS` "Cổ phiếu hạn chế GD (mô phỏng)", danh sách `RESTRICTED_SYMBOLS` (`src/mocks/data.ts`).
+
+### Phiên sau tạm ngừng (Đợt 8B)
+- Vận hành tạm ngừng / cho giao dịch lại một mã ở màn Vận hành (khung "Tạm ngừng mã (mô phỏng)", API
+  `/api/ops/symbols/:symbol/halt | resume`, chỉ OPS).
+- Tạm ngừng: giá, sổ lệnh đứng yên; lệnh cha đang chạy của mã chuyển `PAUSED_SYSTEM` với mã lý do `SYMBOL_HALTED` (lệnh con
+  chờ bị hủy, có thông báo, có câu giải thích); lệnh mới bị từ chối (`SYMBOL_TRADING_HALTED`).
+- Giao dịch lại: một phiên khớp định kỳ 15 phút (`REOPEN`, theo `haltResume` của pack) chỉ nhận LO, cấm sửa, hủy; lệnh cha
+  tự chạy lại (`SYMBOL_RESUMED`). Hết phiên thì khớp một lần rồi mã về lịch bình thường.
+- Trạng thái mã trên giao diện: Tạm ngừng → Khớp định kỳ sau tạm ngừng (đếm ngược) → Bình thường.
+
+### Lệnh thỏa thuận cơ bản (Đợt 8B)
+- Phiếu "Lệnh thỏa thuận" (Sổ lệnh, tab "Thỏa thuận", `?tab=thoa-thuan`): tài khoản, mã, chiều, KL, giá, tài khoản đối
+  ứng (mô phỏng).
+- Kiểm tra (`validatePutThrough`, `src/rules/putThrough.ts`, theo `putThrough` của pack): tối thiểu 20.000 CP trên HOSE,
+  5.000 CP trên HNX/UPCoM; bước giá 1 đ; giá trong trần – sàn của mã; HOSE nhận trong giờ giao dịch và phiên thỏa thuận sau
+  giờ 14:45–15:00; chưa khớp thì hết hiệu lực lúc 15:00 hoặc khi sang ngày.
+- Luồng: gửi → bên đối ứng (mô phỏng) xác nhận hoặc từ chối → khớp. Chỉ hủy được khi chưa khớp; đã khớp thì không sửa, không
+  hủy (`PT_MATCHED_LOCKED`).
+- Lệnh thỏa thuận là danh sách riêng trong engine, nhật ký riêng (OrderEvent, `parent_order_id` là mã lệnh thỏa thuận);
+  không vào bảng khớp lệnh, băng tick hay sổ lệnh, nên không đổi OrderBook3 và không tính vào VWAP khớp lệnh của báo cáo.
+- Ngoài phạm vi: trừ room ngoại cho thỏa thuận, quảng cáo thỏa thuận, thỏa thuận nhiều bên, tiền và chứng khoán của bên đối
+  ứng (xem `docs/backend-gaps.md` mục 15).
 
 ## 8. Quy tắc nghiệp vụ lõi (simulator phải tôn trọng)
 - KL được phép sinh lệnh con = total_qty − executed_qty − working (Child chưa kết thúc).
@@ -408,9 +441,12 @@ App tự chạy 6 kịch bản E2E của [TC-E2E.md](test-cases/TC-E2E.md) để
 | 7 | Sửa lệnh: mất / giữ ưu tiên | KRX-AMEND | Đợt 8A. LO 1.000 CP; giảm KL giữ ưu tiên, đổi cả hai bị từ chối, đổi giá và tăng KL mất ưu tiên |
 | 8 | Lô lẻ khớp trong ATC | KRX-ODD | Đợt 8A. Lô lẻ 150 CP bị từ chối; LO lô lẻ 50 CP đặt 14:35 khớp ở giá ATC |
 | 9 | Ngày 28/12/2026: mã HNX sang HOSE | KRX-TRANSFER | Đợt 8A. XHA (mô phỏng) theo luật HNX ngày 23/12, ngừng giao dịch 24/12, theo luật HOSE từ 28/12 |
+| 10 | Mã hạn chế khớp định kỳ 15 phút | KRX-RESTRICTED | Đợt 8B. XRS: LO chỉ khớp lúc hết lượt 09:30; lô lẻ, MTL, HUNT bị chặn; khóa sửa 5 phút cuối lượt |
+| 11 | Tạm ngừng và giao dịch lại | KRX-HALT | Đợt 8B. FPT tạm ngừng → lệnh PAUSED_SYSTEM; giao dịch lại → phiên định kỳ 15 phút, lệnh tự chạy và khớp |
+| 12 | Thỏa thuận sau giờ 14:45–15:00 | KRX-PT | Đợt 8B. Dưới 20.000 CP, ngoài biên bị từ chối; 20.000 CP đối ứng xác nhận thì khớp, không đổi sổ lệnh |
 
-Kịch bản 1–6 không đổi chú thích: luật KRX không đổi hành vi các bước của chúng.
-Test: `src/demo/scenarios.test.ts` chạy cả 9 kịch bản headless, mọi check phải ĐẠT, chạy 2 lần cho kết quả giống nhau.
+Kịch bản 1–9 không đổi chú thích: luật của Đợt 8A, 8B không đổi hành vi các bước của chúng.
+Test: `src/demo/scenarios.test.ts` chạy cả 12 kịch bản headless, mọi check phải ĐẠT, chạy 2 lần cho kết quả giống nhau.
 
 ## 14. Sổ lệnh 3 mức (Đợt 4)
 
