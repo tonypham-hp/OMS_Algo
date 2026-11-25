@@ -235,7 +235,7 @@ export function OrderTicket() {
             onClear={() => setTemplateId(null)}
           />
           {activeTemplate && (
-            <p role="status" className="bg-primary/10 rounded-md p-2 text-xs" data-demo-id="template-active">
+            <p role="status" className="bg-nav-active rounded-md p-2 text-xs" data-demo-id="template-active">
               Đã điền theo mẫu <span className="font-medium">{activeTemplate.name}</span>. Kiểm tra lại các ô rồi bấm Đặt lệnh.
               {activeTemplate.hint && <span className="text-muted-foreground block">{activeTemplate.hint}</span>}
             </p>
@@ -356,7 +356,7 @@ export function OrderTicket() {
           </div>
 
           {quote && (
-            <dl className="bg-muted/50 grid grid-cols-5 gap-1 rounded-md p-2 text-center text-xs tabular-nums">
+            <dl className="bg-surface-2 grid grid-cols-5 gap-1 rounded-md p-2 text-center text-xs tabular-nums">
               {[
                 ['Trần', quote.ceiling_price, PRICE_COLOR.ceiling],
                 ['TC', quote.ref_price, PRICE_COLOR.ref],

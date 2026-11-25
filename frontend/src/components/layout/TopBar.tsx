@@ -70,7 +70,7 @@ function DemoDataLabel() {
   return (
     // Dưới 1600px thanh trên chật: bỏ chữ "cập nhật" để tên màn (breadcrumb) không bị cắt; title vẫn đủ câu.
     <span
-      className="bg-price-ref/15 text-price-ref rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap"
+      className="bg-status-warning-bg text-status-warning rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap"
       title={`Dữ liệu demo · cập nhật ${lastUpdate}`}
     >
       Dữ liệu demo · <span className="hidden min-[1600px]:inline">cập nhật </span>

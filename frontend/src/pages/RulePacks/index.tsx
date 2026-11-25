@@ -99,7 +99,7 @@ export default function RulePacks() {
           </Button>
         </div>
         {trying && (
-          <p role="status" className="bg-primary/10 rounded-md p-2 text-xs" data-demo-id="experimental-active">
+          <p role="status" className="bg-nav-active rounded-md p-2 text-xs" data-demo-id="experimental-active">
             Đang dùng pack thử nghiệm: HOSE khớp liên tục 09:15–14:30, không nghỉ trưa. Đồng hồ phiên và engine đọc lịch phiên từ pack
             nên đổi ngay, không sửa code. Tải lại trang hoặc bấm “Bỏ cấu hình thử” để quay về luật thật.
           </p>

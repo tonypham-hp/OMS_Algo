@@ -39,6 +39,9 @@ export const TOKEN_NAMES = [
   'price-flash-up-bg',
   'price-flash-down-bg',
   'price-ref-chip-bg',
+  // Sổ lệnh 3 mức: nền nhạt phía mua / phía bán (tương phản cao: bằng nền thẻ)
+  'book-bid-bg',
+  'book-ask-bg',
   // Lệnh
   'buy',
   'buy-fg',
@@ -122,6 +125,8 @@ export const PALETTES: Record<ThemeName, Palette> = {
     'price-flash-up-bg': '#13251F',
     'price-flash-down-bg': '#26141E',
     'price-ref-chip-bg': '#111A2B',
+    'book-bid-bg': mixHex('#0ECB81', DARK_SURFACE, 0.05),
+    'book-ask-bg': mixHex('#F6465D', DARK_SURFACE, 0.05),
     buy: '#0ECB81',
     'buy-fg': '#04121F',
     sell: '#F6465D',
@@ -164,6 +169,8 @@ export const PALETTES: Record<ThemeName, Palette> = {
     'price-flash-down-bg': '#FFF5F5',
     // Giá tham chiếu chữ đậm trên chip vàng nhạt để vẫn "thấy vàng" trên nền sáng.
     'price-ref-chip-bg': '#FEF9C3',
+    'book-bid-bg': mixHex('#15803D', LIGHT_SURFACE, 0.05),
+    'book-ask-bg': mixHex('#B91C1C', LIGHT_SURFACE, 0.05),
     buy: '#15803D',
     'buy-fg': '#FFFFFF',
     sell: '#B91C1C',
@@ -206,6 +213,8 @@ export const PALETTES: Record<ThemeName, Palette> = {
     'price-flash-up-bg': HC_DARK_SURFACE,
     'price-flash-down-bg': HC_DARK_SURFACE,
     'price-ref-chip-bg': HC_DARK_SURFACE,
+    'book-bid-bg': HC_DARK_SURFACE,
+    'book-ask-bg': HC_DARK_SURFACE,
     buy: '#0ECB81',
     'buy-fg': '#000000',
     sell: '#FF7A8A',
@@ -247,6 +256,8 @@ export const PALETTES: Record<ThemeName, Palette> = {
     'price-flash-up-bg': HC_LIGHT_SURFACE,
     'price-flash-down-bg': HC_LIGHT_SURFACE,
     'price-ref-chip-bg': '#FEF3C7',
+    'book-bid-bg': HC_LIGHT_SURFACE,
+    'book-ask-bg': HC_LIGHT_SURFACE,
     buy: '#166534',
     'buy-fg': '#FFFFFF',
     sell: '#991B1B',
@@ -269,13 +280,13 @@ export const PALETTES: Record<ThemeName, Palette> = {
  * thành công/lỗi. Trần, tham chiếu, sàn giữ nguyên (đã có ký hiệu T/S riêng, không chỉ dựa vào màu).
  */
 export const CVD_OVERRIDES: Record<ThemeName, Partial<Palette>> = {
-  dark: cvd('#60A5FA', '#FB923C', '#04121F', DARK_SURFACE, 0.16),
-  light: cvd('#1D4ED8', '#C2410C', '#FFFFFF', LIGHT_SURFACE, 0.07),
-  'hc-dark': cvd('#93C5FD', '#FDBA74', '#000000', HC_DARK_SURFACE, 0.1),
-  'hc-light': cvd('#1E3A8A', '#9A3412', '#FFFFFF', HC_LIGHT_SURFACE, 0),
+  dark: cvd('#60A5FA', '#FB923C', '#04121F', DARK_SURFACE, 0.16, 0.05),
+  light: cvd('#1D4ED8', '#C2410C', '#FFFFFF', LIGHT_SURFACE, 0.07, 0.05),
+  'hc-dark': cvd('#93C5FD', '#FDBA74', '#000000', HC_DARK_SURFACE, 0.1, 0),
+  'hc-light': cvd('#1E3A8A', '#9A3412', '#FFFFFF', HC_LIGHT_SURFACE, 0, 0),
 }
 
-function cvd(up: string, down: string, fg: string, surface: string, amount: number): Partial<Palette> {
+function cvd(up: string, down: string, fg: string, surface: string, amount: number, bookTint: number): Partial<Palette> {
   return {
     'price-up': up,
     'price-down': down,
@@ -289,6 +300,8 @@ function cvd(up: string, down: string, fg: string, surface: string, amount: numb
     'status-success-bg': mixHex(up, surface, amount),
     'status-danger-fg': down,
     'status-danger-bg': mixHex(down, surface, amount),
+    'book-bid-bg': mixHex(up, surface, bookTint),
+    'book-ask-bg': mixHex(down, surface, bookTint),
   }
 }
 

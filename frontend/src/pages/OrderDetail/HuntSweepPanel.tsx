@@ -15,10 +15,10 @@ import { OrderBookCard } from './OrderBookCard'
 export const REPLAY_STEP_MS = 700
 
 const STATE_STYLES: Record<HuntStepState, string> = {
-  FILLED: 'bg-price-up/15 text-price-up',
-  WORKING: 'bg-price-ref/15 text-price-ref',
+  FILLED: 'bg-status-success-bg text-status-success',
+  WORKING: 'bg-status-warning-bg text-status-warning',
   UNUSED: 'bg-muted text-muted-foreground',
-  OUT_OF_LIMIT: 'bg-price-down/15 text-price-down',
+  OUT_OF_LIMIT: 'bg-status-danger-bg text-status-danger',
   CANCELLED: 'bg-muted text-muted-foreground',
 }
 

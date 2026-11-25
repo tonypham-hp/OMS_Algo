@@ -36,6 +36,8 @@
     --color-price-flash-up: var(--price-flash-up-bg);
     --color-price-flash-down: var(--price-flash-down-bg);
     --color-price-ref-chip: var(--price-ref-chip-bg);
+    --color-book-bid: var(--book-bid-bg);
+    --color-book-ask: var(--book-ask-bg);
     --color-buy: var(--buy);
     --color-buy-fg: var(--buy-fg);
     --color-sell: var(--sell);
@@ -125,6 +127,13 @@
 }
 
 .flash-cell { animation: flash-cell 0.6s ease-out; }
+
+/* Giá tham chiếu ở theme sáng: chữ đậm trên chip vàng nhạt (theme tối giữ chữ vàng trên nền thẻ). */
+:root:not([data-theme="dark"], [data-theme="hc-dark"]) .price-ref {
+  background-color: var(--price-ref-chip-bg);
+  font-weight: 600;
+  border-radius: 0.25rem;
+}
 
 /* Tắt nhấp nháy: hệ thống giảm chuyển động, hoặc người dùng tắt trong Cài đặt (data-flash="off"). */
 @media (prefers-reduced-motion: reduce) {

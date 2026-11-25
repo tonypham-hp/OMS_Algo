@@ -76,9 +76,9 @@ function LevelRow({
       data-highlighted={highlighted || undefined}
       className={cn(
         'h-8 transition-colors',
-        side === 'ask' ? 'bg-price-down/5' : 'bg-price-up/5',
+        side === 'ask' ? 'bg-book-ask' : 'bg-book-bid',
         pickable && 'hover:bg-accent focus-visible:bg-accent focus-visible:outline-ring cursor-pointer outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:-outline-offset-2',
-        highlighted && 'outline-primary bg-primary/10 outline-2 -outline-offset-2',
+        highlighted && 'outline-primary bg-surface-hover outline-2 -outline-offset-2',
         dimmed && 'opacity-60',
       )}
       onClick={pickable ? pick : undefined}
@@ -135,7 +135,7 @@ export function OrderBook3({ quote, session, depth, highlightPrice = null, onPic
     body = (
       <>
         {auction && (
-          <div className="border-price-ref/40 bg-price-ref/10 mb-2 rounded-md border px-2 py-1.5 text-xs" role="status">
+          <div className="border-warning bg-status-warning-bg mb-2 rounded-md border px-2 py-1.5 text-xs" role="status">
             <p className="font-medium">Phiên khớp lệnh định kỳ ({SESSION_LABELS[session]})</p>
             <p className="text-muted-foreground">
               Giá dự kiến khớp:{' '}

@@ -29,6 +29,8 @@
   --price-flash-up-bg: #F0FDF4;
   --price-flash-down-bg: #FFF5F5;
   --price-ref-chip-bg: #FEF9C3;
+  --book-bid-bg: #F3F9F5;
+  --book-ask-bg: #FCF4F4;
   --buy: #15803D;
   --buy-fg: #FFFFFF;
   --sell: #B91C1C;
@@ -76,6 +78,8 @@
   --price-flash-up-bg: #13251F;
   --price-flash-down-bg: #26141E;
   --price-ref-chip-bg: #111A2B;
+  --book-bid-bg: #11232F;
+  --book-ask-bg: #1C1C2E;
   --buy: #0ECB81;
   --buy-fg: #04121F;
   --sell: #F6465D;
@@ -123,6 +127,8 @@
   --price-flash-up-bg: #0A0A0A;
   --price-flash-down-bg: #0A0A0A;
   --price-ref-chip-bg: #0A0A0A;
+  --book-bid-bg: #0A0A0A;
+  --book-ask-bg: #0A0A0A;
   --buy: #0ECB81;
   --buy-fg: #000000;
   --sell: #FF7A8A;
@@ -170,6 +176,8 @@
   --price-flash-up-bg: #FFFFFF;
   --price-flash-down-bg: #FFFFFF;
   --price-ref-chip-bg: #FEF3C7;
+  --book-bid-bg: #FFFFFF;
+  --book-ask-bg: #FFFFFF;
   --buy: #166534;
   --buy-fg: #FFFFFF;
   --sell: #991B1B;
@@ -203,6 +211,8 @@
   --status-success-bg: #EFF3FC;
   --status-danger-fg: #C2410C;
   --status-danger-bg: #FBF2EE;
+  --book-bid-bg: #F4F6FD;
+  --book-ask-bg: #FCF6F3;
 }
 
 :root[data-theme="dark"][data-palette="cvd"] {
@@ -218,6 +228,8 @@
   --status-success-bg: #1E304C;
   --status-danger-fg: #FB923C;
   --status-danger-bg: #362D2E;
+  --book-bid-bg: #152135;
+  --book-ask-bg: #1D202C;
 }
 
 :root[data-theme="hc-dark"][data-palette="cvd"] {
@@ -233,6 +245,8 @@
   --status-success-bg: #181D22;
   --status-danger-fg: #FDBA74;
   --status-danger-bg: #221C15;
+  --book-bid-bg: #0A0A0A;
+  --book-ask-bg: #0A0A0A;
 }
 
 :root[data-theme="hc-light"][data-palette="cvd"] {
@@ -248,4 +262,6 @@
   --status-success-bg: #FFFFFF;
   --status-danger-fg: #9A3412;
   --status-danger-bg: #FFFFFF;
+  --book-bid-bg: #FFFFFF;
+  --book-ask-bg: #FFFFFF;
 }

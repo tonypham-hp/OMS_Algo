@@ -28,7 +28,7 @@ export interface ContrastPair {
   kind: 'text' | 'ui'
 }
 
-const SURFACES: TokenName[] = ['bg', 'surface', 'surface-panel', 'surface-2', 'surface-hover']
+const SURFACES: TokenName[] = ['bg', 'surface', 'surface-panel', 'surface-2', 'surface-hover', 'book-bid-bg', 'book-ask-bg']
 const TEXTS: TokenName[] = ['text', 'text-muted', 'accent', 'danger', 'warning', 'success']
 const PRICES: TokenName[] = ['price-ceiling', 'price-up', 'price-ref', 'price-down', 'price-floor']
 const STATUSES = ['neutral', 'info', 'progress', 'success', 'warning', 'danger'] as const
@@ -46,6 +46,8 @@ export const CONTRAST_PAIRS: ContrastPair[] = [
   ...STATUSES.flatMap((name) => [
     { fg: `status-${name}-fg` as TokenName, bg: `status-${name}-bg` as TokenName, kind: 'text' as const },
     { fg: `status-${name}-fg` as TokenName, bg: 'surface' as TokenName, kind: 'text' as const },
+    // Thông báo, hàng cảnh báo: chữ thường trên nền trạng thái.
+    { fg: 'text' as TokenName, bg: `status-${name}-bg` as TokenName, kind: 'text' as const },
   ]),
   ...(['bg', 'surface'] as TokenName[]).map((bg) => ({ fg: 'border-strong' as TokenName, bg, kind: 'ui' as const })),
   ...(['bg', 'surface'] as TokenName[]).map((bg) => ({ fg: 'focus-ring' as TokenName, bg, kind: 'ui' as const })),

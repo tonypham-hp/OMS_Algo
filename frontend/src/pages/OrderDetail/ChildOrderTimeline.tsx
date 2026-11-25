@@ -90,7 +90,7 @@ export function ChildOrderTimeline({ items, events = [] }: ChildOrderTimelinePro
                   className={cn(
                     'cursor-pointer',
                     ALERT_STATUSES.has(child.status) && 'border-l-2 border-l-danger bg-status-danger-bg font-medium hover:bg-status-danger-bg',
-                    isOpen && 'bg-primary/10',
+                    isOpen && 'bg-surface-hover border-l-primary border-l-2',
                   )}
                 >
                   <TableCell className="text-muted-foreground">

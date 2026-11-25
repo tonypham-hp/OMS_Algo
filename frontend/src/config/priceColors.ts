@@ -3,7 +3,8 @@ import type { SymbolQuote } from '@/types'
 export const PRICE_COLOR = {
   ceiling: 'text-price-ceiling',
   up: 'text-price-up',
-  ref: 'text-price-ref',
+  // `price-ref`: theme sáng thêm chip vàng nhạt và chữ đậm (index.css), vì chữ vàng trên nền trắng khó thấy là "vàng".
+  ref: 'text-price-ref price-ref',
   down: 'text-price-down',
   floor: 'text-price-floor',
 } as const
