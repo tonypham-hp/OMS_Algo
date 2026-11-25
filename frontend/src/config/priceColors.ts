@@ -2,13 +2,21 @@ import type { SymbolQuote } from '@/types'
 
 export type PriceLevel = 'ceiling' | 'up' | 'ref' | 'down' | 'floor'
 
+/** Màu chữ theo mức giá (dùng được cho cả ô bảng, cột +/-, %). */
 export const PRICE_COLOR: Record<PriceLevel, string> = {
   ceiling: 'text-price-ceiling',
   up: 'text-price-up',
-  // `price-ref`: theme sáng thêm chip vàng nhạt và chữ đậm (index.css), vì chữ vàng trên nền trắng khó thấy là "vàng".
-  ref: 'text-price-ref price-ref',
+  ref: 'text-price-ref',
   down: 'text-price-down',
   floor: 'text-price-floor',
+}
+
+/**
+ * Lớp đặt lên CHÍNH con số giá (span nội dòng, không đặt lên cả ô): giá tham chiếu chữ đậm, theme sáng thêm chip vàng nhạt
+ * (index.css, token --price-ref-chip-bg), vì chữ vàng trên nền trắng khó nhận ra là "vàng".
+ */
+export function priceChipClass(level: PriceLevel): string {
+  return level === 'ref' ? 'price-ref' : ''
 }
 
 /** Vị trí của giá so với trần / tham chiếu / sàn. */

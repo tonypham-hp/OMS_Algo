@@ -2,6 +2,7 @@ import { Bar, BarChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer,
 import { EmptyState } from '@/components/states'
 import { CHART_COLORS } from '@/config/chartColors'
 import { FONTS } from '@/config/theme'
+import { useHideSensitive } from '@/store/appearance.store'
 import { describeStrategyBps, formatFavorableBps, type StrategyBps } from '@/utils/execQuality'
 
 const AXIS_TICK = { fill: 'var(--text-muted)', fontSize: 12, fontFamily: FONTS.mono }
@@ -18,8 +19,17 @@ function getDomain(stats: StrategyBps[]): [number, number] {
 
 /** bps có lợi trung bình theo chiến lược: trục 0 ở giữa, phải là có lợi, trái là bất lợi. */
 export function StrategyChart({ stats }: { stats: StrategyBps[] }) {
+  const hidden = useHideSensitive()
   if (stats.length === 0) {
     return <EmptyState title="Chưa có lệnh khớp kèm giá arrival để so sánh." description="Thử chọn 5 phiên hoặc gồm cả lệnh đang chạy ở bộ lọc phía trên." />
+  }
+  if (hidden) {
+    return (
+      <EmptyState
+        title="Đã ẩn bps khi trình chiếu"
+        description="Tắt “Ẩn số tiền và bps khi trình chiếu” trong Cài đặt › Giao diện để xem biểu đồ."
+      />
+    )
   }
 
   return (

@@ -81,3 +81,6 @@ export const useAppearanceStore = create<AppearanceState>()((set, get) => {
     setEnv: (nextEnv) => set({ env: nextEnv, resolved: resolveAppearance(get().settings, nextEnv) }),
   }
 })
+
+/** Đang bật "Ẩn số tiền và bps khi trình chiếu". */
+export const useHideSensitive = () => useAppearanceStore((state) => state.settings.hideSensitive)

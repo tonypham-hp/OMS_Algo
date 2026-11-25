@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Sensitive } from '@/components/Sensitive'
 import { Term } from '@/components/Term'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import type { OrderDetailData, ParentOrder } from '@/types'
@@ -46,7 +47,7 @@ export function ExecQualityCard({ order, detail }: { order: ParentOrder; detail:
           <Stat label={<Term id="vwap">VWAP</Term>}>{withUnit(formatQualityPrice(quality.vwap))}</Stat>
           <Stat label={<>So <Term id="arrival">arrival</Term></>}>
             <span className={favorableClass(quality.arrivalFavorable)}>
-              {formatDiffPct(quality.vsArrivalPct)}
+              <Sensitive>{formatDiffPct(quality.vsArrivalPct)}</Sensitive>
               {/* Ghi chữ thay vì bps: phần tóm tắt phía trên đã ghi bps theo quy ước cũ (dương là giá cao hơn arrival). */}
               {quality.arrivalFavorable !== null && (
                 <span className="ml-1 text-xs">{quality.arrivalFavorable ? 'có lợi' : 'bất lợi'}</span>

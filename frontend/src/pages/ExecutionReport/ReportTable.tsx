@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Sensitive } from '@/components/Sensitive'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Term } from '@/components/Term'
 import { REPORT_COLUMN_TERMS } from '@/config/glossary'
@@ -53,9 +54,9 @@ function renderCell(row: ExecQualityRow, key: ReportSortKey): ReactNode {
     case 'vwap':
       return formatQualityPrice(row[key])
     case 'vsArrivalPct':
-      return <span className={favorableClass(row.arrivalFavorable)}>{formatDiffPct(row.vsArrivalPct)}</span>
+      return <span className={favorableClass(row.arrivalFavorable)}><Sensitive>{formatDiffPct(row.vsArrivalPct)}</Sensitive></span>
     case 'vsVwapPct':
-      return <span className={favorableClass(row.vwapFavorable)}>{formatDiffPct(row.vsVwapPct)}</span>
+      return <span className={favorableClass(row.vwapFavorable)}><Sensitive>{formatDiffPct(row.vsVwapPct)}</Sensitive></span>
     case 'participation':
       return formatParticipation(row.participation)
   }

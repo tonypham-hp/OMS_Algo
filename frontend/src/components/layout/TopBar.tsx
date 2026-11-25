@@ -1,6 +1,6 @@
-import { ChevronDown, ChevronRight, CircleHelp, LogOut, Search } from 'lucide-react'
+import { ChevronDown, ChevronRight, CircleHelp, LogOut, Search, Settings } from 'lucide-react'
 import { Fragment, type ReactNode } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { Button } from '@/components/ui/button'
 import {
@@ -86,6 +86,7 @@ export function TopBar({ actions }: { actions?: ReactNode }) {
   const demoActive = useDemoStore((state) => state.snapshot !== null)
   const setTourOpen = useUiStore((state) => state.setTourOpen)
   const setPaletteOpen = useUiStore((state) => state.setPaletteOpen)
+  const navigate = useNavigate()
 
   return (
     <header
@@ -128,6 +129,10 @@ export function TopBar({ actions }: { actions?: ReactNode }) {
               <DropdownMenuItem onSelect={() => setPaletteOpen(true)}>
                 <Search aria-hidden />
                 Tìm nhanh
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => navigate('/cai-dat')} data-testid="menu-settings">
+                <Settings aria-hidden />
+                Cài đặt
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={logout}>

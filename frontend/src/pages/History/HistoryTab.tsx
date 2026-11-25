@@ -6,6 +6,7 @@ import { toOptions } from '@/components/filterOptions'
 import { OrderStatusBadge } from '@/components/OrderStatusBadge'
 import { EmptyState } from '@/components/states'
 import { Term } from '@/components/Term'
+import { Sensitive } from '@/components/Sensitive'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableFooter, TableHeader, TableRow } from '@/components/ui/table'
@@ -68,7 +69,7 @@ function renderCell(row: HistoryRow, key: HistorySortKey): ReactNode {
     case 'avgPrice':
       return formatQualityPrice(row.avgPrice)
     case 'vsArrivalPct':
-      return <span className={favorableClass(row.arrivalFavorable)}>{formatDiffPct(row.vsArrivalPct)}</span>
+      return <span className={favorableClass(row.arrivalFavorable)}><Sensitive>{formatDiffPct(row.vsArrivalPct)}</Sensitive></span>
     case 'status':
       return (
         <span className="flex flex-col gap-0.5">

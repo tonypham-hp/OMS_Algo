@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/select'
 import { STRATEGY_TERMS } from '@/config/glossary'
 import { SESSION_LABELS } from '@/config/hose'
-import { getPriceColor, getPriceLevel, PRICE_COLOR } from '@/config/priceColors'
+import { getPriceColor, getPriceLevel, PRICE_COLOR, priceChipClass } from '@/config/priceColors'
 import { PERSISTENCE_LABELS, STRATEGIES, STRATEGY_TYPES } from '@/config/strategies'
 import { getTemplate, type StrategyTemplate } from '@/config/strategyTemplates'
 import { useCreateOrder } from '@/hooks/useOrders'
@@ -372,7 +372,15 @@ export function OrderTicket() {
                 <div key={label}>
                   <dt className="text-muted-foreground">{label}</dt>
                   <dd className={cn('font-medium', color as string)}>
-                    {formatNumber(price as number)}
+                    {/* TC và giá khớp/dự kiến bằng tham chiếu: chip vàng ở theme sáng. */}
+                    <span
+                      className={cn(
+                        'rounded px-1',
+                        (index === 1 || index === 3) && priceChipClass(index === 1 ? 'ref' : getPriceLevel(price as number, quote)),
+                      )}
+                    >
+                      {formatNumber(price as number)}
+                    </span>
                     {/* Giá khớp/dự kiến: kèm ký hiệu so tham chiếu, không chỉ dựa vào màu. */}
                     {index === 3 && <PriceMark level={getPriceLevel(price as number, quote)} />}
                   </dd>

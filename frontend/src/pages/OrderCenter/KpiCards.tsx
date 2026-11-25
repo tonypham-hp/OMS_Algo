@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Sensitive } from '@/components/Sensitive'
 import { Term } from '@/components/Term'
 import { formatBps, formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -66,7 +67,7 @@ export function KpiCards({ running, filled, attention, slippageBps }: KpiCardsPr
           </>
         }
         demoId="kpi-slippage"
-        value={slippageBps === null ? '—' : formatBps(slippageBps)}
+        value={slippageBps === null ? '—' : <Sensitive>{formatBps(slippageBps)}</Sensitive>}
         note={
           slippageBps === null
             ? 'Chưa có lệnh khớp kèm giá arrival'

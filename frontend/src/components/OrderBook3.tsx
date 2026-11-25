@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { EmptyState, LoadingState } from '@/components/states'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { getPriceColor, getPriceLevel } from '@/config/priceColors'
+import { getPriceColor, getPriceLevel, priceChipClass } from '@/config/priceColors'
 import { SESSION_LABELS } from '@/config/hose'
 import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -106,7 +106,7 @@ function LevelRow({
         ) : null}
       </td>
       <td className="px-2 text-right font-semibold tabular-nums">
-        <FlashValue value={String(level.price)} className={getPriceColor(level.price, quote)}>
+        <FlashValue value={String(level.price)} className={cn(getPriceColor(level.price, quote), priceChipClass(getPriceLevel(level.price, quote)))}>
           {formatNumber(level.price)}
           <PriceMark level={getPriceLevel(level.price, quote)} />
         </FlashValue>

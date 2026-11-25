@@ -200,6 +200,22 @@ export function buildSearchIndex({ user, orders, symbols, templates, canDemo, co
     )
   }
   items.push({
+    id: 'screen:/cai-dat',
+    group: 'SCREEN',
+    title: 'Cài đặt giao diện',
+    subtitle: 'Cài đặt',
+    keywords: ['cài đặt', 'giao diện', 'theme', 'tương phản', 'mù màu', 'cỡ chữ', 'mật độ', 'nhấp nháy', 'trình chiếu'],
+    target: { kind: 'navigate', path: '/cai-dat' },
+  })
+  items.push({
+    id: 'action:open-settings',
+    group: 'ACTION',
+    title: 'Mở Cài đặt giao diện',
+    subtitle: 'Sáng/tối, tương phản cao, mù màu, mật độ, cỡ chữ',
+    keywords: ['cài đặt', 'giao diện', 'settings', 'tương phản cao', 'mù màu'],
+    target: { kind: 'navigate', path: '/cai-dat' },
+  })
+  items.push({
     id: 'action:toggle-theme',
     group: 'ACTION',
     title: colorScheme === 'dark' ? 'Đổi giao diện sáng' : 'Đổi giao diện tối',

@@ -64,7 +64,8 @@ export interface ContrastResult extends ContrastPair {
 /** Kiểm mọi cặp của một theme (và bảng màu). */
 export function checkTheme(theme: ThemeName, palette: 'default' | 'cvd' = 'default'): ContrastResult[] {
   const colors: Palette = paletteOf(theme, palette)
-  return CONTRAST_PAIRS.map((pair) => {
+  // Nền 'transparent' (chip tham chiếu ở theme tối): chữ nằm thẳng trên bề mặt, đã có trong các cặp bề mặt.
+  return CONTRAST_PAIRS.filter((pair) => colors[pair.bg] !== 'transparent').map((pair) => {
     const ratio = contrastRatio(colors[pair.fg], colors[pair.bg])
     const threshold = pair.kind === 'ui' ? NON_TEXT_THRESHOLD : textThreshold(theme)
     return { ...pair, theme, palette, ratio, threshold, passed: ratio >= threshold }

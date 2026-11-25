@@ -9,6 +9,7 @@ export interface Crumb {
 const EXTRA_PAGES: Record<string, string> = {
   '/403': 'Không có quyền',
   '/thuat-ngu': 'Thuật ngữ',
+  '/cai-dat': 'Cài đặt giao diện',
 }
 
 /** Đường dẫn → breadcrumb: nhóm menu › màn hình › mã lệnh (với /so-lenh/:id). */

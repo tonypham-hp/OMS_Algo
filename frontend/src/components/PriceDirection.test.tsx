@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { getPriceColor, getPriceLevel } from '@/config/priceColors'
+import { getPriceColor, getPriceLevel, priceChipClass } from '@/config/priceColors'
 import { PriceMark } from './PriceDirection'
 
 const quote = { ceiling_price: 107_000, floor_price: 93_000, ref_price: 100_000 }
@@ -14,9 +14,11 @@ describe('getPriceLevel', () => {
     expect(getPriceLevel(93_000, quote)).toBe('floor')
   })
 
-  it('màu theo cùng mức; tham chiếu có lớp chip cho theme sáng', () => {
+  it('màu theo cùng mức; chip tham chiếu chỉ là lớp riêng đặt lên con số', () => {
     expect(getPriceColor(107_000, quote as never)).toBe('text-price-ceiling')
-    expect(getPriceColor(100_000, quote as never)).toContain('price-ref')
+    expect(getPriceColor(100_000, quote as never)).toBe('text-price-ref')
+    expect(priceChipClass('ref')).toBe('price-ref')
+    expect(priceChipClass('up')).toBe('')
   })
 })
 

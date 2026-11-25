@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { SensitiveAccount } from '@/components/Sensitive'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { REASON_LABELS } from '@/config/opsAlerts'
@@ -45,7 +46,7 @@ export function PausedOrdersPanel({ orders, overview }: PausedOrdersPanelProps) 
                   </Link>
                 </TableCell>
                 <TableCell className="font-semibold">{order.symbol}</TableCell>
-                <TableCell className="tabular-nums">{order.account_no}</TableCell>
+                <TableCell className="tabular-nums"><SensitiveAccount value={order.account_no} /></TableCell>
                 <TableCell className="whitespace-normal">
                   {order.reason_code ? REASON_LABELS[order.reason_code] : 'Khác'}
                 </TableCell>

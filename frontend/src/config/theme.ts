@@ -124,7 +124,8 @@ export const PALETTES: Record<ThemeName, Palette> = {
     'price-floor': '#1EB5D8',
     'price-flash-up-bg': '#13251F',
     'price-flash-down-bg': '#26141E',
-    'price-ref-chip-bg': '#111A2B',
+    // Theme tối: không có chip (chữ vàng trên nền thẻ đã đủ rõ).
+    'price-ref-chip-bg': 'transparent',
     'book-bid-bg': mixHex('#0ECB81', DARK_SURFACE, 0.05),
     'book-ask-bg': mixHex('#F6465D', DARK_SURFACE, 0.05),
     buy: '#0ECB81',
@@ -212,7 +213,7 @@ export const PALETTES: Record<ThemeName, Palette> = {
     // Tương phản cao: nhấp nháy chỉ hiện mũi tên, nền giữ nguyên để chữ luôn ≥ 7:1.
     'price-flash-up-bg': HC_DARK_SURFACE,
     'price-flash-down-bg': HC_DARK_SURFACE,
-    'price-ref-chip-bg': HC_DARK_SURFACE,
+    'price-ref-chip-bg': 'transparent',
     'book-bid-bg': HC_DARK_SURFACE,
     'book-ask-bg': HC_DARK_SURFACE,
     buy: '#0ECB81',
@@ -311,10 +312,11 @@ export function paletteOf(theme: ThemeName, palette: 'default' | 'cvd' = 'defaul
 }
 
 const THEME_SELECTORS: Record<ThemeName, string> = {
-  light: ':root',
-  dark: ':root[data-theme="dark"]',
-  'hc-dark': ':root[data-theme="hc-dark"]',
-  'hc-light': ':root[data-theme="hc-light"]',
+  // Không gắn :root, để một khung xem trước (trang Cài đặt) đặt data-theme riêng cũng nhận đủ token.
+  light: ':root, [data-theme="light"]',
+  dark: '[data-theme="dark"]',
+  'hc-dark': '[data-theme="hc-dark"]',
+  'hc-light': '[data-theme="hc-light"]',
 }
 
 const COLOR_SCHEME: Record<ThemeName, 'light' | 'dark'> = { light: 'light', dark: 'dark', 'hc-dark': 'dark', 'hc-light': 'light' }
@@ -330,11 +332,10 @@ export function renderTokensCss(): string {
     ].join('\n')
   const parts = [
     '/* SINH TỰ ĐỘNG từ src/config/theme.ts (npm run tokens). Không sửa tay: sửa theme.ts rồi chạy lại. */',
-    '/* :root là theme sáng; data-theme đặt trên <html> bởi script khởi động (index.html) và ThemeProvider. */',
+    '/* :root là theme sáng; data-theme đặt trên <html> bởi script khởi động (index.html) và ThemeProvider,\n   hoặc trên một khung xem trước (trang Cài đặt): biến CSS kế thừa nên cả nhánh con đổi theo. */',
     ...THEME_NAMES.map((theme) => block(THEME_SELECTORS[theme], PALETTES[theme], COLOR_SCHEME[theme])),
-    ...THEME_NAMES.map((theme) =>
-      block(`${theme === 'light' ? ':root' : THEME_SELECTORS[theme]}[data-palette="cvd"]`, CVD_OVERRIDES[theme]),
-    ),
+    // Mù màu: chỉ khi cùng phần tử có cả data-theme và data-palette (đặc hiệu cao hơn khối theme, nên luôn đè).
+    ...THEME_NAMES.map((theme) => block(`[data-theme="${theme}"][data-palette="cvd"]`, CVD_OVERRIDES[theme])),
   ]
   return `${parts.join('\n\n')}\n`
 }
