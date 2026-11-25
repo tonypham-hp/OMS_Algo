@@ -8,7 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getPriceColor, PRICE_COLOR } from '@/config/priceColors'
+import { getPriceColor, PRICE_COLOR, priceChipClass } from '@/config/priceColors'
 import { formatNumber, formatPercent, formatSigned } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useMarketStore } from '@/store/market.store'
@@ -70,7 +70,7 @@ export function PriceBoard() {
                     {formatNumber(quote.ceiling_price)}
                   </TableCell>
                   <TableCell className={cn(NUMBER_CELL, PRICE_COLOR.ref)}>
-                    {formatNumber(quote.ref_price)}
+                    <span className={cn('rounded px-1', priceChipClass('ref'))}>{formatNumber(quote.ref_price)}</span>
                   </TableCell>
                   <TableCell className={cn(NUMBER_CELL, PRICE_COLOR.floor)}>
                     {formatNumber(quote.floor_price)}

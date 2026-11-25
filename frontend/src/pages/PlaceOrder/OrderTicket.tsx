@@ -5,6 +5,7 @@ import { useSearchParams } from 'react-router-dom'
 import { FieldError } from '@/components/FieldError'
 import { Term } from '@/components/Term'
 import { NumberInput } from '@/components/NumberInput'
+import { PriceMark } from '@/components/PriceDirection'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -18,7 +19,7 @@ import {
 } from '@/components/ui/select'
 import { STRATEGY_TERMS } from '@/config/glossary'
 import { SESSION_LABELS } from '@/config/hose'
-import { getPriceColor, PRICE_COLOR } from '@/config/priceColors'
+import { getPriceColor, getPriceLevel, PRICE_COLOR, priceChipClass } from '@/config/priceColors'
 import { PERSISTENCE_LABELS, STRATEGIES, STRATEGY_TYPES } from '@/config/strategies'
 import { getTemplate, type StrategyTemplate } from '@/config/strategyTemplates'
 import { useCreateOrder } from '@/hooks/useOrders'
@@ -235,7 +236,7 @@ export function OrderTicket() {
             onClear={() => setTemplateId(null)}
           />
           {activeTemplate && (
-            <p role="status" className="bg-primary/10 rounded-md p-2 text-xs" data-demo-id="template-active">
+            <p role="status" className="bg-nav-active rounded-md p-2 text-xs" data-demo-id="template-active">
               Đã điền theo mẫu <span className="font-medium">{activeTemplate.name}</span>. Kiểm tra lại các ô rồi bấm Đặt lệnh.
               {activeTemplate.hint && <span className="text-muted-foreground block">{activeTemplate.hint}</span>}
             </p>
@@ -249,8 +250,8 @@ export function OrderTicket() {
                   const isActive = field.value === side
                   const activeClass =
                     side === 'BUY'
-                      ? 'bg-green-600 text-white hover:bg-green-600'
-                      : 'bg-red-600 text-white hover:bg-red-600'
+                      ? 'bg-buy text-buy-fg hover:bg-buy/90'
+                      : 'bg-sell text-sell-fg hover:bg-sell/90'
                   return (
                     <Button
                       key={side}
@@ -356,7 +357,7 @@ export function OrderTicket() {
           </div>
 
           {quote && (
-            <dl className="bg-muted/50 grid grid-cols-5 gap-1 rounded-md p-2 text-center text-xs tabular-nums">
+            <dl className="bg-surface-2 grid grid-cols-5 gap-1 rounded-md p-2 text-center text-xs tabular-nums">
               {[
                 ['Trần', quote.ceiling_price, PRICE_COLOR.ceiling],
                 ['TC', quote.ref_price, PRICE_COLOR.ref],
@@ -367,11 +368,21 @@ export function OrderTicket() {
                   getPriceColor(getDisplayPrice(quote), quote),
                 ],
                 ['Bước', quoteRules ? getTickSize(tickBase ?? quote.last_price, quoteRules.secType, quoteRules.rules) : 0, ''],
-              ].map(([label, price, color]) => (
+              ].map(([label, price, color], index) => (
                 <div key={label}>
                   <dt className="text-muted-foreground">{label}</dt>
                   <dd className={cn('font-medium', color as string)}>
-                    {formatNumber(price as number)}
+                    {/* TC và giá khớp/dự kiến bằng tham chiếu: chip vàng ở theme sáng. */}
+                    <span
+                      className={cn(
+                        'rounded px-1',
+                        (index === 1 || index === 3) && priceChipClass(index === 1 ? 'ref' : getPriceLevel(price as number, quote)),
+                      )}
+                    >
+                      {formatNumber(price as number)}
+                    </span>
+                    {/* Giá khớp/dự kiến: kèm ký hiệu so tham chiếu, không chỉ dựa vào màu. */}
+                    {index === 3 && <PriceMark level={getPriceLevel(price as number, quote)} />}
                   </dd>
                 </div>
               ))}
@@ -488,7 +499,7 @@ export function OrderTicket() {
           </div>
 
           {strategy.usesMtl && !isMtlAllowed(symbolSession, quoteRules?.rules) && (
-            <p role="status" className="rounded-md bg-amber-500/15 p-2 text-xs text-amber-300">
+            <p role="status" className="rounded-md bg-status-warning-bg p-2 text-xs text-status-warning">
               Hiện tại: {SESSION_LABELS[symbolSession]}. Lệnh {strategy.label} có thể sinh lệnh con MTL, mà MTL
               chỉ hợp lệ trong phiên liên tục. Trong ATO, ATC lệnh con đó được gửi dưới dạng lệnh ATO, ATC.
             </p>

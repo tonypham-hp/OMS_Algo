@@ -47,7 +47,7 @@ export function TemplateStrip({ templates, activeId, onSelect, onClear }: Templa
               onClick={() => onSelect(template)}
               className={cn(
                 'bg-muted/40 hover:bg-accent focus-visible:ring-ring flex w-36 shrink-0 flex-col items-start gap-0.5 rounded-md border px-2.5 py-2 text-left outline-none focus-visible:ring-2',
-                active && 'border-primary bg-primary/10 ring-primary ring-1',
+                active && 'border-primary bg-nav-active ring-primary ring-1',
               )}
             >
               <span className="line-clamp-1 text-xs font-medium">{template.name}</span>

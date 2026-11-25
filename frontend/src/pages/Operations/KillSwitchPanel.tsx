@@ -66,8 +66,8 @@ export function KillSwitchPanel({ orders, overview }: KillSwitchPanelProps) {
       {active.length === 0 ? (
         <p className="text-muted-foreground text-sm">Kill switch đang tắt.</p>
       ) : (
-        <div role="status" className="flex flex-col gap-2 rounded-md border border-red-500/60 bg-red-500/10 p-3">
-          <p className="text-sm font-medium text-red-300">Kill switch đang bật, không đặt được lệnh mới:</p>
+        <div role="status" className="flex flex-col gap-2 rounded-md border border-danger bg-status-danger-bg p-3">
+          <p className="text-sm font-medium text-status-danger">Kill switch đang bật, không đặt được lệnh mới:</p>
           {active.map((item) => (
             <div key={item.key} className="flex items-center justify-between gap-2 text-sm">
               <span>{item.label}</span>

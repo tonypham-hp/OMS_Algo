@@ -1,9 +1,11 @@
 import { Bar, BarChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { EmptyState } from '@/components/states'
-import { FONTS, THEME } from '@/config/theme'
+import { CHART_COLORS } from '@/config/chartColors'
+import { FONTS } from '@/config/theme'
+import { useHideSensitive } from '@/store/appearance.store'
 import { describeStrategyBps, formatFavorableBps, type StrategyBps } from '@/utils/execQuality'
 
-const AXIS_TICK = { fill: 'var(--muted-foreground)', fontSize: 12, fontFamily: FONTS.mono }
+const AXIS_TICK = { fill: 'var(--text-muted)', fontSize: 12, fontFamily: FONTS.mono }
 /** Chiều cao mỗi cột và phần dành cho trục. */
 const ROW_HEIGHT = 44
 const AXIS_HEIGHT = 40
@@ -17,8 +19,17 @@ function getDomain(stats: StrategyBps[]): [number, number] {
 
 /** bps có lợi trung bình theo chiến lược: trục 0 ở giữa, phải là có lợi, trái là bất lợi. */
 export function StrategyChart({ stats }: { stats: StrategyBps[] }) {
+  const hidden = useHideSensitive()
   if (stats.length === 0) {
     return <EmptyState title="Chưa có lệnh khớp kèm giá arrival để so sánh." description="Thử chọn 5 phiên hoặc gồm cả lệnh đang chạy ở bộ lọc phía trên." />
+  }
+  if (hidden) {
+    return (
+      <EmptyState
+        title="Đã ẩn bps khi trình chiếu"
+        description="Tắt “Ẩn số tiền và bps khi trình chiếu” trong Cài đặt › Giao diện để xem biểu đồ."
+      />
+    )
   }
 
   return (
@@ -39,25 +50,25 @@ export function StrategyChart({ stats }: { stats: StrategyBps[] }) {
               stroke="var(--border)"
             />
             <YAxis type="category" dataKey="label" width={72} tick={AXIS_TICK} stroke="var(--border)" />
-            <ReferenceLine x={0} stroke={THEME.textMuted} />
+            <ReferenceLine x={0} stroke={CHART_COLORS.axis} />
             <Tooltip
-              cursor={{ fill: 'var(--nav-active)' }}
+              cursor={{ fill: CHART_COLORS.cursor }}
               formatter={(value, _name, item) => [
                 `${formatFavorableBps(Number(value))} (${(item.payload as StrategyBps).orders} lệnh)`,
                 'So arrival',
               ]}
               contentStyle={{
-                background: 'var(--popover)',
+                background: 'var(--surface)',
                 border: '1px solid var(--border)',
                 borderRadius: 8,
                 fontSize: 12,
               }}
-              labelStyle={{ color: 'var(--foreground)' }}
-              itemStyle={{ color: 'var(--foreground)' }}
+              labelStyle={{ color: 'var(--text)' }}
+              itemStyle={{ color: 'var(--text)' }}
             />
             <Bar dataKey="bps" name="bps" barSize={20} isAnimationActive={false}>
               {stats.map((item) => (
-                <Cell key={item.strategy_type} fill={item.bps >= 0 ? THEME.up : THEME.down} />
+                <Cell key={item.strategy_type} fill={item.bps >= 0 ? CHART_COLORS.favorable : CHART_COLORS.unfavorable} />
               ))}
             </Bar>
           </BarChart>

@@ -31,18 +31,18 @@ import { ReconDecisionDialog } from './ReconDecisionDialog'
 import { ChildId, DateRangeFilter, Pagination } from './shared'
 
 const STATUS_STYLES: Record<ReconRowStatus, string> = {
-  OPEN: 'bg-red-500/15 text-red-300',
-  PENDING_APPROVAL: 'bg-amber-500/15 text-amber-300',
-  RESOLVED: 'bg-emerald-500/15 text-emerald-300',
+  OPEN: 'bg-status-danger-bg text-status-danger',
+  PENDING_APPROVAL: 'bg-status-warning-bg text-status-warning',
+  RESOLVED: 'bg-status-success-bg text-status-success',
 }
 const TYPE_OPTIONS = RECON_TYPES.map((type) => ({ value: type as string, label: `${type} · ${RECON_TYPE_LABELS[type]}` }))
 const STATUS_OPTIONS = toOptions(RECON_STATUS_LABELS)
 
 function Kpi({ label, value, note, isAlert = false, demoId }: { label: ReactNode; value: number; note: string; isAlert?: boolean; demoId: string }) {
   return (
-    <div data-demo-id={demoId} className={cn('bg-card flex flex-col gap-1 rounded-lg border p-4', isAlert && 'border-red-400/70')}>
+    <div data-demo-id={demoId} className={cn('bg-card flex flex-col gap-1 rounded-lg border p-4', isAlert && 'border-danger')}>
       <p className="text-muted-foreground text-sm">{label}</p>
-      <p className={cn('text-3xl font-semibold tabular-nums', isAlert && 'text-red-300')}>{formatNumber(value)}</p>
+      <p className={cn('text-3xl font-semibold tabular-nums', isAlert && 'text-status-danger')}>{formatNumber(value)}</p>
       <p className="text-muted-foreground text-xs">{note}</p>
     </div>
   )
@@ -56,7 +56,7 @@ function TypeCell({ row }: { row: ReconRow }) {
           {row.type}
         </Badge>
       </Term>
-      <span className={cn('text-xs', row.critical ? 'font-semibold text-red-300' : 'text-muted-foreground')}>
+      <span className={cn('text-xs', row.critical ? 'font-semibold text-status-danger' : 'text-muted-foreground')}>
         {row.critical ? OVERFILL_LABEL : RECON_TYPE_LABELS[row.type]}
       </span>
     </span>
@@ -228,7 +228,7 @@ export function ReconTab({ tradingDate }: { tradingDate: string }) {
                 </TableHeader>
                 <TableBody>
                   {current.rows.map((row) => (
-                    <TableRow key={row.id} data-demo-id={`recon-row-${row.type}`} data-recon-id={row.id} className={cn(row.critical && 'bg-red-500/10')}>
+                    <TableRow key={row.id} data-demo-id={`recon-row-${row.type}`} data-recon-id={row.id} className={cn(row.critical && 'bg-status-danger-bg')}>
                       <TableCell className="whitespace-nowrap tabular-nums">{formatDateTime(row.detected_at)}</TableCell>
                       <TableCell>
                         <TypeCell row={row} />

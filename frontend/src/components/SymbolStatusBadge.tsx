@@ -8,7 +8,7 @@ const STATUS_LABELS: Record<string, { label: string; title: string; className: s
   RESTRICTED: {
     label: 'Hạn chế GD',
     title: 'Mã bị hạn chế giao dịch: chỉ khớp định kỳ (ATO, các lượt 15 phút, ATC), chỉ lô chẵn, chỉ LO trong lượt.',
-    className: 'bg-amber-500/20 text-amber-300',
+    className: 'bg-status-warning-bg text-status-warning',
   },
 }
 
@@ -49,7 +49,7 @@ export function CallCountdown({ symbol, className }: { symbol: string; className
     <p role="status" className={className} data-demo-id={`call-countdown-${symbol}`}>
       Khớp kế tiếp <span className="font-medium tabular-nums">{formatClock(callEnd).slice(0, 5)}</span> · còn{' '}
       <span className="tabular-nums">{remaining}</span>
-      {locked && <span className="text-amber-300"> · đang khóa sửa/hủy</span>}
+      {locked && <span className="text-status-warning"> · đang khóa sửa/hủy</span>}
     </p>
   )
 }

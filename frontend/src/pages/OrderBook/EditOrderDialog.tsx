@@ -117,7 +117,7 @@ export function EditOrderDialog({ order, onClose }: EditOrderDialogProps) {
                   data-demo-id="amend-priority"
                   className={cn(
                     'rounded-md p-2 text-xs',
-                    amend.losesPriority ? 'bg-amber-500/15 text-amber-300' : 'bg-emerald-500/15 text-emerald-300',
+                    amend.losesPriority ? 'bg-status-warning-bg text-status-warning' : 'bg-status-success-bg text-status-success',
                   )}
                 >
                   {amend.text}

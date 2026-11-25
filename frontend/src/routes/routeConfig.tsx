@@ -19,6 +19,7 @@ const Operations = lazy(() => import('@/pages/Operations'))
 const StrategyConfig = lazy(() => import('@/pages/StrategyConfig'))
 const RulePacks = lazy(() => import('@/pages/RulePacks'))
 const Glossary = lazy(() => import('@/pages/Glossary'))
+const Settings = lazy(() => import('@/pages/Settings'))
 const Forbidden = lazy(() => import('@/pages/Forbidden'))
 const NotFound = lazy(() => import('@/pages/NotFound'))
 
@@ -47,6 +48,8 @@ export const routes: RouteObject[] = [
           { path: '/bao-cao/hieu-qua', element: page(ExecutionReport) },
           { path: '/bao-cao/lich-su', element: page(History) },
           { path: '/thuat-ngu', element: page(Glossary) },
+          // Cài đặt giao diện: mọi vai trò.
+          { path: '/cai-dat', element: page(Settings) },
           {
             element: <PermissionRoute permission="place_order" />,
             children: [

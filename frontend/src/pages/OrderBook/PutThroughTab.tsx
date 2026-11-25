@@ -1,6 +1,7 @@
 import { Handshake, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { EmptyState, ErrorState, LoadingState } from '@/components/states'
+import { SensitiveAccount } from '@/components/Sensitive'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -68,7 +69,7 @@ export function PutThroughTab() {
                   <TableRow key={deal.deal_id} data-demo-id={`put-through-row-${deal.deal_id}`}>
                     <TableCell className="font-mono text-xs">{deal.deal_id}</TableCell>
                     <TableCell className="tabular-nums">{formatDateTime(deal.matched_at ?? deal.created_at)}</TableCell>
-                    <TableCell>{deal.account_no}</TableCell>
+                    <TableCell><SensitiveAccount value={deal.account_no} /></TableCell>
                     <TableCell className="font-semibold">{deal.symbol}</TableCell>
                     <TableCell>{SIDE_LABELS[deal.side]}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatNumber(deal.qty)}</TableCell>

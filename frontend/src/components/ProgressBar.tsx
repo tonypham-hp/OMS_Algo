@@ -21,7 +21,7 @@ export function ProgressBar({ value, max, label }: ProgressBarProps) {
         className="bg-muted h-1.5 flex-1 overflow-hidden rounded-full"
       >
         <div
-          className={cn('h-full rounded-full transition-all', percent >= 100 ? 'bg-green-500' : 'bg-sky-500')}
+          className={cn('h-full rounded-full transition-all', percent >= 100 ? 'bg-success' : 'bg-status-progress')}
           style={{ width: `${percent}%` }}
         />
       </div>

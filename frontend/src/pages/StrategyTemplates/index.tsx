@@ -58,7 +58,7 @@ export default function StrategyTemplates() {
                       <Badge variant="secondary">{STRATEGIES[template.strategy_type].label}</Badge>
                     </Term>
                     {template.side && (
-                      <Badge className={cn(template.side === 'BUY' ? 'bg-price-up/15 text-price-up' : 'bg-price-down/15 text-price-down')}>
+                      <Badge className={cn(template.side === 'BUY' ? 'bg-buy text-buy-fg' : 'bg-sell text-sell-fg')}>
                         {SIDE_LABELS[template.side]}
                       </Badge>
                     )}

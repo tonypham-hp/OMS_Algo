@@ -9,9 +9,9 @@ import { useAuthStore } from '@/store/auth.store'
 import type { AttentionItem, AttentionKind } from '@/utils/dashboard'
 
 const KIND_STYLES: Record<AttentionKind, { label: string; className: string }> = {
-  UNKNOWN: { label: 'Chưa rõ', className: 'bg-red-500/20 text-red-300' },
-  REJECTED: { label: 'Bị từ chối', className: 'bg-red-500/20 text-red-300' },
-  PAUSED_SYSTEM: { label: 'Hệ thống dừng', className: 'bg-amber-500/20 text-amber-300' },
+  UNKNOWN: { label: 'Chưa rõ', className: 'bg-status-danger-bg text-status-danger' },
+  REJECTED: { label: 'Bị từ chối', className: 'bg-status-danger-bg text-status-danger' },
+  PAUSED_SYSTEM: { label: 'Hệ thống dừng', className: 'bg-status-warning-bg text-status-warning' },
 }
 
 /** Lệnh cần chú ý; bấm một dòng (hoặc Enter khi đang chọn dòng) để mở chi tiết lệnh. */

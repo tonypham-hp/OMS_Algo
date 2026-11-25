@@ -1,6 +1,7 @@
-import { ChevronDown, ChevronRight, CircleHelp, LogOut, Search } from 'lucide-react'
+import { ChevronDown, ChevronRight, CircleHelp, LogOut, Search, Settings } from 'lucide-react'
 import { Fragment, type ReactNode } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { ThemeToggle } from '@/components/ThemeToggle'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -69,7 +70,7 @@ function DemoDataLabel() {
   return (
     // Dưới 1600px thanh trên chật: bỏ chữ "cập nhật" để tên màn (breadcrumb) không bị cắt; title vẫn đủ câu.
     <span
-      className="bg-price-ref/15 text-price-ref rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap"
+      className="bg-status-warning-bg text-status-warning rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap"
       title={`Dữ liệu demo · cập nhật ${lastUpdate}`}
     >
       Dữ liệu demo · <span className="hidden min-[1600px]:inline">cập nhật </span>
@@ -85,6 +86,7 @@ export function TopBar({ actions }: { actions?: ReactNode }) {
   const demoActive = useDemoStore((state) => state.snapshot !== null)
   const setTourOpen = useUiStore((state) => state.setTourOpen)
   const setPaletteOpen = useUiStore((state) => state.setPaletteOpen)
+  const navigate = useNavigate()
 
   return (
     <header
@@ -93,10 +95,12 @@ export function TopBar({ actions }: { actions?: ReactNode }) {
     >
       <Breadcrumb />
       <PaletteButton />
-      <div className="ml-auto flex shrink-0 items-center gap-3">
+      {/* Dưới 1600px khoảng cách hẹp hơn để chừa chỗ cho tên màn (đã thêm nút Sáng/Tối). */}
+      <div className="ml-auto flex shrink-0 items-center gap-2 min-[1600px]:gap-3">
         <SessionStatus />
         {/* Đang Demo: chỗ này dành cho nhãn Demo; dữ liệu lúc đó là của kịch bản, không phải giá demo thường. */}
         {!demoActive && <DemoDataLabel />}
+        <ThemeToggle />
         {actions}
         {user && (
           <DropdownMenu>
@@ -125,6 +129,10 @@ export function TopBar({ actions }: { actions?: ReactNode }) {
               <DropdownMenuItem onSelect={() => setPaletteOpen(true)}>
                 <Search aria-hidden />
                 Tìm nhanh
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => navigate('/cai-dat')} data-testid="menu-settings">
+                <Settings aria-hidden />
+                Cài đặt
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={logout}>

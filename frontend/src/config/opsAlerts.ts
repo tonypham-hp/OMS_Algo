@@ -8,8 +8,8 @@ export const REASON_LABELS: Record<OrderReasonCode, string> = {
   SYMBOL_HALTED: 'Mã tạm ngừng giao dịch',
 }
 
-const DANGER = 'bg-red-500/20 text-red-300'
-const WARNING = 'bg-amber-500/20 text-amber-300'
+const DANGER = 'bg-status-danger-bg text-status-danger'
+const WARNING = 'bg-status-warning-bg text-status-warning'
 
 export const OPS_ALERT_STYLES: Record<OpsAlertType, { label: string; className: string }> = {
   CHILD_UNKNOWN: { label: 'Lệnh con chưa rõ', className: DANGER },

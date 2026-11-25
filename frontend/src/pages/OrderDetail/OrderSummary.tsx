@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { ProgressBar } from '@/components/ProgressBar'
 import { Term } from '@/components/Term'
 import { PERSISTENCE_LABELS } from '@/config/strategies'
+import { Sensitive, SensitiveAccount } from '@/components/Sensitive'
 import { formatBps, formatDate, formatDateTime, formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { OrderDetailData, ParentOrder } from '@/types'
@@ -40,7 +41,7 @@ export function OrderSummary({ order, detail }: OrderSummaryProps) {
             '—'
           ) : (
             <>
-              {formatBps(fill.differenceBps)}
+              <Sensitive>{formatBps(fill.differenceBps)}</Sensitive>
               {fill.isFavorable !== null && (
                 <span className={cn('ml-1 text-xs', fill.isFavorable ? 'text-price-up' : 'text-price-down')}>
                   {fill.isFavorable ? 'có lợi' : 'bất lợi'}
@@ -63,7 +64,7 @@ export function OrderSummary({ order, detail }: OrderSummaryProps) {
             {row.value}
           </Stat>
         ))}
-        <Stat label="Tài khoản">{order.account_no}</Stat>
+        <Stat label="Tài khoản"><SensitiveAccount value={order.account_no} /></Stat>
         <Stat label="Hiệu lực">
           {PERSISTENCE_LABELS[order.persistence_mode]}, đến {formatDate(order.valid_to)}
         </Stat>

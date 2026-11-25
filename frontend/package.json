@@ -1,12 +1,13 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "eslint .",
+    "tokens": "node scripts/gen-tokens.mjs",
+    "lint": "eslint . && node scripts/check-colors.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "playwright test",
@@ -15,7 +16,8 @@
     "screenshots": "playwright test e2e/screenshots.spec.ts --project=desktop-1440",
     "screenshots:dot7": "playwright test e2e/screenshots-dot7.spec.ts --project=desktop-1440",
     "screenshots:dot8a": "playwright test e2e/screenshots-dot8a.spec.ts --project=desktop-1440",
-    "screenshots:dot8b": "playwright test e2e/screenshots-dot8b.spec.ts --project=desktop-1440"
+    "screenshots:dot8b": "playwright test e2e/screenshots-dot8b.spec.ts --project=desktop-1440",
+    "screenshots:dot9": "playwright test e2e/screenshots-dot9.spec.ts --project=desktop-1440"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",
@@ -38,6 +40,7 @@
     "zustand": "^5.0.16"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.1",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.65.1",
     "@types/node": "^24.19.2",

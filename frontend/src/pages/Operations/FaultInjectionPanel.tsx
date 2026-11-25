@@ -171,7 +171,7 @@ export function FaultInjectionPanel({ orders, overview }: FaultInjectionPanelPro
         </div>
       )}
       {done && !inject.error && (
-        <p role="status" className="text-sm text-sky-300">
+        <p role="status" className="text-sm text-status-info">
           {done}
         </p>
       )}

@@ -4,7 +4,7 @@ Hệ thống quản lý lệnh nâng cao (Advanced Order Management System) cho 
 Khách hàng và dealer đặt lệnh thuật toán (Stop, Stop Limit, Take Profit, Trailing Stop, OCO, Bracket, Iceberg, TWAP,
 VWAP, POV, HUNT). OMS tự chia thành lệnh con, gửi xuống Core, theo dõi khớp, xử lý lỗi và đối soát.
 
-> **Trạng thái:** bản demo frontend **v0.1.1** ([CHANGELOG](CHANGELOG.md)): 9 màn hình, Chế độ Demo, kiểm thử Vitest và
+> **Trạng thái:** bản demo frontend **v0.3.0** ([CHANGELOG](CHANGELOG.md)): 11 màn hình, 4 theme, Chế độ Demo, kiểm thử Vitest và
 > Playwright ([báo cáo chất lượng](docs/quality-report.md)). Chạy độc lập bằng dữ liệu giả lập (MSW và bộ giả lập thị
 > trường trong trình duyệt), có ghi chú "Dữ liệu demo" trên header. Backend (FastAPI) và simulators chưa có code.
 
@@ -24,6 +24,13 @@ VWAP, POV, HUNT). OMS tự chia thành lệnh con, gửi xuống Core, theo dõi
   - Bảng lệnh cần chú ý; bấm một dòng để mở chi tiết lệnh.
   - 10 hoạt động gần nhất.
   - Khách hàng chỉ thấy lệnh của tài khoản mình; dealer thấy các tài khoản mình quản lý; vận hành thấy tất cả.
+- **Giao diện** (Đợt 9, [docs/theme.md](docs/theme.md)):
+  - Theme: Tối (mặc định), Sáng, Tương phản cao tối / sáng, và bảng màu mù màu xanh–cam.
+  - Đổi bằng nút Mặt trời/Mặt trăng trên thanh trên, Ctrl+K, hoặc trang **Cài đặt giao diện** (`/cai-dat`, mọi vai trò).
+    Trang này còn có mật độ Thoáng/Gọn, cỡ chữ 90/100/110%, bật/tắt nhấp nháy giá, ẩn bps và số tài khoản khi trình chiếu.
+    Lưu riêng theo tài khoản demo.
+  - Màu giá theo thông lệ thị trường VN (không phải quy định của Sở), đạt ≥ 4,5:1 (≥ 7:1 ở tương phản cao) trên mọi nền.
+  - Giá có ▲/▼ và ký hiệu trần "T"/sàn "S", không chỉ dựa vào màu. Không nháy sai theme khi tải lại.
 - **Thông báo**: sinh từ nhật ký lệnh theo các loại trong spec (kích hoạt lệnh, kích hoạt điều kiện, lệnh con bị từ chối,
   hệ thống tạm dừng, hoàn tất, hủy, hết hạn).
   - Chuông có badge số chưa đọc.
@@ -169,19 +176,25 @@ Lệnh khác trong `frontend/`:
 | `npm run screenshots:dot7` | Chụp lại 3 ảnh màn Lịch sử và đối soát vào `docs/screenshots/dot7/` |
 | `npm run screenshots:dot8a` | Chụp lại 5 ảnh luật KRX vào `docs/screenshots/dot8a/` |
 | `npm run screenshots:dot8b` | Chụp lại 4 ảnh phiên đặc biệt vào `docs/screenshots/dot8b/` |
+| `npm run screenshots:dot9` | Chụp lại 11 ảnh theme (5 biến thể × 2 màn, trang Cài đặt) vào `docs/screenshots/dot9/` |
+| `npm run tokens` | Sinh lại `src/styles/tokens.css` từ `src/config/theme.ts` (sau khi sửa màu) |
 
 Cấu hình qua biến môi trường: xem `frontend/.env.example` (`VITE_API_BASE_URL`, `VITE_USE_MOCK`, `VITE_DEMO_MODE`).
 
 ## Kiểm thử
 
 - **Vitest** (`src/**/*.test.ts`): luật giao dịch KRX (ma trận `validateOrder`, test thuộc tính trần/sàn), engine giả
-  lập, phiên đặc biệt (mã hạn chế, tạm ngừng, thỏa thuận), 12 kịch bản Demo chạy headless, định dạng, độ tương phản màu.
+  lập, phiên đặc biệt (mã hạn chế, tạm ngừng, thỏa thuận), 12 kịch bản Demo chạy headless, định dạng, tương phản WCAG của mọi cặp token màu ở 4 theme và bảng màu mù màu.
 - **Playwright** (`frontend/e2e/`): chạy trên Chrome có sẵn trong máy (không có thì Edge); **không** tải trình duyệt
   riêng, nên không cần `npx playwright install`. Không có cả hai thì cấu hình dừng và báo rõ.
   - Đồng hồ cố định (thứ Hai 16/11/2026, 09:10) qua `page.clock`, `Math.random` có seed qua `?e2e=1&seed=…`: kết quả lặp lại
     giữa các lần chạy.
   - Selector theo vai trò, nhãn và `data-demo-id`, không dựa vào class CSS.
   - Lỗi console hoặc request lỗi ở bất kỳ test nào đều làm test đó trượt.
+  - Theme (Đợt 9):
+    - axe (`@axe-core/playwright`, luật color-contrast) = 0 vi phạm trên các màn chính ở 4 theme và mù màu;
+    - đổi theme bằng nút và Ctrl+K, không nháy khung tối khi tải lại;
+    - ảnh chuẩn `toHaveScreenshot` theo theme ở 1440 và 1366 (`e2e/visual.spec.ts-snapshots/`, chụp trên Windows).
   - Báo cáo HTML ở `frontend/playwright-report/`, ảnh và trace khi lỗi ở `frontend/test-results/` (đều không commit).
 - Số liệu lần chạy gần nhất: [docs/quality-report.md](docs/quality-report.md).
 
@@ -239,6 +252,7 @@ khi cần người duyệt thứ hai.
 | 7 | `/mau-chien-luoc` | Mẫu chiến lược | Lưới thẻ mẫu, tham số mặc định, "Phù hợp khi…", "Dùng mẫu này" mở Đặt lệnh đã điền sẵn |
 | 8 | `/bao-cao/lich-su` | Lịch sử và đối soát | Lịch sử lệnh nhiều phiên, nhật ký kiểm toán, đối soát OMS với Core (`?tab=lich-su\|nhat-ky\|doi-soat`) |
 | 9 | `/cau-hinh/luat` | Luật giao dịch | Gói luật theo bảng × ngày hiệu lực, trạng thái kiểm chứng, cờ; nạp thử pack bỏ nghỉ trưa (chỉ vận hành) |
+| 10 | `/cai-dat` | Cài đặt giao diện | Theme, tương phản cao, bảng màu mù màu, mật độ, cỡ chữ, nhấp nháy giá, ẩn số khi trình chiếu; xem trước từng lựa chọn (mọi vai trò) |
 
 ## Tài liệu
 
@@ -249,4 +263,5 @@ khi cần người duyệt thứ hai.
 - [docs/backend-gaps.md](docs/backend-gaps.md): bảng, trường, API backend cần thêm ngoài ERD; tồn đọng kỹ thuật.
 - [docs/quality-report.md](docs/quality-report.md): kết quả kiểm thử, kích thước bundle, lỗi đã sửa và việc còn tồn của v0.1.0.
 - [docs/demo-checklist.md](docs/demo-checklist.md): checklist 10 mục trước buổi demo.
-- [CHANGELOG.md](CHANGELOG.md): thay đổi theo phiên bản, Đợt 1–8B.
+- [docs/theme.md](docs/theme.md): theme, token màu, tỷ lệ tương phản đã kiểm, cách thêm màu mới.
+- [CHANGELOG.md](CHANGELOG.md): thay đổi theo phiên bản, Đợt 1–9.

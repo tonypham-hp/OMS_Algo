@@ -6,7 +6,7 @@ import { useMarketStore } from '@/store/market.store'
 import type { OrderDetailData, ParentOrder } from '@/types'
 import { buildOrderProgress, formatTimeTick, getTimeTicks } from './orderProgress'
 
-const AXIS_TICK = { fill: 'var(--muted-foreground)', fontSize: 12, style: { fontVariantNumeric: 'tabular-nums' } }
+const AXIS_TICK = { fill: 'var(--text-muted)', fontSize: 12, style: { fontVariantNumeric: 'tabular-nums' } }
 
 interface OrderProgressChartProps {
   order: ParentOrder
@@ -74,13 +74,13 @@ export function OrderProgressChart({ order, detail }: OrderProgressChartProps) {
               labelFormatter={(time) => formatTimeTick(Number(time), Math.max(span, 5 * 60_000))}
               formatter={(qty) => `${formatNumber(Number(qty))} CP`}
               contentStyle={{
-                background: 'var(--popover)',
+                background: 'var(--surface)',
                 border: '1px solid var(--border)',
                 borderRadius: 8,
                 fontSize: 12,
               }}
-              labelStyle={{ color: 'var(--foreground)' }}
-              itemStyle={{ color: 'var(--foreground)' }}
+              labelStyle={{ color: 'var(--text)' }}
+              itemStyle={{ color: 'var(--text)' }}
             />
             {hasPlan && (
               <Legend

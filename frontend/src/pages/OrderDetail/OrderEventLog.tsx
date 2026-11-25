@@ -38,11 +38,11 @@ export function OrderEventLog({ events, childOrders, highlightedId = null }: Ord
                 id={`event-${event.event_id}`}
                 data-event-id={event.event_id}
                 tabIndex={event.event_id === highlightedId ? -1 : undefined}
-                className={cn(event.event_id === highlightedId && 'bg-primary/15 outline-primary outline-2 -outline-offset-2')}
+                className={cn(event.event_id === highlightedId && 'bg-surface-hover outline-primary outline-2 -outline-offset-2')}
               >
                 <TableCell className="tabular-nums">{formatDateTime(event.event_time)}</TableCell>
                 <TableCell>{formatEventActor(event.user_id)}</TableCell>
-                <TableCell className={cn(ALERT_ACTIONS.has(event.action) && 'font-medium text-red-300')}>
+                <TableCell className={cn(ALERT_ACTIONS.has(event.action) && 'font-medium text-status-danger')}>
                   {EVENT_ACTION_LABELS[event.action]}
                   {cycle !== undefined && <span className="text-muted-foreground"> · chu kỳ {cycle}</span>}
                 </TableCell>

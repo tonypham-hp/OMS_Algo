@@ -12,6 +12,7 @@ const ROUTES: ReadonlyArray<{ path: string; title: RegExp; roles: Role[] }> = [
   // Khách hàng không có tab Đối soát: ở lại màn, về tab Lịch sử lệnh (không phải 403).
   { path: '/bao-cao/lich-su?tab=doi-soat', title: /Lịch sử và đối soát/, roles: ['CUSTOMER', 'DEALER', 'OPS'] },
   { path: '/thuat-ngu', title: /Thuật ngữ/, roles: ['CUSTOMER', 'DEALER', 'OPS'] },
+  { path: '/cai-dat', title: /Cài đặt giao diện/, roles: ['CUSTOMER', 'DEALER', 'OPS'] },
   { path: '/van-hanh', title: /Màn vận hành/, roles: ['OPS'] },
   { path: '/cau-hinh', title: /Cấu hình chiến lược/, roles: ['OPS'] },
   { path: '/cau-hinh/luat', title: /Luật giao dịch/, roles: ['OPS'] },

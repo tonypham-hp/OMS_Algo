@@ -2,6 +2,7 @@ import { memo, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { OrderStatusBadge } from '@/components/OrderStatusBadge'
 import { ProgressBar } from '@/components/ProgressBar'
+import { SensitiveAccount } from '@/components/Sensitive'
 import {
   Table,
   TableBody,
@@ -50,7 +51,7 @@ const OrderRow = memo(function OrderRow({ order, showAccount, isBusy, role, onEd
           {order.parent_order_id}
         </Link>
       </TableCell>
-      {showAccount && <TableCell className="tabular-nums">{order.account_no}</TableCell>}
+      {showAccount && <TableCell className="tabular-nums"><SensitiveAccount value={order.account_no} /></TableCell>}
       <TableCell className="font-semibold">
         <span className="flex items-center gap-1.5">
           {order.symbol}

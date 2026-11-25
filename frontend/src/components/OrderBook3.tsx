@@ -1,13 +1,14 @@
 import { useState, type ReactNode } from 'react'
 import { EmptyState, LoadingState } from '@/components/states'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { getPriceColor } from '@/config/priceColors'
+import { getPriceColor, getPriceLevel, priceChipClass } from '@/config/priceColors'
 import { SESSION_LABELS } from '@/config/hose'
 import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { BookLevel, OrderBookDepth, SessionCode, SymbolQuote } from '@/types'
 import { buildBookRows, getSpread } from '@/utils/orderBook'
 import { isAuctionSession } from '@/utils/hose'
+import { PriceMark } from './PriceDirection'
 import { CallCountdown, SymbolStatusBadge } from './SymbolStatusBadge'
 
 interface OrderBook3Props {
@@ -61,7 +62,7 @@ function LevelRow({
   const sideLabel = `${side === 'ask' ? 'Bán' : 'Mua'} ${rank}`
   if (!level) {
     return (
-      <tr className="text-muted-foreground/80 h-8">
+      <tr className="text-muted-foreground h-8">
         <td className="px-2 text-right tabular-nums">—</td>
         <td className="px-2 text-right tabular-nums">—</td>
         <td className="px-2 text-xs">{sideLabel}</td>
@@ -76,10 +77,11 @@ function LevelRow({
       data-highlighted={highlighted || undefined}
       className={cn(
         'h-8 transition-colors',
-        side === 'ask' ? 'bg-price-down/5' : 'bg-price-up/5',
+        side === 'ask' ? 'bg-book-ask' : 'bg-book-bid',
         pickable && 'hover:bg-accent focus-visible:bg-accent focus-visible:outline-ring cursor-pointer outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:-outline-offset-2',
-        highlighted && 'outline-primary bg-primary/10 outline-2 -outline-offset-2',
-        dimmed && 'opacity-60',
+        highlighted && 'outline-primary bg-surface-hover outline-2 -outline-offset-2',
+        // Phiên định kỳ: mức giá chỉ tham khảo → chữ nghiêng (không làm mờ: giữ tương phản của màu giá).
+        dimmed && 'italic',
       )}
       onClick={pickable ? pick : undefined}
       onKeyDown={
@@ -105,8 +107,9 @@ function LevelRow({
         ) : null}
       </td>
       <td className="px-2 text-right font-semibold tabular-nums">
-        <FlashValue value={String(level.price)} className={getPriceColor(level.price, quote)}>
+        <FlashValue value={String(level.price)} className={cn(getPriceColor(level.price, quote), priceChipClass(getPriceLevel(level.price, quote)))}>
           {formatNumber(level.price)}
+          <PriceMark level={getPriceLevel(level.price, quote)} />
         </FlashValue>
       </td>
       <td className="text-muted-foreground px-2 text-xs">{sideLabel}</td>
@@ -135,7 +138,7 @@ export function OrderBook3({ quote, session, depth, highlightPrice = null, onPic
     body = (
       <>
         {auction && (
-          <div className="border-price-ref/40 bg-price-ref/10 mb-2 rounded-md border px-2 py-1.5 text-xs" role="status">
+          <div className="border-warning bg-surface-2 mb-2 rounded-md border px-2 py-1.5 text-xs" role="status">
             <p className="font-medium">Phiên khớp lệnh định kỳ ({SESSION_LABELS[session]})</p>
             <p className="text-muted-foreground">
               Giá dự kiến khớp:{' '}
