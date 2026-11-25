@@ -5,6 +5,7 @@ import { useSearchParams } from 'react-router-dom'
 import { FieldError } from '@/components/FieldError'
 import { Term } from '@/components/Term'
 import { NumberInput } from '@/components/NumberInput'
+import { PriceMark } from '@/components/PriceDirection'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -18,7 +19,7 @@ import {
 } from '@/components/ui/select'
 import { STRATEGY_TERMS } from '@/config/glossary'
 import { SESSION_LABELS } from '@/config/hose'
-import { getPriceColor, PRICE_COLOR } from '@/config/priceColors'
+import { getPriceColor, getPriceLevel, PRICE_COLOR } from '@/config/priceColors'
 import { PERSISTENCE_LABELS, STRATEGIES, STRATEGY_TYPES } from '@/config/strategies'
 import { getTemplate, type StrategyTemplate } from '@/config/strategyTemplates'
 import { useCreateOrder } from '@/hooks/useOrders'
@@ -367,11 +368,13 @@ export function OrderTicket() {
                   getPriceColor(getDisplayPrice(quote), quote),
                 ],
                 ['Bước', quoteRules ? getTickSize(tickBase ?? quote.last_price, quoteRules.secType, quoteRules.rules) : 0, ''],
-              ].map(([label, price, color]) => (
+              ].map(([label, price, color], index) => (
                 <div key={label}>
                   <dt className="text-muted-foreground">{label}</dt>
                   <dd className={cn('font-medium', color as string)}>
                     {formatNumber(price as number)}
+                    {/* Giá khớp/dự kiến: kèm ký hiệu so tham chiếu, không chỉ dựa vào màu. */}
+                    {index === 3 && <PriceMark level={getPriceLevel(price as number, quote)} />}
                   </dd>
                 </div>
               ))}

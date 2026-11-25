@@ -135,15 +135,24 @@
   border-radius: 0.25rem;
 }
 
+/* Mũi tên ↑/↓ theo chiều bước giá, đi cùng nền nháy, mờ dần trong 600ms. */
+@keyframes flash-tick {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+.flash-tick { display: inline-block; animation: flash-tick 0.6s ease-out forwards; }
+
 /* Tắt nhấp nháy: hệ thống giảm chuyển động, hoặc người dùng tắt trong Cài đặt (data-flash="off"). */
 @media (prefers-reduced-motion: reduce) {
   .flash-up, .flash-down, .flash-cell { animation: none; }
+  .flash-tick { display: none; }
 }
 :root[data-flash="off"] .flash-up,
 :root[data-flash="off"] .flash-down,
 :root[data-flash="off"] .flash-cell {
   animation: none;
 }
+:root[data-flash="off"] .flash-tick { display: none; }
 
 /* Cỡ chữ 90% / 100% / 110%: mọi kích thước của Tailwind theo rem nên đổi theo. */
 :root[data-font-scale="90"] { font-size: 90%; }

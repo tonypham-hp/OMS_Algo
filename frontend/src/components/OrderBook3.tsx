@@ -1,13 +1,14 @@
 import { useState, type ReactNode } from 'react'
 import { EmptyState, LoadingState } from '@/components/states'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { getPriceColor } from '@/config/priceColors'
+import { getPriceColor, getPriceLevel } from '@/config/priceColors'
 import { SESSION_LABELS } from '@/config/hose'
 import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { BookLevel, OrderBookDepth, SessionCode, SymbolQuote } from '@/types'
 import { buildBookRows, getSpread } from '@/utils/orderBook'
 import { isAuctionSession } from '@/utils/hose'
+import { PriceMark } from './PriceDirection'
 import { CallCountdown, SymbolStatusBadge } from './SymbolStatusBadge'
 
 interface OrderBook3Props {
@@ -107,6 +108,7 @@ function LevelRow({
       <td className="px-2 text-right font-semibold tabular-nums">
         <FlashValue value={String(level.price)} className={getPriceColor(level.price, quote)}>
           {formatNumber(level.price)}
+          <PriceMark level={getPriceLevel(level.price, quote)} />
         </FlashValue>
       </td>
       <td className="text-muted-foreground px-2 text-xs">{sideLabel}</td>
@@ -135,7 +137,7 @@ export function OrderBook3({ quote, session, depth, highlightPrice = null, onPic
     body = (
       <>
         {auction && (
-          <div className="border-warning bg-status-warning-bg mb-2 rounded-md border px-2 py-1.5 text-xs" role="status">
+          <div className="border-warning bg-surface-2 mb-2 rounded-md border px-2 py-1.5 text-xs" role="status">
             <p className="font-medium">Phiên khớp lệnh định kỳ ({SESSION_LABELS[session]})</p>
             <p className="text-muted-foreground">
               Giá dự kiến khớp:{' '}
