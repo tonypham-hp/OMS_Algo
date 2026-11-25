@@ -90,14 +90,16 @@ test.describe('Lịch sử và đối soát', () => {
     await page.getByRole('link', { name: 'Lịch sử và đối soát' }).click()
     await tabList(page).getByRole('tab', { name: 'Đối soát' }).click()
     const open = demoId(page, 'recon-row-UNKNOWN_OPEN').filter({ hasText: id })
+    // Dừng đồng hồ ngay từ đây và chỉ tua bằng runFor: giữa lúc dòng UNKNOWN hiện ra và lúc bấm nút không còn khoảng
+    // thời gian thật nào để engine tự đối soát trước (trước đây dừng sau khi thấy dòng, đôi khi trễ một nhịp).
+    // Mốc dừng cách hiện tại 500 ms: đủ xa để không thành "quá khứ" khi lệnh tới trình duyệt, chưa tới một nhịp giả lập.
+    await page.clock.pauseAt(new Date((await page.evaluate(() => Date.now())) + 500))
     await expect(async () => {
       await page.clock.runFor(1_000)
       await expect(open).toBeVisible({ timeout: 500 })
     }).toPass({ timeout: 60_000 })
-    // Dừng đồng hồ để engine không tự đối soát trước khi bấm nút.
-    await page.clock.pauseAt(new Date((await page.evaluate(() => Date.now())) + 50))
     await expect(open).toContainText('Mở')
-    await expect(demoId(page, 'recon-kpi-open')).toHaveClass(/border-red/)
+    await expect(demoId(page, 'recon-kpi-open')).toHaveClass(/border-danger/)
 
     await page.getByRole('button', { name: 'Đối soát ngay' }).click()
     // Đồng hồ đang dừng: nhích từng 20 ms để react-query phát cập nhật (setTimeout 0), chưa tới nhịp giả lập kế tiếp.
