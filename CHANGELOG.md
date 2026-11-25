@@ -4,6 +4,47 @@ Ghi các thay đổi đáng chú ý của frontend OMS Algo theo từng đợt p
 [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/), đánh số phiên bản theo [SemVer](https://semver.org/lang/vi/).
 Bản 0.x là bản demo chạy với dữ liệu giả lập, chưa có backend.
 
+## [0.3.0] – 2026-11-25 · Đợt 9: Theme Sáng / Tối / Tương phản cao, màu giá VN, mù màu, trang Cài đặt giao diện
+
+Mọi màu giao diện đi qua token ngữ nghĩa. Không đổi nghiệp vụ, không đổi engine. Chi tiết: [docs/theme.md](docs/theme.md).
+
+### Thêm
+- **4 theme:** Tối (mặc định, nền giữ như cũ), Sáng (nền `#F8FAFC`, thẻ `#FFFFFF`), Tương phản cao tối, Tương phản cao
+  sáng.
+- **Bảng màu mù màu xanh–cam:** tăng xanh lam, giảm cam; áp cả nút Mua/Bán và nhãn thành công/lỗi.
+- **Màu giá theo thông lệ thị trường VN** (không phải quy định của Sở): mỗi theme có bộ giá trị riêng, đạt ≥ 4,5:1
+  (≥ 7:1 ở tương phản cao) trên mọi nền xuất hiện. Theme sáng: giá tham chiếu chữ đậm trên chip vàng nhạt.
+- **Không chỉ dựa vào màu:** giá có ▲/▼ so tham chiếu, trần "T" và sàn "S" có tên đọc "Giá trần"/"Giá sàn". Nhấp nháy giá
+  = nền nhạt cộng mũi tên ↑/↓ trong 600ms, tắt khi hệ điều hành giảm chuyển động hoặc người dùng tắt.
+- **Script khởi động trong `<head>`:** đặt theme trước lần vẽ đầu, nên tải lại không nháy khung tối. Đọc lựa chọn đã lưu
+  (lỗi lưu trữ thì dùng Tối) và `prefers-color-scheme` / `prefers-contrast`.
+- **ThemeProvider (Zustand):**
+  - Sáng / Tối / Theo hệ thống; tự nhận `prefers-contrast: more` và `forced-colors`;
+  - nút Sáng/Tối trên thanh trên; Ctrl+K "Đổi giao diện sáng/tối" và "Mở Cài đặt giao diện".
+- **Trang Cài đặt giao diện `/cai-dat`** (mọi vai trò, mục "Cài đặt" trong menu tài khoản):
+  - giao diện, tương phản cao, bảng màu, mật độ Thoáng/Gọn, cỡ chữ 90/100/110%, nhấp nháy giá;
+  - ẩn bps/slippage (`•••`) và số tài khoản (`058C•••456`) khi trình chiếu;
+  - mỗi lựa chọn có hàng xem trước đủ 5 màu giá; lưu riêng theo tài khoản demo.
+- **`npm run tokens`:** sinh `src/styles/tokens.css` từ `src/config/theme.ts`, nơi duy nhất có mã màu.
+- **`npm run lint` chặn mã màu viết cứng:** ESLint và `scripts/check-colors.mjs`, kiểm cả `tokens.css` khớp `theme.ts`.
+- **Test:**
+  - Vitest: tương phản WCAG của mọi cặp token ở 4 theme × 2 bảng màu; chọn theme; script khởi động; lưu theo tài khoản;
+    lỗi localStorage.
+  - Playwright + axe (`@axe-core/playwright`, gói dev duy nhất thêm vào): color-contrast = 0 vi phạm trên Trung tâm lệnh,
+    Đặt lệnh, Sổ lệnh, Chi tiết, Báo cáo, Lịch sử, Đối soát, Cài đặt, Demo, ở 4 theme và mù màu.
+  - Playwright: không nháy khung tối, đổi theme bằng nút và Ctrl+K, Recharts đổi màu không tải lại, trang Cài đặt.
+  - 20 ảnh chuẩn `toHaveScreenshot` (Trung tâm lệnh, Đặt lệnh × 5 biến thể × 1440/1366).
+  - Ảnh nghiệm thu [docs/screenshots/dot9/](docs/screenshots/dot9/).
+
+### Đổi
+- **Màu nhấn:** từ xanh lam `#38BDF8` (trùng màu sàn) sang chàm `#818CF8` (tối) / `#4338CA` (sáng).
+- **Biểu đồ Recharts:** đọc màu qua biến CSS, đổi theo theme ngay.
+- **Khoảng 105 lớp màu bảng Tailwind và mã hex/rgb** ở khoảng 25 file thay bằng lớp token (`text-status-danger`,
+  `bg-buy`, `bg-surface-hover`…).
+- **Hàng bảng đang rê/chọn:** dùng nền `--surface-hover` riêng (đỏ giảm trên nền mục menu cũ chỉ đạt 4,40:1).
+- **Sổ lệnh 3 mức:** mức giá tham khảo trong phiên định kỳ hiển thị chữ nghiêng thay vì làm mờ.
+- **HUNT xem lại:** bước chưa tới là khung trống thay vì làm mờ (làm mờ làm chữ tụt dưới ngưỡng tương phản).
+
 ## [0.2.1] – 2026-11-23 · Đợt 8B: Phiên giao dịch đặc biệt theo KRX
 
 Bổ sung vào gói luật của Đợt 8A ba nhóm luật: mã bị hạn chế giao dịch, phiên sau tạm ngừng, lệnh thỏa thuận cơ bản.

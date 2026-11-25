@@ -282,10 +282,38 @@ pack. Giá dùng số nguyên đồng; hiển thị kiểu Việt Nam: 1.000.000
   - Lưu ở khóa localStorage riêng.
 
 ## 10. Giao diện
-- Nền tối kiểu bảng giá; màu giá theo quy ước VN: trần tím, tăng xanh lá, tham chiếu vàng,
-  giảm đỏ, sàn xanh lam. Số căn phải, font số đều nhau (tabular-nums).
-- Trạng thái lệnh có badge màu thống nhất (khai báo trong src/config).
-- Tiếng Việt toàn bộ giao diện.
+- Tiếng Việt toàn bộ giao diện. Số căn phải, font số đều nhau (tabular-nums).
+- **Theme (Đợt 9)**, chi tiết ở [docs/theme.md](theme.md):
+  - Theme: Tối (mặc định), Sáng, Tương phản cao tối, Tương phản cao sáng.
+  - Bảng màu mù màu xanh–cam đè lên theme bất kỳ.
+  - Chọn ở trang `/cai-dat` (mọi vai trò), nút Sáng/Tối trên thanh trên, hoặc Ctrl+K. Lưu riêng theo tài khoản demo.
+  - "Theo hệ thống" theo `prefers-color-scheme` và `prefers-contrast: more`. `forced-colors` để hệ điều hành quyết định
+    màu.
+  - Script nội tuyến trong `<head>` đặt `data-theme` trước lần vẽ đầu, nên tải lại không nháy sai theme. localStorage lỗi
+    thì dùng Tối.
+- **Màu chỉ khai báo ở `src/config/theme.ts`.**
+  - `npm run tokens` sinh `src/styles/tokens.css`.
+  - Component dùng lớp token (`text-price-up`, `bg-surface`, `bg-status-danger-bg`, `bg-buy`…) hoặc `var(--token)`.
+  - Recharts dùng `var(--token)` nên đổi màu ngay khi đổi theme.
+  - `npm run lint` chặn mã màu viết cứng (ESLint và `scripts/check-colors.mjs`).
+- **Màu giá theo thông lệ thị trường VN (không phải quy định của Sở):** trần tím, tăng xanh lá, tham chiếu vàng, giảm
+  đỏ, sàn xanh lam.
+  - Mỗi theme có bộ giá trị riêng đạt ≥ 4,5:1 (≥ 7:1 ở tương phản cao) trên mọi nền nó xuất hiện.
+  - Theme sáng: giá tham chiếu chữ đậm trên chip vàng nhạt.
+- **Không chỉ dựa vào màu:**
+  - giá có ▲/▼ so tham chiếu, trần "T", sàn "S" (tên đọc "Giá trần"/"Giá sàn");
+  - cột +/− có dấu;
+  - trạng thái lệnh luôn có chữ (6 cặp token `--status-*`, khai báo nhãn trong `src/config`).
+- **Nhấp nháy khi giá đổi:** nền nhạt cộng mũi tên ↑/↓ trong 600ms. Tắt khi `prefers-reduced-motion` hoặc người dùng
+  tắt trong Cài đặt.
+- **Mật độ, cỡ chữ, ẩn số:**
+  - mật độ Thoáng/Gọn (hàng bảng thấp hơn); cỡ chữ 90/100/110%;
+  - "Ẩn số tiền và bps khi trình chiếu" che bps/slippage so arrival hoặc VWAP (`•••`) và số tài khoản (`058C•••456`).
+    Chỉ đổi phần hiển thị.
+- **Test:**
+  - Vitest kiểm mọi cặp token theo ngưỡng WCAG;
+  - axe (`@axe-core/playwright`, luật color-contrast) = 0 vi phạm trên các màn chính ở 4 theme và mù màu;
+  - ảnh chuẩn từng theme ở 1440 và 1366.
 
 ## 11. Nghiệm thu mỗi màn
 - `npm run lint` và `npm run build` không lỗi; có test Vitest cho bộ kiểm tra luật giao dịch (mục 7).
