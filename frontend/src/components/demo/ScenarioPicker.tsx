@@ -35,7 +35,7 @@ export function ScenarioPicker() {
                   <span className="text-muted-foreground shrink-0 text-xs">{scenario.steps.length} bước</span>
                 </span>
                 <span className="text-muted-foreground text-sm">{scenario.summary}</span>
-                <span className="text-muted-foreground/80 font-mono text-xs">{scenario.tcRefs.join(' · ')}</span>
+                <span className="text-muted-foreground font-mono text-xs">{scenario.tcRefs.join(' · ')}</span>
               </button>
             </li>
           ))}

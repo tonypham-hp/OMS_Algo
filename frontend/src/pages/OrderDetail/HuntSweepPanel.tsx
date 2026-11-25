@@ -114,8 +114,9 @@ export function HuntSweepPanel({ order, detail, compact = false }: HuntSweepPane
                 data-demo-id={`hunt-step-${item.index + 1}`}
                 className={cn(
                   'flex items-center justify-between gap-3 rounded-md border px-2.5 py-1.5 text-sm transition-opacity',
-                  current && 'border-primary bg-primary/5',
-                  !reached && 'opacity-30',
+                  current && 'border-primary bg-surface-hover',
+                  // Chưa tới bước này khi xem lại: khung trống nét đứt (không làm mờ chữ, giữ tương phản).
+                  !reached && 'border-dashed [&>*]:invisible',
                 )}
                 aria-current={current ? 'step' : undefined}
               >
@@ -132,7 +133,7 @@ export function HuntSweepPanel({ order, detail, compact = false }: HuntSweepPane
               data-demo-id="hunt-remainder"
               className={cn(
                 'text-muted-foreground flex items-center justify-between gap-3 rounded-md border border-dashed px-2.5 py-1.5 text-sm',
-                replay.playing && 'opacity-30',
+                replay.playing && '[&>*]:invisible',
               )}
             >
               <span className="tabular-nums">{view.remainder.text}</span>

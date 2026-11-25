@@ -22,7 +22,7 @@ function ComingSoonItem({ item, collapsed }: { item: NavItem; collapsed: boolean
     <span
       aria-disabled="true"
       title={`${item.label} (sắp có)`}
-      className={cn(ITEM_CLASS, 'text-muted-foreground/80 cursor-not-allowed', collapsed && 'justify-center px-0')}
+      className={cn(ITEM_CLASS, 'text-muted-foreground cursor-not-allowed', collapsed && 'justify-center px-0')}
     >
       <Icon className="size-4 shrink-0" aria-hidden />
       {collapsed ? (
@@ -89,7 +89,7 @@ export function Sidebar({ role, collapsed, onToggle }: SidebarProps) {
               (collapsed ? (
                 <div className="border-border mx-2 my-2 border-t" aria-hidden />
               ) : (
-                <p className="text-muted-foreground/80 px-3 pt-2 pb-1 text-[11px] font-medium tracking-wider uppercase">
+                <p className="text-muted-foreground px-3 pt-2 pb-1 text-[11px] font-medium tracking-wider uppercase">
                   {section.title}
                 </p>
               ))}

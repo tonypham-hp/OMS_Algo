@@ -161,3 +161,17 @@ export async function chooseStrategy(page: Page, label: string) {
     await expect(combobox).toHaveText(label, { timeout: 1_000 })
   }).toPass({ timeout: 15_000 })
 }
+
+/**
+ * Đặt sẵn cài đặt giao diện (Đợt 9) trước khi trang chạy: bản của tài khoản và bản `:last` mà script khởi động đọc.
+ * Gọi trước loginAs / page.goto.
+ */
+export async function seedAppearance(page: Page, settings: object, username = USERNAMES.OPS) {
+  await page.addInitScript(
+    ([value, user]) => {
+      window.localStorage.setItem(`oms-appearance:${user}`, value)
+      window.localStorage.setItem('oms-appearance:last', value)
+    },
+    [JSON.stringify(settings), username] as const,
+  )
+}

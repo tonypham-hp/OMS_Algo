@@ -62,7 +62,7 @@ function LevelRow({
   const sideLabel = `${side === 'ask' ? 'Bán' : 'Mua'} ${rank}`
   if (!level) {
     return (
-      <tr className="text-muted-foreground/80 h-8">
+      <tr className="text-muted-foreground h-8">
         <td className="px-2 text-right tabular-nums">—</td>
         <td className="px-2 text-right tabular-nums">—</td>
         <td className="px-2 text-xs">{sideLabel}</td>
@@ -80,7 +80,8 @@ function LevelRow({
         side === 'ask' ? 'bg-book-ask' : 'bg-book-bid',
         pickable && 'hover:bg-accent focus-visible:bg-accent focus-visible:outline-ring cursor-pointer outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:-outline-offset-2',
         highlighted && 'outline-primary bg-surface-hover outline-2 -outline-offset-2',
-        dimmed && 'opacity-60',
+        // Phiên định kỳ: mức giá chỉ tham khảo → chữ nghiêng (không làm mờ: giữ tương phản của màu giá).
+        dimmed && 'italic',
       )}
       onClick={pickable ? pick : undefined}
       onKeyDown={
