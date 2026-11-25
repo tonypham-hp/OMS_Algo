@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "tokens": "node scripts/gen-tokens.mjs",
-    "lint": "eslint .",
+    "lint": "eslint . && node scripts/check-colors.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "playwright test",
