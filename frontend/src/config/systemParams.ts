@@ -210,9 +210,9 @@ export function canDecideRequest(request: Pick<ParameterChangeRequest, 'status' 
 }
 
 export const CHANGE_STATUS_STYLES: Record<ChangeRequestStatus, { label: string; className: string }> = {
-  PENDING: { label: 'Chờ duyệt', className: 'bg-amber-500/20 text-amber-300' },
-  APPROVED: { label: 'Đã duyệt', className: 'bg-green-500/20 text-green-300' },
-  REJECTED: { label: 'Từ chối', className: 'bg-red-500/20 text-red-300' },
+  PENDING: { label: 'Chờ duyệt', className: 'bg-status-warning-bg text-status-warning' },
+  APPROVED: { label: 'Đã duyệt', className: 'bg-status-success-bg text-status-success' },
+  REJECTED: { label: 'Từ chối', className: 'bg-status-danger-bg text-status-danger' },
 }
 
 export const DATA_TYPE_LABELS: Record<SystemParameterDataType, string> = {

@@ -8,7 +8,7 @@ const STATUS_LABELS: Record<string, { label: string; title: string; className: s
   RESTRICTED: {
     label: 'Hạn chế GD',
     title: 'Mã bị hạn chế giao dịch: chỉ khớp định kỳ (ATO, các lượt 15 phút, ATC), chỉ lô chẵn, chỉ LO trong lượt.',
-    className: 'bg-amber-500/20 text-amber-300',
+    className: 'bg-status-warning-bg text-status-warning',
   },
 }
 

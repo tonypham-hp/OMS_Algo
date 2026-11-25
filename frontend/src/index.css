@@ -1,52 +1,96 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+/* Giá trị màu của mọi theme: sinh từ src/config/theme.ts. File này KHÔNG chứa mã màu. */
+@import "./styles/tokens.css";
 
-@custom-variant dark (&:is(.dark *));
+/* Biến thể dark: theo data-theme trên <html> (script khởi động trong index.html và ThemeProvider đặt). */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, [data-theme="hc-dark"], [data-theme="hc-dark"] *));
 
 @theme inline {
     --font-heading: var(--font-sans);
     --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
     --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-    --color-border-strong: var(--border-strong);
+
+    /* Token ngữ nghĩa (Đợt 9) → lớp Tailwind: bg-surface, text-price-up, bg-buy, text-status-danger… */
+    --color-bg: var(--bg);
+    --color-surface: var(--surface);
+    --color-surface-panel: var(--surface-panel);
+    --color-surface-2: var(--surface-2);
+    --color-surface-hover: var(--surface-hover);
     --color-nav-active: var(--nav-active);
-    --color-sidebar-ring: var(--sidebar-ring);
-    --color-sidebar-border: var(--sidebar-border);
-    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-    --color-sidebar-accent: var(--sidebar-accent);
-    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-    --color-sidebar-primary: var(--sidebar-primary);
-    --color-sidebar-foreground: var(--sidebar-foreground);
-    --color-sidebar: var(--sidebar);
-    --color-chart-5: var(--chart-5);
-    --color-chart-4: var(--chart-4);
-    --color-chart-3: var(--chart-3);
-    --color-chart-2: var(--chart-2);
-    --color-chart-1: var(--chart-1);
-    --color-ring: var(--ring);
-    --color-input: var(--input);
+    --color-border-strong: var(--border-strong);
+    --color-text: var(--text);
+    --color-text-muted: var(--text-muted);
+    --color-accent-fg: var(--accent-fg);
+    --color-focus-ring: var(--focus-ring);
+    --color-danger: var(--danger);
+    --color-warning: var(--warning);
+    --color-success: var(--success);
+    --color-overlay: var(--overlay);
+    --color-price-ceiling: var(--price-ceiling);
+    --color-price-up: var(--price-up);
+    --color-price-ref: var(--price-ref);
+    --color-price-down: var(--price-down);
+    --color-price-floor: var(--price-floor);
+    --color-price-flash-up: var(--price-flash-up-bg);
+    --color-price-flash-down: var(--price-flash-down-bg);
+    --color-price-ref-chip: var(--price-ref-chip-bg);
+    --color-buy: var(--buy);
+    --color-buy-fg: var(--buy-fg);
+    --color-sell: var(--sell);
+    --color-sell-fg: var(--sell-fg);
+    --color-status-neutral: var(--status-neutral-fg);
+    --color-status-neutral-bg: var(--status-neutral-bg);
+    --color-status-info: var(--status-info-fg);
+    --color-status-info-bg: var(--status-info-bg);
+    --color-status-progress: var(--status-progress-fg);
+    --color-status-progress-bg: var(--status-progress-bg);
+    --color-status-success: var(--status-success-fg);
+    --color-status-success-bg: var(--status-success-bg);
+    --color-status-warning: var(--status-warning-fg);
+    --color-status-warning-bg: var(--status-warning-bg);
+    --color-status-danger: var(--status-danger-fg);
+    --color-status-danger-bg: var(--status-danger-bg);
+    --color-chart-actual: var(--chart-actual);
+    --color-chart-plan: var(--chart-plan);
+
+    /*
+     * Biến của shadcn/ui trỏ về token, để mọi component ui/ tự đổi theo theme.
+     * Lưu ý tên: `accent` của shadcn là nền hover (bg-accent) → --surface-hover; màu nhấn của app là `primary` (= --accent).
+     */
+    --color-background: var(--bg);
+    --color-foreground: var(--text);
+    --color-card: var(--surface);
+    --color-card-foreground: var(--text);
+    --color-popover: var(--surface);
+    --color-popover-foreground: var(--text);
+    --color-primary: var(--accent);
+    --color-primary-foreground: var(--accent-fg);
+    --color-secondary: var(--nav-active);
+    --color-secondary-foreground: var(--text);
+    --color-muted: var(--surface-2);
+    --color-muted-foreground: var(--text-muted);
+    --color-accent: var(--surface-hover);
+    --color-accent-foreground: var(--text);
+    --color-destructive: var(--danger);
     --color-border: var(--border);
-    --color-destructive: var(--destructive);
-    --color-accent-foreground: var(--accent-foreground);
-    --color-accent: var(--accent);
-    --color-muted-foreground: var(--muted-foreground);
-    --color-muted: var(--muted);
-    --color-secondary-foreground: var(--secondary-foreground);
-    --color-secondary: var(--secondary);
-    --color-primary-foreground: var(--primary-foreground);
-    --color-primary: var(--primary);
-    --color-popover-foreground: var(--popover-foreground);
-    --color-popover: var(--popover);
-    --color-card-foreground: var(--card-foreground);
-    --color-card: var(--card);
-    --color-foreground: var(--foreground);
-    --color-background: var(--background);
-    /* Màu giá theo quy ước Việt Nam (mục 10 của spec) */
-    --color-price-ceiling: #c084fc;
-    --color-price-up: #4ade80;
-    --color-price-ref: #facc15;
-    --color-price-down: #f87171;
-    --color-price-floor: #38bdf8;
+    --color-input: var(--border-strong);
+    --color-ring: var(--focus-ring);
+    --color-sidebar: var(--surface-panel);
+    --color-sidebar-foreground: var(--text);
+    --color-sidebar-primary: var(--accent);
+    --color-sidebar-primary-foreground: var(--accent-fg);
+    --color-sidebar-accent: var(--nav-active);
+    --color-sidebar-accent-foreground: var(--accent);
+    --color-sidebar-border: var(--border);
+    --color-sidebar-ring: var(--focus-ring);
+    --color-chart-1: var(--chart-actual);
+    --color-chart-2: var(--price-up);
+    --color-chart-3: var(--price-ref);
+    --color-chart-4: var(--price-ceiling);
+    --color-chart-5: var(--price-down);
+
     --radius-sm: calc(var(--radius) * 0.6);
     --radius-md: calc(var(--radius) * 0.8);
     --radius-lg: var(--radius);
@@ -57,102 +101,59 @@
 }
 
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
     --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
 }
 
-.dark {
-    /* Design tokens: giữ khớp src/config/theme.ts */
-    color-scheme: dark;
-    --background: #0b1220;
-    --foreground: #e6edf7;
-    --card: #111a2b;
-    --card-foreground: #e6edf7;
-    --popover: #111a2b;
-    --popover-foreground: #e6edf7;
-    --primary: #38bdf8;
-    --primary-foreground: #04121f;
-    --secondary: #16243d;
-    --secondary-foreground: #e6edf7;
-    --muted: #16243d;
-    --muted-foreground: #9fb0c9;
-    --accent: #16243d;
-    --accent-foreground: #e6edf7;
-    --destructive: #f87171;
-    --border: #1e2b44;
-    --border-strong: #2a3a58;
-    --input: #2a3a58;
-    --ring: #38bdf8;
-    --nav-active: #16243d;
-    --chart-1: #38bdf8;
-    --chart-2: #4ade80;
-    --chart-3: #facc15;
-    --chart-4: #c084fc;
-    --chart-5: #f87171;
-    --sidebar: #0d1626;
-    --sidebar-foreground: #e6edf7;
-    --sidebar-primary: #38bdf8;
-    --sidebar-primary-foreground: #04121f;
-    --sidebar-accent: #16243d;
-    --sidebar-accent-foreground: #38bdf8;
-    --sidebar-border: #1e2b44;
-    --sidebar-ring: #38bdf8;
-}
-
-/* Nháy nền ô giá khi giá đổi */
+/* Nháy nền ô giá khi giá đổi: nền nhạt theo token (đạt tương phản với mọi màu giá), 600ms. */
 @keyframes flash-up {
-  from { background-color: color-mix(in srgb, var(--color-price-up) 45%, transparent); }
+  from { background-color: var(--price-flash-up-bg); }
   to { background-color: transparent; }
 }
 
 @keyframes flash-down {
-  from { background-color: color-mix(in srgb, var(--color-price-down) 45%, transparent); }
+  from { background-color: var(--price-flash-down-bg); }
   to { background-color: transparent; }
 }
 
-.flash-up { animation: flash-up 0.8s ease-out; }
-.flash-down { animation: flash-down 0.8s ease-out; }
+.flash-up { animation: flash-up 0.6s ease-out; }
+.flash-down { animation: flash-down 0.6s ease-out; }
 
 /* Ô sổ lệnh đổi giá trị: nháy 600ms. */
 @keyframes flash-cell {
-  from { background-color: color-mix(in srgb, var(--color-price-ref) 35%, transparent); }
+  from { background-color: var(--surface-2); }
   to { background-color: transparent; }
 }
 
 .flash-cell { animation: flash-cell 0.6s ease-out; }
 
+/* Tắt nhấp nháy: hệ thống giảm chuyển động, hoặc người dùng tắt trong Cài đặt (data-flash="off"). */
 @media (prefers-reduced-motion: reduce) {
   .flash-up, .flash-down, .flash-cell { animation: none; }
+}
+:root[data-flash="off"] .flash-up,
+:root[data-flash="off"] .flash-down,
+:root[data-flash="off"] .flash-cell {
+  animation: none;
+}
+
+/* Cỡ chữ 90% / 100% / 110%: mọi kích thước của Tailwind theo rem nên đổi theo. */
+:root[data-font-scale="90"] { font-size: 90%; }
+:root[data-font-scale="110"] { font-size: 110%; }
+
+/* Mật độ Gọn: hàng bảng thấp hơn, chữ bảng nhỏ hơn để xem được nhiều mã. */
+:root[data-density="compact"] [data-slot="table-cell"],
+:root[data-density="compact"] [data-slot="table-head"] {
+  padding-block: 0.125rem;
+  font-size: 0.8125rem;
+}
+:root[data-density="compact"] [data-slot="table-head"] {
+  height: 2rem;
+}
+
+/* Chế độ màu cưỡng bức (Windows High Contrast): để hệ điều hành quyết định màu, chỉ giữ viền và focus. */
+@media (forced-colors: active) {
+  :root { forced-color-adjust: auto; }
+  :focus-visible { outline: 2px solid CanvasText; }
 }
 
 @layer base {

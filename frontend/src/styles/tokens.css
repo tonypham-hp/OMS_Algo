@@ -1,0 +1,251 @@
+/* SINH TỰ ĐỘNG từ src/config/theme.ts (npm run tokens). Không sửa tay: sửa theme.ts rồi chạy lại. */
+
+/* :root là theme sáng; data-theme đặt trên <html> bởi script khởi động (index.html) và ThemeProvider. */
+
+:root {
+  color-scheme: light;
+  --bg: #F8FAFC;
+  --surface: #FFFFFF;
+  --surface-panel: #F1F5F9;
+  --surface-2: #F1F5F9;
+  --surface-hover: #F1F5F9;
+  --nav-active: #E0E7FF;
+  --border: #E2E8F0;
+  --border-strong: #7C8BA1;
+  --text: #0F172A;
+  --text-muted: #475569;
+  --accent: #4338CA;
+  --accent-fg: #FFFFFF;
+  --focus-ring: #4338CA;
+  --danger: #B91C1C;
+  --warning: #854D0E;
+  --success: #15803D;
+  --overlay: #0F172A66;
+  --price-ceiling: #A21CAF;
+  --price-up: #15803D;
+  --price-ref: #854D0E;
+  --price-down: #B91C1C;
+  --price-floor: #0369A1;
+  --price-flash-up-bg: #F0FDF4;
+  --price-flash-down-bg: #FFF5F5;
+  --price-ref-chip-bg: #FEF9C3;
+  --buy: #15803D;
+  --buy-fg: #FFFFFF;
+  --sell: #B91C1C;
+  --sell-fg: #FFFFFF;
+  --status-neutral-fg: #334155;
+  --status-neutral-bg: #F1F2F3;
+  --status-info-fg: #0369A1;
+  --status-info-bg: #EDF4F8;
+  --status-progress-fg: #4338CA;
+  --status-progress-bg: #F2F1FB;
+  --status-success-fg: #15803D;
+  --status-success-bg: #EFF6F1;
+  --status-warning-fg: #854D0E;
+  --status-warning-bg: #F6F3EE;
+  --status-danger-fg: #B91C1C;
+  --status-danger-bg: #FAEFEF;
+  --chart-actual: #1D4ED8;
+  --chart-plan: #C2410C;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0B1220;
+  --surface: #111A2B;
+  --surface-panel: #0D1626;
+  --surface-2: #131D31;
+  --surface-hover: #131D31;
+  --nav-active: #16243D;
+  --border: #1E2B44;
+  --border-strong: #5B6B86;
+  --text: #E6EDF7;
+  --text-muted: #9FB0C9;
+  --accent: #818CF8;
+  --accent-fg: #0B1220;
+  --focus-ring: #818CF8;
+  --danger: #F6465D;
+  --warning: #F0B90B;
+  --success: #0ECB81;
+  --overlay: #0000008C;
+  --price-ceiling: #FF25FF;
+  --price-up: #0ECB81;
+  --price-ref: #F0B90B;
+  --price-down: #F6465D;
+  --price-floor: #1EB5D8;
+  --price-flash-up-bg: #13251F;
+  --price-flash-down-bg: #26141E;
+  --price-ref-chip-bg: #111A2B;
+  --buy: #0ECB81;
+  --buy-fg: #04121F;
+  --sell: #F6465D;
+  --sell-fg: #04121F;
+  --status-neutral-fg: #B6C2D4;
+  --status-neutral-bg: #2B3546;
+  --status-info-fg: #7DD3FC;
+  --status-info-bg: #22384C;
+  --status-progress-fg: #A5B4FC;
+  --status-progress-bg: #29334C;
+  --status-success-fg: #0ECB81;
+  --status-success-bg: #113639;
+  --status-warning-fg: #F0B90B;
+  --status-warning-bg: #353326;
+  --status-danger-fg: #FF6B7D;
+  --status-danger-bg: #372738;
+  --chart-actual: #3987E5;
+  --chart-plan: #D95926;
+}
+
+:root[data-theme="hc-dark"] {
+  color-scheme: dark;
+  --bg: #000000;
+  --surface: #0A0A0A;
+  --surface-panel: #000000;
+  --surface-2: #141414;
+  --surface-hover: #141414;
+  --nav-active: #1F1F1F;
+  --border: #737373;
+  --border-strong: #A3A3A3;
+  --text: #FFFFFF;
+  --text-muted: #D4D4D8;
+  --accent: #A5B4FC;
+  --accent-fg: #000000;
+  --focus-ring: #FFFFFF;
+  --danger: #FF7A8A;
+  --warning: #F0B90B;
+  --success: #0ECB81;
+  --overlay: #000000B3;
+  --price-ceiling: #E879F9;
+  --price-up: #0ECB81;
+  --price-ref: #F0B90B;
+  --price-down: #FF7A8A;
+  --price-floor: #1EB5D8;
+  --price-flash-up-bg: #0A0A0A;
+  --price-flash-down-bg: #0A0A0A;
+  --price-ref-chip-bg: #0A0A0A;
+  --buy: #0ECB81;
+  --buy-fg: #000000;
+  --sell: #FF7A8A;
+  --sell-fg: #000000;
+  --status-neutral-fg: #E5E5E5;
+  --status-neutral-bg: #202020;
+  --status-info-fg: #7DD3FC;
+  --status-info-bg: #161E22;
+  --status-progress-fg: #C7D2FE;
+  --status-progress-bg: #1D1E22;
+  --status-success-fg: #0ECB81;
+  --status-success-bg: #0A1D16;
+  --status-warning-fg: #F0B90B;
+  --status-warning-bg: #211C0A;
+  --status-danger-fg: #FF8A98;
+  --status-danger-bg: #231718;
+  --chart-actual: #7DB4FF;
+  --chart-plan: #FF9A5C;
+}
+
+:root[data-theme="hc-light"] {
+  color-scheme: light;
+  --bg: #FFFFFF;
+  --surface: #FFFFFF;
+  --surface-panel: #FFFFFF;
+  --surface-2: #FFFFFF;
+  --surface-hover: #FFFFFF;
+  --nav-active: #E0E7FF;
+  --border: #52525B;
+  --border-strong: #3F3F46;
+  --text: #000000;
+  --text-muted: #27272A;
+  --accent: #3730A3;
+  --accent-fg: #FFFFFF;
+  --focus-ring: #000000;
+  --danger: #991B1B;
+  --warning: #713F12;
+  --success: #166534;
+  --overlay: #00000080;
+  --price-ceiling: #86198F;
+  --price-up: #166534;
+  --price-ref: #713F12;
+  --price-down: #991B1B;
+  --price-floor: #075985;
+  --price-flash-up-bg: #FFFFFF;
+  --price-flash-down-bg: #FFFFFF;
+  --price-ref-chip-bg: #FEF3C7;
+  --buy: #166534;
+  --buy-fg: #FFFFFF;
+  --sell: #991B1B;
+  --sell-fg: #FFFFFF;
+  --status-neutral-fg: #27272A;
+  --status-neutral-bg: #FFFFFF;
+  --status-info-fg: #075985;
+  --status-info-bg: #FFFFFF;
+  --status-progress-fg: #3730A3;
+  --status-progress-bg: #FFFFFF;
+  --status-success-fg: #166534;
+  --status-success-bg: #FFFFFF;
+  --status-warning-fg: #713F12;
+  --status-warning-bg: #FFFFFF;
+  --status-danger-fg: #991B1B;
+  --status-danger-bg: #FFFFFF;
+  --chart-actual: #1E3A8A;
+  --chart-plan: #9A3412;
+}
+
+:root[data-palette="cvd"] {
+  --price-up: #1D4ED8;
+  --price-down: #C2410C;
+  --buy: #1D4ED8;
+  --buy-fg: #FFFFFF;
+  --sell: #C2410C;
+  --sell-fg: #FFFFFF;
+  --success: #1D4ED8;
+  --danger: #C2410C;
+  --status-success-fg: #1D4ED8;
+  --status-success-bg: #EFF3FC;
+  --status-danger-fg: #C2410C;
+  --status-danger-bg: #FBF2EE;
+}
+
+:root[data-theme="dark"][data-palette="cvd"] {
+  --price-up: #60A5FA;
+  --price-down: #FB923C;
+  --buy: #60A5FA;
+  --buy-fg: #04121F;
+  --sell: #FB923C;
+  --sell-fg: #04121F;
+  --success: #60A5FA;
+  --danger: #FB923C;
+  --status-success-fg: #60A5FA;
+  --status-success-bg: #1E304C;
+  --status-danger-fg: #FB923C;
+  --status-danger-bg: #362D2E;
+}
+
+:root[data-theme="hc-dark"][data-palette="cvd"] {
+  --price-up: #93C5FD;
+  --price-down: #FDBA74;
+  --buy: #93C5FD;
+  --buy-fg: #000000;
+  --sell: #FDBA74;
+  --sell-fg: #000000;
+  --success: #93C5FD;
+  --danger: #FDBA74;
+  --status-success-fg: #93C5FD;
+  --status-success-bg: #181D22;
+  --status-danger-fg: #FDBA74;
+  --status-danger-bg: #221C15;
+}
+
+:root[data-theme="hc-light"][data-palette="cvd"] {
+  --price-up: #1E3A8A;
+  --price-down: #9A3412;
+  --buy: #1E3A8A;
+  --buy-fg: #FFFFFF;
+  --sell: #9A3412;
+  --sell-fg: #FFFFFF;
+  --success: #1E3A8A;
+  --danger: #9A3412;
+  --status-success-fg: #1E3A8A;
+  --status-success-bg: #FFFFFF;
+  --status-danger-fg: #9A3412;
+  --status-danger-bg: #FFFFFF;
+}

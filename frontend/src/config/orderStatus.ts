@@ -7,12 +7,12 @@ interface StatusStyle {
   className: string
 }
 
-const NEUTRAL = 'bg-slate-500/20 text-slate-300'
-const INFO = 'bg-sky-500/20 text-sky-300'
-const PROGRESS = 'bg-indigo-500/20 text-indigo-300'
-const SUCCESS = 'bg-green-500/20 text-green-300'
-const WARNING = 'bg-amber-500/20 text-amber-300'
-const DANGER = 'bg-red-500/20 text-red-300'
+const NEUTRAL = 'bg-status-neutral-bg text-status-neutral'
+const INFO = 'bg-status-info-bg text-status-info'
+const PROGRESS = 'bg-status-progress-bg text-status-progress'
+const SUCCESS = 'bg-status-success-bg text-status-success'
+const WARNING = 'bg-status-warning-bg text-status-warning'
+const DANGER = 'bg-status-danger-bg text-status-danger'
 
 export const PARENT_STATUS_STYLES: Record<ParentOrderStatus, StatusStyle> = {
   DRAFT: { label: 'Nháp', className: NEUTRAL },
