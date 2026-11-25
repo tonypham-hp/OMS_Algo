@@ -6,6 +6,7 @@ import { canUseDemo } from '@/demo/access'
 import { useOrders } from '@/hooks/useOrders'
 import { useOrderRules } from '@/hooks/useSystemConfig'
 import { cn } from '@/lib/utils'
+import { useAppearanceStore } from '@/store/appearance.store'
 import { useAuthStore } from '@/store/auth.store'
 import { useDemoStore } from '@/store/demo.store'
 import { useMarketStore } from '@/store/market.store'
@@ -47,6 +48,8 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   const setSelectedSymbol = useUiStore((state) => state.setSelectedSymbol)
   const setPickerOpen = useDemoStore((state) => state.setPickerOpen)
   const demoActive = useDemoStore((state) => state.snapshot !== null)
+  const colorScheme = useAppearanceStore((state) => state.resolved.colorScheme)
+  const toggleMode = useAppearanceStore((state) => state.toggleMode)
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
   const [recent] = useState(() => readRecent())
@@ -60,9 +63,10 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
             symbols: quotes.map((quote) => quote.symbol),
             templates: getVisibleTemplates(user.role, enabled),
             canDemo: canUseDemo(user.role) && !demoActive,
+            colorScheme,
           })
         : [],
-    [user, orders, quotes, enabled, demoActive],
+    [user, orders, quotes, enabled, demoActive, colorScheme],
   )
 
   const sections: Section[] = useMemo(() => {
@@ -85,6 +89,10 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
     const target: SearchTarget = item.target
     if (target.kind === 'demo') {
       setPickerOpen(true)
+      return
+    }
+    if (target.kind === 'toggle-theme') {
+      toggleMode()
       return
     }
     if (target.symbol) setSelectedSymbol(target.symbol)

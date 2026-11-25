@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronRight, CircleHelp, LogOut, Search } from 'lucide-react'
 import { Fragment, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { ThemeToggle } from '@/components/ThemeToggle'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -93,10 +94,12 @@ export function TopBar({ actions }: { actions?: ReactNode }) {
     >
       <Breadcrumb />
       <PaletteButton />
-      <div className="ml-auto flex shrink-0 items-center gap-3">
+      {/* Dưới 1600px khoảng cách hẹp hơn để chừa chỗ cho tên màn (đã thêm nút Sáng/Tối). */}
+      <div className="ml-auto flex shrink-0 items-center gap-2 min-[1600px]:gap-3">
         <SessionStatus />
         {/* Đang Demo: chỗ này dành cho nhãn Demo; dữ liệu lúc đó là của kịch bản, không phải giá demo thường. */}
         {!demoActive && <DemoDataLabel />}
+        <ThemeToggle />
         {actions}
         {user && (
           <DropdownMenu>

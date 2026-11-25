@@ -23,7 +23,10 @@ export const SEARCH_GROUP_LABELS: Record<SearchGroup, string> = {
 }
 
 /** Mở một kết quả: điều hướng (kèm mã CK cần chọn, phần tử cần cuộn tới) hoặc mở hộp chọn kịch bản Demo. */
-export type SearchTarget = { kind: 'navigate'; path: string; symbol?: string; scrollTo?: string } | { kind: 'demo' }
+export type SearchTarget =
+  | { kind: 'navigate'; path: string; symbol?: string; scrollTo?: string }
+  | { kind: 'demo' }
+  | { kind: 'toggle-theme' }
 
 export interface SearchItem {
   /** Duy nhất trong chỉ mục, cũng là khóa lưu "mở gần đây". */
@@ -70,10 +73,12 @@ export interface SearchIndexInput {
   templates: StrategyTemplate[]
   /** Vai trò này có được chạy Chế độ Demo không (canUseDemo). */
   canDemo: boolean
+  /** Nền đang hiện (sáng/tối), để mục "Đổi giao diện" nói đúng chiều sẽ đổi. Mặc định tối. */
+  colorScheme?: 'light' | 'dark'
 }
 
 /** Dựng chỉ mục tìm kiếm, đã lọc theo quyền của người dùng. Hàm thuần. */
-export function buildSearchIndex({ user, orders, symbols, templates, canDemo }: SearchIndexInput): SearchItem[] {
+export function buildSearchIndex({ user, orders, symbols, templates, canDemo, colorScheme = 'dark' }: SearchIndexInput): SearchItem[] {
   const permissions = ROLE_PERMISSIONS[user.role]
   const canPlace = permissions.includes('place_order')
   const canBook = permissions.includes('order_book')
@@ -194,6 +199,14 @@ export function buildSearchIndex({ user, orders, symbols, templates, canDemo }: 
       },
     )
   }
+  items.push({
+    id: 'action:toggle-theme',
+    group: 'ACTION',
+    title: colorScheme === 'dark' ? 'Đổi giao diện sáng' : 'Đổi giao diện tối',
+    subtitle: 'Giao diện',
+    keywords: ['giao diện', 'theme', 'sáng', 'tối', 'chế độ tối', 'dark', 'light', 'màu nền'],
+    target: { kind: 'toggle-theme' },
+  })
   if (canDemo) {
     items.push({
       id: 'action:demo',
