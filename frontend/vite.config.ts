@@ -1,11 +1,15 @@
 import path from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vitest/config'
+import { defineConfig, type Plugin } from 'vitest/config'
+import { injectBootstrap } from './src/theme/bootstrap.ts'
+
+// Script đặt data-theme trước lần vẽ đầu (tải lại không nháy sai theme), chèn nội tuyến vào <head> của index.html.
+const themeBootstrap = (): Plugin => ({ name: 'theme-bootstrap', transformIndexHtml: (html) => injectBootstrap(html) })
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [themeBootstrap(), react(), tailwindcss()],
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),
