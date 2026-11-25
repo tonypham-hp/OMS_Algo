@@ -9,10 +9,10 @@ const STATUSES = Object.keys(PARENT_STATUS_STYLES) as ParentOrderStatus[]
 
 function Stat({ label, value, note, isAlert }: { label: string; value: ReactNode; note?: string; isAlert: boolean }) {
   return (
-    <div className={cn('rounded-md border p-3', isAlert && 'border-red-500/60 bg-red-500/10')}>
+    <div className={cn('rounded-md border p-3', isAlert && 'border-danger bg-status-danger-bg')}>
       <p className="text-muted-foreground text-xs">{label}</p>
       <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
-      {note && <p className={cn('mt-0.5 text-xs', isAlert ? 'text-red-300' : 'text-muted-foreground')}>{note}</p>}
+      {note && <p className={cn('mt-0.5 text-xs', isAlert ? 'text-status-danger' : 'text-muted-foreground')}>{note}</p>}
     </div>
   )
 }

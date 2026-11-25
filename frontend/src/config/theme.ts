@@ -333,25 +333,6 @@ export function readToken(name: TokenName): string {
   return value || PALETTES.dark[name]
 }
 
-/** Giữ tên cũ cho các chỗ chưa chuyển (biểu đồ dùng readToken từ Đợt 9). */
-export const THEME = {
-  background: PALETTES.dark.bg,
-  sidebar: PALETTES.dark['surface-panel'],
-  card: PALETTES.dark.surface,
-  border: PALETTES.dark.border,
-  borderStrong: PALETTES.dark['border-strong'],
-  navActive: PALETTES.dark['nav-active'],
-  text: PALETTES.dark.text,
-  textMuted: PALETTES.dark['text-muted'],
-  accent: PALETTES.dark.accent,
-  onAccent: PALETTES.dark['accent-fg'],
-  up: PALETTES.dark['price-up'],
-  down: PALETTES.dark['price-down'],
-  ref: PALETTES.dark['price-ref'],
-  ceiling: PALETTES.dark['price-ceiling'],
-  floor: PALETTES.dark['price-floor'],
-} as const
-
 export const FONTS = {
   sans: "'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif",
   mono: "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace",

@@ -162,12 +162,12 @@ export function TourOverlay() {
             left: box.left,
             width: box.width,
             height: box.height,
-            boxShadow: '0 0 0 9999px rgb(0 0 0 / 0.55)',
-            outline: '2px solid var(--color-price-ref)',
+            boxShadow: '0 0 0 9999px var(--overlay)',
+            outline: '2px solid var(--price-ref)',
           }}
         />
       ) : (
-        <div aria-hidden className="pointer-events-none fixed inset-0 bg-black/55" />
+        <div aria-hidden className="pointer-events-none fixed inset-0 bg-overlay" />
       )}
       <div
         ref={cardRef}

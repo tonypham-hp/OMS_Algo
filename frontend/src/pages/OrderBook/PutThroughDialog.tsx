@@ -143,7 +143,7 @@ export function PutThroughDialog({ onClose }: { onClose: () => void }) {
                 type="button"
                 variant={side === item ? 'default' : 'outline'}
                 aria-pressed={side === item}
-                className={cn(side === item && (item === 'BUY' ? 'bg-green-600 hover:bg-green-600' : 'bg-red-600 hover:bg-red-600'))}
+                className={cn(side === item && (item === 'BUY' ? 'bg-buy text-buy-fg hover:bg-buy/90' : 'bg-sell text-sell-fg hover:bg-sell/90'))}
                 onClick={() => setSide(item)}
               >
                 {item === 'BUY' ? 'Mua' : 'Bán'}

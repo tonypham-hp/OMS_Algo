@@ -41,9 +41,9 @@ export function DemoHighlight() {
   if (!highlight) return null
   return (
     <style>{`[data-demo-id="${escapeValue(highlight)}"] {
-  outline: 2px solid var(--color-price-ref);
+  outline: 2px solid var(--price-ref);
   outline-offset: 2px;
-  background-color: color-mix(in srgb, var(--color-price-ref) 14%, transparent);
+  background-color: color-mix(in srgb, var(--price-ref) 14%, transparent);
   border-radius: 6px;
   transition: outline-color 0.2s, background-color 0.2s;
 }`}</style>

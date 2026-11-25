@@ -15,9 +15,9 @@ interface KpiProps {
 
 function Kpi({ label, value, note, isAlert = false, demoId }: KpiProps) {
   return (
-    <div data-demo-id={demoId} className={cn('bg-card flex flex-col gap-1 rounded-lg border p-4', isAlert && 'border-red-400/70')}>
+    <div data-demo-id={demoId} className={cn('bg-card flex flex-col gap-1 rounded-lg border p-4', isAlert && 'border-danger')}>
       <p className="text-muted-foreground text-sm">{label}</p>
-      <p className={cn('text-3xl font-semibold tabular-nums', isAlert && 'text-red-300')}>{value}</p>
+      <p className={cn('text-3xl font-semibold tabular-nums', isAlert && 'text-status-danger')}>{value}</p>
       <p className="text-muted-foreground text-xs">{note}</p>
     </div>
   )

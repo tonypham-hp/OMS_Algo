@@ -249,8 +249,8 @@ export function OrderTicket() {
                   const isActive = field.value === side
                   const activeClass =
                     side === 'BUY'
-                      ? 'bg-green-600 text-white hover:bg-green-600'
-                      : 'bg-red-600 text-white hover:bg-red-600'
+                      ? 'bg-buy text-buy-fg hover:bg-buy/90'
+                      : 'bg-sell text-sell-fg hover:bg-sell/90'
                   return (
                     <Button
                       key={side}
@@ -488,7 +488,7 @@ export function OrderTicket() {
           </div>
 
           {strategy.usesMtl && !isMtlAllowed(symbolSession, quoteRules?.rules) && (
-            <p role="status" className="rounded-md bg-amber-500/15 p-2 text-xs text-amber-300">
+            <p role="status" className="rounded-md bg-status-warning-bg p-2 text-xs text-status-warning">
               Hiện tại: {SESSION_LABELS[symbolSession]}. Lệnh {strategy.label} có thể sinh lệnh con MTL, mà MTL
               chỉ hợp lệ trong phiên liên tục. Trong ATO, ATC lệnh con đó được gửi dưới dạng lệnh ATO, ATC.
             </p>

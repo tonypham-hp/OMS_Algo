@@ -49,7 +49,7 @@ export function CallCountdown({ symbol, className }: { symbol: string; className
     <p role="status" className={className} data-demo-id={`call-countdown-${symbol}`}>
       Khớp kế tiếp <span className="font-medium tabular-nums">{formatClock(callEnd).slice(0, 5)}</span> · còn{' '}
       <span className="tabular-nums">{remaining}</span>
-      {locked && <span className="text-amber-300"> · đang khóa sửa/hủy</span>}
+      {locked && <span className="text-status-warning"> · đang khóa sửa/hủy</span>}
     </p>
   )
 }

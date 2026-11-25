@@ -14,9 +14,9 @@ const NO_LUNCH_PACK = 'sto-experimental-no-lunch'
 
 function VerifiedBadge({ verified }: { verified: boolean }) {
   return verified ? (
-    <Badge className="bg-green-500/20 text-green-300">Đã kiểm chứng</Badge>
+    <Badge className="bg-status-success-bg text-status-success">Đã kiểm chứng</Badge>
   ) : (
-    <Badge className="bg-amber-500/20 text-amber-300">Chưa kiểm chứng</Badge>
+    <Badge className="bg-status-warning-bg text-status-warning">Chưa kiểm chứng</Badge>
   )
 }
 
@@ -127,7 +127,7 @@ export default function RulePacks() {
                   <TableCell className="whitespace-normal">
                     <div className="flex flex-wrap items-center gap-2 font-medium">
                       {pack.title}
-                      {activeIds.has(pack.id) && <Badge className="bg-sky-500/20 text-sky-300">Đang áp dụng</Badge>}
+                      {activeIds.has(pack.id) && <Badge className="bg-status-info-bg text-status-info">Đang áp dụng</Badge>}
                       {pack.experimental && <Badge variant="outline">Thử nghiệm</Badge>}
                     </div>
                     <div className="text-muted-foreground font-mono text-xs">{pack.id}</div>

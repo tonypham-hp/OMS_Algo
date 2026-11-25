@@ -39,7 +39,7 @@ export function NotificationBell() {
         >
           <Bell aria-hidden />
           {unread > 0 && (
-            <span className="bg-destructive absolute -top-1 -right-1 min-w-4 rounded-full px-1 text-[10px] leading-4 font-semibold text-white tabular-nums">
+            <span className="bg-danger absolute -top-1 -right-1 min-w-4 rounded-full px-1 text-[10px] leading-4 font-semibold text-sell-fg tabular-nums">
               {unread > 99 ? '99+' : unread}
             </span>
           )}

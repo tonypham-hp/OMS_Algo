@@ -13,7 +13,7 @@ export function SessionLockNotice() {
   if (isModifyCancelAllowed(session)) return null
   const flag = defaultRules().flags.AMEND_CANCEL_IN_AUCTION_LOCK
   return (
-    <p role="status" className="flex flex-wrap items-center gap-2 rounded-md bg-amber-500/15 p-2 text-sm text-amber-300">
+    <p role="status" className="flex flex-wrap items-center gap-2 rounded-md bg-status-warning-bg p-2 text-sm text-status-warning">
       Đang trong {SESSION_LABELS[session]}: tạm khóa Sửa và Hủy lệnh theo luật HOSE.
       {flag && !flag.verified && (
         <Badge variant="secondary" title={flag.note}>

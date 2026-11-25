@@ -42,7 +42,7 @@ export function OrderEventLog({ events, childOrders, highlightedId = null }: Ord
               >
                 <TableCell className="tabular-nums">{formatDateTime(event.event_time)}</TableCell>
                 <TableCell>{formatEventActor(event.user_id)}</TableCell>
-                <TableCell className={cn(ALERT_ACTIONS.has(event.action) && 'font-medium text-red-300')}>
+                <TableCell className={cn(ALERT_ACTIONS.has(event.action) && 'font-medium text-status-danger')}>
                   {EVENT_ACTION_LABELS[event.action]}
                   {cycle !== undefined && <span className="text-muted-foreground"> · chu kỳ {cycle}</span>}
                 </TableCell>

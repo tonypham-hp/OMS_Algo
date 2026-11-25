@@ -6,8 +6,8 @@ import { cn } from '@/lib/utils'
 import { useDemoStore } from '@/store/demo.store'
 
 const STATUS_STYLES: Record<CheckStatus, { label: string; className: string }> = {
-  pass: { label: 'ĐẠT', className: 'bg-green-500/20 text-green-300' },
-  fail: { label: 'KHÔNG ĐẠT', className: 'bg-red-500/20 text-red-300' },
+  pass: { label: 'ĐẠT', className: 'bg-status-success-bg text-status-success' },
+  fail: { label: 'KHÔNG ĐẠT', className: 'bg-status-danger-bg text-status-danger' },
   pending: { label: 'CHỜ', className: 'bg-muted text-muted-foreground' },
 }
 

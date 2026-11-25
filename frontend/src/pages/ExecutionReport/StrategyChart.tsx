@@ -1,9 +1,10 @@
 import { Bar, BarChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { EmptyState } from '@/components/states'
-import { FONTS, THEME } from '@/config/theme'
+import { CHART_COLORS } from '@/config/chartColors'
+import { FONTS } from '@/config/theme'
 import { describeStrategyBps, formatFavorableBps, type StrategyBps } from '@/utils/execQuality'
 
-const AXIS_TICK = { fill: 'var(--muted-foreground)', fontSize: 12, fontFamily: FONTS.mono }
+const AXIS_TICK = { fill: 'var(--text-muted)', fontSize: 12, fontFamily: FONTS.mono }
 /** Chiều cao mỗi cột và phần dành cho trục. */
 const ROW_HEIGHT = 44
 const AXIS_HEIGHT = 40
@@ -39,25 +40,25 @@ export function StrategyChart({ stats }: { stats: StrategyBps[] }) {
               stroke="var(--border)"
             />
             <YAxis type="category" dataKey="label" width={72} tick={AXIS_TICK} stroke="var(--border)" />
-            <ReferenceLine x={0} stroke={THEME.textMuted} />
+            <ReferenceLine x={0} stroke={CHART_COLORS.axis} />
             <Tooltip
-              cursor={{ fill: 'var(--nav-active)' }}
+              cursor={{ fill: CHART_COLORS.cursor }}
               formatter={(value, _name, item) => [
                 `${formatFavorableBps(Number(value))} (${(item.payload as StrategyBps).orders} lệnh)`,
                 'So arrival',
               ]}
               contentStyle={{
-                background: 'var(--popover)',
+                background: 'var(--surface)',
                 border: '1px solid var(--border)',
                 borderRadius: 8,
                 fontSize: 12,
               }}
-              labelStyle={{ color: 'var(--foreground)' }}
-              itemStyle={{ color: 'var(--foreground)' }}
+              labelStyle={{ color: 'var(--text)' }}
+              itemStyle={{ color: 'var(--text)' }}
             />
             <Bar dataKey="bps" name="bps" barSize={20} isAnimationActive={false}>
               {stats.map((item) => (
-                <Cell key={item.strategy_type} fill={item.bps >= 0 ? THEME.up : THEME.down} />
+                <Cell key={item.strategy_type} fill={item.bps >= 0 ? CHART_COLORS.favorable : CHART_COLORS.unfavorable} />
               ))}
             </Bar>
           </BarChart>

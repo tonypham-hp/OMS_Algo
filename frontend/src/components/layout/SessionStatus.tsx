@@ -14,12 +14,12 @@ const SPEEDS: SimSpeed[] = [1, 10, 60]
 
 /** Màu chấm phiên: xanh lá khi khớp liên tục, vàng khi phiên định kỳ, xám khi không giao dịch. */
 const SESSION_DOT: Record<SessionCode, string> = {
-  PRE_OPEN: 'bg-slate-500',
+  PRE_OPEN: 'bg-text-muted',
   ATO: 'bg-price-ref',
   CONTINUOUS: 'bg-price-up',
-  LUNCH: 'bg-slate-500',
+  LUNCH: 'bg-text-muted',
   ATC: 'bg-price-ref',
-  PUT_THROUGH: 'bg-slate-500',
+  PUT_THROUGH: 'bg-text-muted',
   PERIODIC: 'bg-price-ref',
   PERIODIC_LOCK: 'bg-price-ref',
   HALTED: 'bg-price-down',

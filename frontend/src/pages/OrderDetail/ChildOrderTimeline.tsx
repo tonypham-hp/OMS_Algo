@@ -89,7 +89,7 @@ export function ChildOrderTimeline({ items, events = [] }: ChildOrderTimelinePro
                   }}
                   className={cn(
                     'cursor-pointer',
-                    ALERT_STATUSES.has(child.status) && 'border-l-2 border-l-red-500 bg-red-500/15 font-medium hover:bg-red-500/20',
+                    ALERT_STATUSES.has(child.status) && 'border-l-2 border-l-danger bg-status-danger-bg font-medium hover:bg-status-danger-bg',
                     isOpen && 'bg-primary/10',
                   )}
                 >
