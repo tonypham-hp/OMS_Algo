@@ -49,6 +49,10 @@ export const CONTRAST_PAIRS: ContrastPair[] = [
     // Thông báo, hàng cảnh báo: chữ thường trên nền trạng thái.
     { fg: 'text' as TokenName, bg: `status-${name}-bg` as TokenName, kind: 'text' as const },
   ]),
+  // Nhãn "Nhóm 1–4" trên tab panel của Bàn làm việc (nền tab: surface, surface-panel; rê chuột: surface-hover).
+  ...(['link-1', 'link-2', 'link-3', 'link-4'] as TokenName[]).flatMap((fg) =>
+    (['bg', 'surface', 'surface-panel', 'surface-hover'] as TokenName[]).map((bg) => ({ fg, bg, kind: 'text' as const })),
+  ),
   ...(['bg', 'surface'] as TokenName[]).map((bg) => ({ fg: 'border-strong' as TokenName, bg, kind: 'ui' as const })),
   ...(['bg', 'surface'] as TokenName[]).map((bg) => ({ fg: 'focus-ring' as TokenName, bg, kind: 'ui' as const })),
 ]

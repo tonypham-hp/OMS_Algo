@@ -4,6 +4,58 @@ Ghi các thay đổi đáng chú ý của frontend OMS Algo theo từng đợt p
 [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/), đánh số phiên bản theo [SemVer](https://semver.org/lang/vi/).
 Bản 0.x là bản demo chạy với dữ liệu giả lập, chưa có backend.
 
+## [0.4.0] – 2026-11-26 · Đợt 10A: Bàn làm việc, nhóm liên kết màu, phím tắt
+
+Màn mới cho dealer và vận hành, ghép từ component có sẵn. Không đổi nghiệp vụ, không đổi engine. Tách cửa sổ / màn hình
+thứ hai để sang Đợt 10B.
+
+### Thêm
+- **Bàn làm việc `/ban-lam-viec`** (mọi vai trò):
+  - Panel dock được (dockview-react 8.10.0, MIT): kéo tab để dock trái / phải / trên / dưới hoặc gộp tab, kéo viền đổi
+    kích thước, thả nổi.
+  - 7 loại panel: Danh mục theo dõi, Phiếu lệnh, Sổ lệnh 3 mức, Sổ lệnh, Chi tiết lệnh, Thuật toán đang chạy, Thông báo.
+    Một loại mở được nhiều lần.
+  - Tab có chấm màu nhóm kèm nhãn, menu "⋯" (đổi nhóm, thả nổi, "Tách cửa sổ" khóa đến 10B), nút đóng; nút "+" thêm panel.
+  - Theme dockview lấy từ token Đợt 9 (4 theme và mù màu).
+- **Bố cục:**
+  - Mẫu Cơ bản (mặc định cho khách hàng) và Chuyên nghiệp (dealer, vận hành); "Về mặc định".
+  - Nhiều bố cục có tên lưu theo tài khoản (localStorage, `schemaVersion: 2`, có migrate từ v1); xuất / nhập JSON.
+  - Dữ liệu hỏng thì dùng bố cục mặc định kèm báo nhẹ.
+- **Nhóm liên kết 4 màu + "Không nhóm":**
+  - Chọn mã ở Danh mục thì Phiếu lệnh, Sổ lệnh 3 mức, Sổ lệnh cùng nhóm đổi theo; bấm mức giá thì điền vào phiếu cùng
+    nhóm; bấm một lệnh thì Chi tiết lệnh cùng nhóm mở lệnh đó.
+  - Token `link-1..4` đạt tương phản ở mọi theme.
+- **Giữ bản nháp:** phiếu đang nhập dở mà nhóm đổi mã thì hỏi "Giữ bản nháp cho mã cũ / Chuyển sang mã mới", không xóa
+  trắng; "Khóa mã" trên phiếu.
+- **Phím tắt** (react-hotkeys-hook 5.4.0, MIT, có scope):
+  - B / S mở phiếu Mua / Bán (không bao giờ gửi lệnh); O, D, N tới panel; Alt+1…9 chuyển panel.
+  - "?" hoặc "/" mở bảng phím tắt; phím hiện trong Ctrl+K và tooltip.
+  - Không chạy khi đang gõ, khi có hộp thoại mở, khi đang Demo; tắt được ở Cài đặt. Không dùng F1, không chặn Ctrl+W/T/R.
+- **Bàn phím:** bảng trong panel theo mẫu Grid WAI-ARIA (một điểm dừng Tab; mũi tên, Home/End, PageUp/PageDown, Enter);
+  panel có `aria-label`.
+- **Demo và tour:**
+  - Kịch bản 13 "Dealer dùng bàn làm việc": đổi mã theo nhóm, bấm B, điền và xác nhận lệnh, mở chi tiết.
+  - Tour 1 bước giới thiệu Bàn làm việc lần đầu mở màn.
+- **Test:**
+  - Vitest: lưu / khôi phục, migrate v1 → v2, JSON hỏng, nhóm liên kết, giữ bản nháp, phím tắt không chạy trong ô nhập,
+    điều hướng lưới.
+  - Playwright: kéo panel rồi tải lại; nhóm đổi mã; "B" trong ô nhập; B rồi Xác nhận; duyệt bằng bàn phím; kịch bản 13
+    trên giao diện.
+  - axe color-contrast = 0 ở 4 theme và mù màu.
+- **`npm run perf:workspace`:** đo khung hình trên bản build production; số đo ở
+  [quality-report.md](docs/quality-report.md).
+- **Tài liệu và ảnh:** [docs/licenses.md](docs/licenses.md); ảnh [docs/screenshots/dot10a/](docs/screenshots/dot10a/).
+
+### Đổi
+- **Màn cũ dùng chung phần lõi với Bàn làm việc**, hành vi trên màn cũ không đổi:
+  - Bảng giá tách `PriceBoardTable`.
+  - Sổ lệnh tách `OrderBlotter`.
+  - Chi tiết lệnh tách `OrderDetailView({ id })`; tìm dòng nhật ký trong khung của chính nó.
+  - Thông báo tách `NotificationList`.
+- **Phiếu lệnh đọc mã qua `useSymbolScope()`** (mặc định vẫn là mã toàn cục) và chỉ theo dõi giá của mã đang chọn, không
+  vẽ lại cả phiếu mỗi tick của mọi mã. Hàng bảng giá `memo` theo mã.
+- **Cài đặt giao diện** có thêm mục "Phím tắt".
+
 ## [0.3.0] – 2026-11-25 · Đợt 9: Theme Sáng / Tối / Tương phản cao, màu giá VN, mù màu, trang Cài đặt giao diện
 
 Mọi màu giao diện đi qua token ngữ nghĩa. Không đổi nghiệp vụ, không đổi engine. Chi tiết: [docs/theme.md](docs/theme.md).

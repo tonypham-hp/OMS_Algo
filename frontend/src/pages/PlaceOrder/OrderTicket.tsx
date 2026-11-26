@@ -2,6 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useCallback, useEffect, useState } from 'react'
 import { Controller, useForm, useWatch, type Resolver } from 'react-hook-form'
 import { useSearchParams } from 'react-router-dom'
+import { useShallow } from 'zustand/react/shallow'
 import { FieldError } from '@/components/FieldError'
 import { Term } from '@/components/Term'
 import { NumberInput } from '@/components/NumberInput'
@@ -28,7 +29,7 @@ import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth.store'
 import { useMarketStore } from '@/store/market.store'
-import { useUiStore } from '@/store/ui.store'
+import { useSymbolScope } from '@/workspace/symbolScope'
 import type { OrderRules, PersistenceMode, Side, StrategyType } from '@/types'
 import { getDisplayPrice, getTickSize, isAuctionSession, isMtlAllowed, rulesForQuote } from '@/utils/hose'
 import { applyTemplate, getVisibleTemplates } from '@/utils/strategyTemplates'
@@ -78,12 +79,27 @@ function buildDefaults(accountNo: string, symbol: string, strategyType: Strategy
   }
 }
 
-export function OrderTicket() {
+interface OrderTicketProps {
+  /** Trong Bàn làm việc: tiêu đề là h2 "Phiếu lệnh" (trang đã có h1), không viền thẻ riêng. */
+  embedded?: boolean
+  /** Bàn làm việc: báo phiếu đang có bản nháp (người dùng đã nhập hoặc vừa điền theo mẫu), để không xóa trắng khi nhóm đổi mã. */
+  onDraftChange?: (hasDraft: boolean) => void
+  /** Bàn làm việc, phím B/S: đặt chiều Mua/Bán của phiếu (chỉ mở phiếu, không gửi lệnh). `nonce` đổi mỗi lần bấm. */
+  sideRequest?: { side: Side; nonce: number } | null
+  /** Chế độ Demo trên Bàn làm việc: điền sẵn các ô (chưa gửi; vẫn phải Đặt lệnh rồi Xác nhận). */
+  fillRequest?: { values: Partial<OrderFormValues>; nonce: number } | null
+}
+
+export function OrderTicket({ embedded = false, onDraftChange, sideRequest = null, fillRequest = null }: OrderTicketProps = {}) {
   const user = useAuthStore((state) => state.user)
   const accounts = user?.accounts ?? []
-  const quotes = useMarketStore((state) => state.quotes)
-  const selectedSymbol = useUiStore((state) => state.selectedSymbol)
-  const setSelectedSymbol = useUiStore((state) => state.setSelectedSymbol)
+  // Mã đang chọn: store toàn cục ở màn Đặt lệnh, nhóm liên kết của panel ở Bàn làm việc.
+  const scope = useSymbolScope()
+  const selectedSymbol = scope.symbol
+  const setSelectedSymbol = scope.setSymbol
+  // Selector hẹp: chỉ vẽ lại khi giá của mã đang chọn đổi (không vẽ lại cả form mỗi tick của mọi mã).
+  const quote = useMarketStore((state) => state.quotes.find((item) => item.symbol === selectedSymbol))
+  const symbols = useMarketStore(useShallow((state) => state.quotes.map((item) => item.symbol)))
   const createOrder = useCreateOrder()
   const [pendingValues, setPendingValues] = useState<OrderFormValues | null>(null)
   const orderRules = useOrderRules().data
@@ -97,11 +113,13 @@ export function OrderTicket() {
     defaultValues: buildDefaults(accounts[0] ?? '', selectedSymbol, defaultStrategy),
   })
   const { control, getValues, handleSubmit, reset, setValue, trigger } = form
+  // Bản nháp = có ô người dùng đã sửa. Đọc dirtyFields trong lúc vẽ để react-hook-form theo dõi; không dùng isDirty vì
+  // cờ đó có thể bật sau setValue của chương trình (đồng bộ mã, kiểm tra lại) dù giá trị vẫn bằng mặc định.
+  const isDirty = Object.keys(form.formState.dirtyFields).length > 0
   const values = useWatch({ control })
   const strategyType = values.strategy_type ?? 'STOP_LIMIT'
   const strategy = STRATEGIES[strategyType]
   const persistenceMode = values.persistence_mode ?? 'DAY'
-  const quote = quotes.find((item) => item.symbol === selectedSymbol)
   // Lô lẻ (1–99 CP) chỉ đặt được lệnh LO: danh sách loại lệnh chỉ còn LIMIT.
   const lotType = values.lot_type ?? 'ROUND'
   const enabledTypes = lotType === 'ODD' ? allEnabledTypes.filter((type) => type === 'LIMIT') : allEnabledTypes
@@ -121,6 +139,8 @@ export function OrderTicket() {
     templates.some((item) => item.id === requestedTemplate) ? requestedTemplate : null,
   )
   const activeTemplate = templates.find((item) => item.id === templateId && item.strategy_type === strategyType) ?? null
+  const hasDraft = isDirty || activeTemplate !== null
+  useEffect(() => onDraftChange?.(hasDraft), [hasDraft, onDraftChange])
 
   /** Điền giá trị của mẫu vào form (không đổi mẫu đang chọn). */
   const fillFromTemplate = useCallback(
@@ -171,6 +191,23 @@ export function OrderTicket() {
     }
   }, [orderRules, defaultStrategy, getValues, setValue])
 
+  // Phím B/S trên Bàn làm việc: đổi chiều (không tính là bản nháp, không gửi gì).
+  const sideNonce = sideRequest?.nonce
+  const requestedSide = sideRequest?.side
+  useEffect(() => {
+    if (sideNonce !== undefined && requestedSide) setValue('side', requestedSide, { shouldValidate: true })
+  }, [sideNonce, requestedSide, setValue])
+
+  // Demo: điền sẵn phiếu như người dùng gõ (giữ giá trị mặc định ban đầu nên phiếu được tính là bản nháp).
+  const fillNonce = fillRequest?.nonce
+  const fillValues = fillRequest?.values
+  useEffect(() => {
+    if (fillNonce === undefined || !fillValues) return
+    reset({ ...getValues(), ...fillValues }, { keepDefaultValues: true })
+    // Chỉ chạy khi có yêu cầu điền mới.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fillNonce])
+
   // Bấm vào bảng giá thì ticket đổi theo mã vừa chọn.
   useEffect(() => {
     setValue('symbol', selectedSymbol)
@@ -178,8 +215,8 @@ export function OrderTicket() {
 
   // Bấm một mức trên sổ lệnh: điền vào ô giá giới hạn (hoặc ô giá đầu tiên của loại lệnh). Form vẫn kiểm tra như cũ.
   // Bỏ qua lần bấm đã có trước khi ticket được mở, để quay lại màn không bị điền giá cũ.
-  const pickedPrice = useUiStore((state) => state.pickedPrice)
-  const [initialPickNonce] = useState(() => useUiStore.getState().pickedPrice?.nonce ?? 0)
+  const pickedPrice = scope.pickedPrice
+  const [initialPickNonce] = useState(() => scope.pickedPrice?.nonce ?? 0)
   useEffect(() => {
     if (!pickedPrice || pickedPrice.nonce <= initialPickNonce) return
     const fields = STRATEGIES[getValues('strategy_type')].fields
@@ -216,14 +253,12 @@ export function OrderTicket() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>
-          <h1>Đặt lệnh nâng cao</h1>
-        </CardTitle>
+    <Card className={embedded ? 'border-0 bg-transparent py-0 shadow-none ring-0' : undefined}>
+      <CardHeader className={embedded ? 'px-0' : undefined}>
+        <CardTitle>{embedded ? <h2>Phiếu lệnh</h2> : <h1>Đặt lệnh nâng cao</h1>}</CardTitle>
         <CardDescription>{strategy.description}</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className={embedded ? 'px-0' : undefined}>
         <form
           noValidate
           className="flex flex-col gap-4"
@@ -316,9 +351,9 @@ export function OrderTicket() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {quotes.map((item) => (
-                    <SelectItem key={item.symbol} value={item.symbol}>
-                      {item.symbol}
+                  {symbols.map((symbol) => (
+                    <SelectItem key={symbol} value={symbol}>
+                      {symbol}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -515,6 +550,7 @@ export function OrderTicket() {
           errorMessage={createOrder.error?.message}
           onConfirm={confirmOrder}
           onClose={closeDialog}
+          onOpenOrder={scope.openOrder}
         />
       </CardContent>
     </Card>

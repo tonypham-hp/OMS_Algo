@@ -63,6 +63,11 @@ export const TOKEN_NAMES = [
   // Biểu đồ (không dùng màu giá vì đã mang nghĩa tăng, giảm)
   'chart-actual',
   'chart-plan',
+  // Nhóm liên kết của Bàn làm việc (Đợt 10A): chấm và nhãn "Nhóm 1–4" trên tab panel, không trùng nghĩa màu giá
+  'link-1',
+  'link-2',
+  'link-3',
+  'link-4',
 ] as const
 
 export type TokenName = (typeof TOKEN_NAMES)[number]
@@ -142,6 +147,10 @@ export const PALETTES: Record<ThemeName, Palette> = {
     }),
     'chart-actual': '#3987E5',
     'chart-plan': '#D95926',
+    'link-1': '#FB923C',
+    'link-2': '#60A5FA',
+    'link-3': '#C084FC',
+    'link-4': '#F472B6',
   },
   light: {
     bg: '#F8FAFC',
@@ -186,6 +195,10 @@ export const PALETTES: Record<ThemeName, Palette> = {
     }),
     'chart-actual': '#1D4ED8',
     'chart-plan': '#C2410C',
+    'link-1': '#B45309',
+    'link-2': '#1D4ED8',
+    'link-3': '#7E22CE',
+    'link-4': '#BE185D',
   },
   'hc-dark': {
     bg: '#000000',
@@ -230,6 +243,10 @@ export const PALETTES: Record<ThemeName, Palette> = {
     }),
     'chart-actual': '#7DB4FF',
     'chart-plan': '#FF9A5C',
+    'link-1': '#FDBA74',
+    'link-2': '#93C5FD',
+    'link-3': '#D8B4FE',
+    'link-4': '#F9A8D4',
   },
   'hc-light': {
     bg: '#FFFFFF',
@@ -273,6 +290,10 @@ export const PALETTES: Record<ThemeName, Palette> = {
     }),
     'chart-actual': '#1E3A8A',
     'chart-plan': '#9A3412',
+    'link-1': '#7C2D12',
+    'link-2': '#1E3A8A',
+    'link-3': '#6B21A8',
+    'link-4': '#9D174D',
   },
 }
 

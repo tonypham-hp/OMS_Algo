@@ -20,6 +20,7 @@ const StrategyConfig = lazy(() => import('@/pages/StrategyConfig'))
 const RulePacks = lazy(() => import('@/pages/RulePacks'))
 const Glossary = lazy(() => import('@/pages/Glossary'))
 const Settings = lazy(() => import('@/pages/Settings'))
+const Workspace = lazy(() => import('@/pages/Workspace'))
 const Forbidden = lazy(() => import('@/pages/Forbidden'))
 const NotFound = lazy(() => import('@/pages/NotFound'))
 
@@ -54,6 +55,8 @@ export const routes: RouteObject[] = [
             element: <PermissionRoute permission="place_order" />,
             children: [
               { path: '/dat-lenh', element: page(PlaceOrder) },
+              // Bàn làm việc (Đợt 10A): mọi vai trò đặt được lệnh; khách hàng mặc định bố cục Cơ bản.
+              { path: '/ban-lam-viec', element: page(Workspace) },
               { path: '/mau-chien-luoc', element: page(StrategyTemplates) },
             ],
           },

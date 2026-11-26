@@ -3,7 +3,9 @@ import type { CreateOrderRequest, StrategyParameter } from '@/types'
 import { parseTimeToSeconds } from '@/utils/hose'
 import { createEmptySeed } from './env'
 import { childrenOfRef, findChild, readState, requireChild, requireOrderId } from './state'
-import type { ChildRef, DemoAction, DemoContext, DemoEnv, PlaceOrderParams } from './types'
+import { useWorkspaceStore } from '@/store/workspace.store'
+import { withWorkspace } from '@/workspace/demoBridge'
+import type { ChildRef, DemoAction, DemoContext, DemoEnv, PlaceOrderParams, WorkspaceDemoOp } from './types'
 
 // Mỗi loại action là một hàm gọi vào engine, bộ giả lập: không có logic nghiệp vụ ở đây,
 // mọi quyết định (sinh lệnh con, chặn KL, đối soát) vẫn do engine làm như khi chạy thật.
@@ -114,9 +116,49 @@ export function orderDataFingerprint(env: DemoEnv) {
   })
 }
 
+/** Bàn làm việc: nhóm liên kết 1 (mọi panel của bố cục mẫu ở nhóm 1). */
+const DEMO_GROUP = '1'
+
+function runWorkspace(env: DemoEnv, ctx: DemoContext, params: WorkspaceDemoOp) {
+  const store = useWorkspaceStore.getState()
+  switch (params.op) {
+    case 'preset':
+      store.loadGroups({ [DEMO_GROUP]: { symbol: params.symbol, orderId: null } })
+      withWorkspace((bridge) => bridge.preset(params.preset))
+      return
+    case 'selectSymbol':
+      store.setGroupSymbol(DEMO_GROUP, params.symbol)
+      return
+    case 'openTicket':
+      // Như bấm phím B / S: chỉ mở phiếu, không gửi gì.
+      store.requestTicket('ticket-1', params.side)
+      withWorkspace((bridge) => bridge.openTicket(params.side))
+      return
+    case 'fillTicket':
+      withWorkspace((bridge) =>
+        bridge.fillTicket({ strategy_type: params.strategy_type, total_qty: params.total_qty, limit_price: params.limit_price }),
+      )
+      return
+    case 'submitTicket':
+      // "Đặt lệnh" → "Xác nhận": lệnh đi qua đúng engine như khi bấm trên phiếu; phiếu trống lại.
+      placeOrder(env, ctx, params.order)
+      withWorkspace((bridge) => bridge.resetTicket())
+      return
+    case 'openOrder': {
+      const orderId = requireOrderId(ctx, params.order)
+      store.setGroupOrder(DEMO_GROUP, orderId)
+      withWorkspace((bridge) => bridge.openOrder(orderId))
+      return
+    }
+  }
+}
+
 export function runAction(env: DemoEnv, ctx: DemoContext, action: DemoAction) {
   const { engine, simulator } = env
   switch (action.type) {
+    case 'workspace':
+      runWorkspace(env, ctx, action.params)
+      return
     case 'note':
       return
     case 'placeOrder':

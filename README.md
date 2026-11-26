@@ -4,7 +4,7 @@ Hệ thống quản lý lệnh nâng cao (Advanced Order Management System) cho 
 Khách hàng và dealer đặt lệnh thuật toán (Stop, Stop Limit, Take Profit, Trailing Stop, OCO, Bracket, Iceberg, TWAP,
 VWAP, POV, HUNT). OMS tự chia thành lệnh con, gửi xuống Core, theo dõi khớp, xử lý lỗi và đối soát.
 
-> **Trạng thái:** bản demo frontend **v0.3.0** ([CHANGELOG](CHANGELOG.md)): 11 màn hình, 4 theme, Chế độ Demo, kiểm thử Vitest và
+> **Trạng thái:** bản demo frontend **v0.4.0** ([CHANGELOG](CHANGELOG.md)): 12 màn hình, Bàn làm việc dock được, 4 theme, Chế độ Demo, kiểm thử Vitest và
 > Playwright ([báo cáo chất lượng](docs/quality-report.md)). Chạy độc lập bằng dữ liệu giả lập (MSW và bộ giả lập thị
 > trường trong trình duyệt), có ghi chú "Dữ liệu demo" trên header. Backend (FastAPI) và simulators chưa có code.
 
@@ -94,9 +94,18 @@ VWAP, POV, HUNT). OMS tự chia thành lệnh con, gửi xuống Core, theo dõi
   - Kết quả theo quyền của vai trò; nhớ 5 mục mở gần nhất.
 - **Hướng dẫn lần đầu** (Đợt 5): tour 5 bước khi mỗi vai trò đăng nhập lần đầu; xem lại ở menu tài khoản
   "Xem hướng dẫn". Không chạy khi đang Demo.
+- **Bàn làm việc** (`/ban-lam-viec`, Đợt 10A, [frontend-spec mục 22–23](docs/frontend-spec.md)):
+  - Panel dock được: kéo tab để dock hoặc gộp tab, kéo viền đổi kích thước, thả nổi. Mỗi panel dùng lại component có
+    sẵn: Danh mục, Phiếu lệnh, Sổ lệnh 3 mức, Sổ lệnh, Chi tiết lệnh, Thuật toán đang chạy, Thông báo.
+  - Bố cục mẫu Cơ bản / Chuyên nghiệp; nhiều bố cục có tên lưu theo tài khoản, xuất / nhập JSON.
+  - Nhóm liên kết 4 màu (kèm nhãn "Nhóm 1–4"): chọn mã ở Danh mục thì panel cùng nhóm đổi theo; phiếu đang nhập dở thì
+    hỏi giữ bản nháp, không xóa trắng; có "Khóa mã".
+  - Phím tắt B / S (mở phiếu, không bao giờ gửi lệnh), O / D / N, Alt+1…9; "?" mở bảng phím tắt; tắt được trong Cài đặt.
+  - Bảng trong panel đi bằng mũi tên theo mẫu Grid.
 - **Chế độ Demo**: app tự chạy 6 kịch bản E2E (Iceberg, Stop → Iceberg, POV, HUNT, Core mất ACK, OMS sập) và 3 kịch bản
   luật KRX (sửa lệnh mất/giữ ưu tiên, lô lẻ khớp trong ATC, mã HNX sang HOSE ngày 28/12/2026), 3 kịch bản phiên đặc
-  biệt (mã hạn chế khớp định kỳ 15 phút, tạm ngừng và giao dịch lại, thỏa thuận sau giờ 14:45–15:00).
+  biệt (mã hạn chế khớp định kỳ 15 phút, tạm ngừng và giao dịch lại, thỏa thuận sau giờ 14:45–15:00) và kịch bản 13
+  "Dealer dùng bàn làm việc" (Đợt 10A).
   - Mỗi bước có chú thích, tô sáng phần tử liên quan và tự chấm điều kiện kiểm tra.
   - Chạy trên dữ liệu riêng; thoát thì dữ liệu của bạn trở về nguyên vẹn.
   - Cách bật ở mục [Chế độ Demo](#chế-độ-demo).
@@ -178,13 +187,15 @@ Lệnh khác trong `frontend/`:
 | `npm run screenshots:dot8b` | Chụp lại 4 ảnh phiên đặc biệt vào `docs/screenshots/dot8b/` |
 | `npm run screenshots:dot9` | Chụp lại 11 ảnh theme (5 biến thể × 2 màn, trang Cài đặt) vào `docs/screenshots/dot9/` |
 | `npm run tokens` | Sinh lại `src/styles/tokens.css` từ `src/config/theme.ts` (sau khi sửa màu) |
+| `npm run screenshots:dot10a` | Chụp lại 6 ảnh Bàn làm việc vào `docs/screenshots/dot10a/` |
+| `npm run perf:workspace` | Build production rồi đo khung hình của Bàn làm việc (giá x60, 30 giây); ghi số đo vào `test-results/` |
 
 Cấu hình qua biến môi trường: xem `frontend/.env.example` (`VITE_API_BASE_URL`, `VITE_USE_MOCK`, `VITE_DEMO_MODE`).
 
 ## Kiểm thử
 
 - **Vitest** (`src/**/*.test.ts`): luật giao dịch KRX (ma trận `validateOrder`, test thuộc tính trần/sàn), engine giả
-  lập, phiên đặc biệt (mã hạn chế, tạm ngừng, thỏa thuận), 12 kịch bản Demo chạy headless, định dạng, tương phản WCAG của mọi cặp token màu ở 4 theme và bảng màu mù màu.
+  lập, phiên đặc biệt (mã hạn chế, tạm ngừng, thỏa thuận), 13 kịch bản Demo chạy headless, bố cục Bàn làm việc (lưu, migrate, JSON hỏng), nhóm liên kết, giữ bản nháp, phím tắt không chạy trong ô nhập, định dạng, tương phản WCAG của mọi cặp token màu ở 4 theme và bảng màu mù màu.
 - **Playwright** (`frontend/e2e/`): chạy trên Chrome có sẵn trong máy (không có thì Edge); **không** tải trình duyệt
   riêng, nên không cần `npx playwright install`. Không có cả hai thì cấu hình dừng và báo rõ.
   - Đồng hồ cố định (thứ Hai 16/11/2026, 09:10) qua `page.clock`, `Math.random` có seed qua `?e2e=1&seed=…`: kết quả lặp lại
@@ -201,7 +212,7 @@ Cấu hình qua biến môi trường: xem `frontend/.env.example` (`VITE_API_BA
 ## Chế độ Demo
 
 App tự chạy 6 kịch bản E2E trong [TC-E2E.md](docs/test-cases/TC-E2E.md), 3 kịch bản luật KRX (Đợt 8A) và 3 kịch bản
-phiên đặc biệt (Đợt 8B), để trình bày mà không phải thao tác tay.
+phiên đặc biệt (Đợt 8B) và kịch bản Bàn làm việc (Đợt 10A), để trình bày mà không phải thao tác tay.
 
 **Bật Demo:**
 - Đăng nhập `vanhanh` (vai trò Vận hành), bấm **▶ Demo** trên thanh trên cùng, chọn một kịch bản.
@@ -253,6 +264,7 @@ khi cần người duyệt thứ hai.
 | 8 | `/bao-cao/lich-su` | Lịch sử và đối soát | Lịch sử lệnh nhiều phiên, nhật ký kiểm toán, đối soát OMS với Core (`?tab=lich-su\|nhat-ky\|doi-soat`) |
 | 9 | `/cau-hinh/luat` | Luật giao dịch | Gói luật theo bảng × ngày hiệu lực, trạng thái kiểm chứng, cờ; nạp thử pack bỏ nghỉ trưa (chỉ vận hành) |
 | 10 | `/cai-dat` | Cài đặt giao diện | Theme, tương phản cao, bảng màu mù màu, mật độ, cỡ chữ, nhấp nháy giá, ẩn số khi trình chiếu; xem trước từng lựa chọn (mọi vai trò) |
+| 11 | `/ban-lam-viec` | Bàn làm việc | Panel dock được (Danh mục, Phiếu lệnh, Sổ lệnh 3 mức, Sổ lệnh, Chi tiết, Thuật toán đang chạy, Thông báo), nhóm liên kết màu, bố cục lưu theo tài khoản, phím tắt (mọi vai trò; khách hàng mặc định bố cục Cơ bản) |
 
 ## Tài liệu
 
@@ -264,4 +276,5 @@ khi cần người duyệt thứ hai.
 - [docs/quality-report.md](docs/quality-report.md): kết quả kiểm thử, kích thước bundle, lỗi đã sửa và việc còn tồn của v0.1.0.
 - [docs/demo-checklist.md](docs/demo-checklist.md): checklist 10 mục trước buổi demo.
 - [docs/theme.md](docs/theme.md): theme, token màu, tỷ lệ tương phản đã kiểm, cách thêm màu mới.
-- [CHANGELOG.md](CHANGELOG.md): thay đổi theo phiên bản, Đợt 1–9.
+- [docs/licenses.md](docs/licenses.md): giấy phép các gói thêm từ Đợt 9 (dockview-react, react-hotkeys-hook, @axe-core/playwright).
+- [CHANGELOG.md](CHANGELOG.md): thay đổi theo phiên bản, Đợt 1–10A.

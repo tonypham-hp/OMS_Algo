@@ -56,6 +56,10 @@
     --color-status-danger-bg: var(--status-danger-bg);
     --color-chart-actual: var(--chart-actual);
     --color-chart-plan: var(--chart-plan);
+    --color-link-1: var(--link-1);
+    --color-link-2: var(--link-2);
+    --color-link-3: var(--link-3);
+    --color-link-4: var(--link-4);
 
     /*
      * Biến của shadcn/ui trỏ về token, để mọi component ui/ tự đổi theo theme.

@@ -3,6 +3,7 @@ import {
   ChartLine,
   History,
   LayoutDashboard,
+  LayoutPanelLeft,
   LayoutTemplate,
   ListOrdered,
   Scale,
@@ -37,6 +38,7 @@ export const NAV_SECTIONS: ReadonlyArray<NavSection> = [
   {
     title: 'Giao dịch',
     items: [
+      { label: 'Bàn làm việc', icon: LayoutPanelLeft, path: '/ban-lam-viec', permission: 'place_order' },
       { label: 'Đặt lệnh', icon: SquarePen, path: '/dat-lenh', permission: 'place_order' },
       { label: 'Sổ lệnh', icon: ListOrdered, path: '/so-lenh', permission: 'order_book' },
       { label: 'Mẫu chiến lược', icon: LayoutTemplate, path: '/mau-chien-luoc', permission: 'place_order' },

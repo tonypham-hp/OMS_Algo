@@ -772,3 +772,113 @@ tra trên lệnh cha. Mỗi dòng một loại:
   "Xem chênh lệch đang mở" chỉ với quyền `reconciliation` (`?tab=doi-soat&run=1` chạy một lần).
 - Thuật ngữ mới: Đối soát (mở rộng), STATUS_MISMATCH, QTY_MISMATCH, DUP_FILL_IGNORED, PARENT_SUM_MISMATCH, OVERFILL,
   Nhật ký kiểm toán.
+
+## 22. Bàn làm việc (Đợt 10A)
+
+Màn `/ban-lam-viec` ("Bàn làm việc", thanh bên nhóm Giao dịch, quyền `place_order` nên mọi vai trò đều thấy) cho dealer
+và vận hành: nhiều panel dock được trên một màn, ghép từ component có sẵn, không viết lại. Tách cửa sổ / màn hình thứ hai
+để sang Đợt 10B.
+
+### Khung (dockview-react 8.10.0, MIT; xem [licenses.md](licenses.md))
+- Kéo tab để dock trái / phải / trên / dưới hoặc gộp vào nhóm tab khác; kéo viền để đổi kích thước; "Thả nổi" một panel.
+- Tab mỗi panel:
+  - chấm màu nhóm kèm nhãn "Nhóm 1–4" / "Không nhóm", tiêu đề, nút đóng;
+  - menu "⋯": đổi nhóm liên kết, Thả nổi, "Tách cửa sổ (Đợt 10B)" bị khóa, Đóng.
+- Nút "+" trên thanh tab của mỗi nhóm thêm một panel bất kỳ; một loại panel mở được nhiều lần (ví dụ 2 sổ lệnh 3 mức cho 2
+  mã).
+- Theme `dockview-theme-oms` (`src/styles/workspace.css`): mọi biến `--dv-*` trỏ về token Đợt 9, nên đủ 4 theme và bảng
+  màu mù màu, không có mã màu.
+
+### Panel (`src/workspace/panels.tsx`)
+
+| Panel | Component có sẵn |
+|---|---|
+| Danh mục theo dõi | `PriceBoardTable` (bảng giá thu gọn) |
+| Phiếu lệnh | `OrderTicket` (`embedded`) + `ConfirmDialog` |
+| Sổ lệnh 3 mức | `OrderBook3` |
+| Sổ lệnh | `OrderBlotter` (tách từ màn Sổ lệnh), mặc định lọc theo mã của nhóm |
+| Chi tiết lệnh | `OrderDetailView({ id })` (tách từ màn Chi tiết; gồm ExplainCard, HUNT, lệnh con, nhật ký) |
+| Thuật toán đang chạy | `OrderBlotter` lọc `isRunningStatus` |
+| Thông báo | `NotificationList` (dùng chung phần hiển thị với chuông) |
+
+- **Mã đang chọn:** component đọc qua `useSymbolScope()` (`src/workspace/symbolScope.ts`).
+  - Trong Bàn làm việc, mỗi panel có Provider theo nhóm liên kết.
+  - Ở các màn cũ không có Provider, nên dùng `useUiStore.selectedSymbol` như trước; Đặt lệnh, Sổ lệnh không đổi hành vi.
+- **Mở lệnh:** bấm mã lệnh trong panel thì mở ở panel Chi tiết lệnh cùng nhóm (chưa có thì mở thêm), không chuyển trang.
+
+### Bố cục mẫu và lưu (`src/workspace/layouts.ts`, `presets.ts`)
+- **Hai bố cục mẫu:**
+  - "Cơ bản": Danh mục + Phiếu lệnh + Sổ lệnh; mặc định cho khách hàng.
+  - "Chuyên nghiệp": thêm Sổ lệnh 3 mức, Thuật toán đang chạy, Chi tiết, Thông báo; mặc định cho dealer, vận hành.
+  - Nút "Về mặc định".
+- **Lưu trữ:** `localStorage['oms-workspace:<username>']`, bọc try/catch, dạng
+  `{ schemaVersion: 2, active, layouts: { <tên>: { dock, groups } } }`.
+  - `dock` là `toJSON()` của dockview; `groups` là mã và lệnh của từng nhóm.
+  - Tự lưu sau 0,5 giây yên lặng và khi rời trang.
+- **Nhiều bố cục có tên** ("Phiên sáng", "Theo dõi HUNT"…): đổi nhanh trong menu Bố cục, lưu thành bố cục mới, xóa,
+  xuất / nhập file JSON.
+- **`migrateWorkspace()`:**
+  - v1 (một bố cục, ID panel cũ `priceBoard`, `book3`, `detail`…) đổi sang loại panel v2;
+  - panel lạ và nhóm tách cửa sổ bị bỏ;
+  - một bố cục hỏng chỉ bỏ riêng bố cục đó.
+- **JSON hỏng hoặc dockview không đọc được:** dùng bố cục mặc định, kèm băng báo nhẹ đóng được; không trắng trang.
+
+### Nhóm liên kết theo màu
+- 4 nhóm (token `link-1..4`, đạt tương phản như chữ) và "Không nhóm".
+- Panel cùng nhóm dùng chung mã đang chọn và lệnh đang xem (`src/store/workspace.store.ts`, selector hẹp theo nhóm):
+  - chọn mã ở Danh mục thì Phiếu lệnh, Sổ lệnh 3 mức, Sổ lệnh cùng nhóm đổi theo;
+  - bấm một mức giá ở Sổ lệnh 3 mức thì giá điền vào Phiếu lệnh cùng nhóm;
+  - bấm một lệnh thì Chi tiết lệnh cùng nhóm mở lệnh đó.
+- Panel "Không nhóm" giữ mã riêng (lưu trong params của panel).
+- **Giữ bản nháp:** Phiếu lệnh đang có ô người dùng đã sửa (`dirtyFields`) hoặc vừa điền theo mẫu mà nhóm đổi mã thì
+  không xóa trắng.
+  - Hỏi "Giữ bản nháp cho <mã cũ> / Chuyển sang <mã mới>".
+  - Panel đang ẩn sau tab khác thì tự giữ bản nháp kèm nhãn "Bản nháp FPT · nhóm đang ở HPG".
+  - "Khóa mã" trên phiếu: bỏ qua thay đổi của nhóm.
+  - Quyết định do hàm thuần `resolveTicketSymbolChange()` (`src/workspace/ticketSymbol.ts`).
+
+### Bàn phím và a11y
+- Mỗi panel là một `section` có `aria-label`; Alt+1…9 đưa focus tới panel thứ n (trái → phải, trên → dưới).
+- **Bảng trong các panel dạng danh sách** (Danh mục, Sổ lệnh, Thuật toán, Sổ lệnh 3 mức, Thông báo) theo mẫu Grid
+  WAI-ARIA (`useGridKeyboard`, `moveInGrid`):
+  - mỗi bảng một điểm dừng Tab;
+  - mũi tên, Home / End, Ctrl+Home / Ctrl+End, PageUp / PageDown;
+  - Enter / Space kích hoạt nút của ô hoặc hàng.
+- Focus rõ ràng theo token `--focus-ring`.
+
+### Hiệu năng
+- Panel đọc store bằng selector hẹp: hàng bảng giá `memo` theo mã; phiếu lệnh chỉ đọc quote của mã đang chọn; nhóm đọc
+  theo khóa nhóm.
+- Tick giá không làm vẽ lại cả bàn làm việc.
+- Số đo ở [quality-report.md](quality-report.md) mục 5 (`npm run perf:workspace`).
+
+### Demo và tour
+- Kịch bản 13 "Dealer dùng bàn làm việc":
+  - bố cục Chuyên nghiệp → chọn FPT ở Danh mục, nhóm đổi theo → B mở phiếu Mua (không tạo lệnh) → điền LO → Đặt lệnh +
+    Xác nhận → mở lệnh ở Chi tiết.
+  - Phần giao diện qua cầu nối `src/workspace/demoBridge.ts`, phần đặt lệnh qua engine; chạy headless vẫn đạt.
+- Tour 1 bước giới thiệu Bàn làm việc lần đầu mở màn (mỗi vai trò, khóa `oms-tour-workspace-<role>`).
+
+## 23. Phím tắt (Đợt 10A)
+
+`react-hotkeys-hook` 5.4.0 (MIT), có scope. Danh sách duy nhất ở `src/hotkeys/shortcuts.ts`, dùng cho bảng phím tắt,
+Ctrl+K và tooltip.
+
+| Phím | Ở đâu | Tác dụng |
+|---|---|---|
+| B / S | Bàn làm việc | Mở phiếu Mua / Bán với mã của panel đang chọn (hoặc nhóm của nó), con trỏ vào ô Khối lượng |
+| O | Bàn làm việc | Tới panel Sổ lệnh (mở thêm nếu chưa có) |
+| D | Bàn làm việc | Tới panel Sổ lệnh 3 mức |
+| N | Bàn làm việc | Tới panel Thông báo |
+| Alt+1…9 | Bàn làm việc | Tới panel thứ 1–9 |
+| ? hoặc / | Mọi màn | Bảng phím tắt (theo nhóm) |
+| Ctrl+K | Mọi màn | Tìm nhanh; mục có phím tắt hiện phím bên phải; có "Mở phiếu Mua/Bán trên Bàn làm việc" |
+| Esc | Mọi màn | Đóng hộp thoại, hủy nhập |
+
+- **Không phím nào gửi lệnh:** B / S chỉ mở phiếu; gửi lệnh luôn qua Đặt lệnh → Xác nhận như bấm chuột.
+- **Phím bị loại:** không dùng F1 (trợ giúp của trình duyệt), không chặn Ctrl+W / Ctrl+T / Ctrl+R.
+- **Không kích hoạt khi:**
+  - đang gõ trong ô nhập, textarea, select, contenteditable, combobox, menu;
+  - có hộp thoại đang mở;
+  - đang chạy Demo (Demo có phím riêng: Space, →, Esc);
+  - đã tắt ở `/cai-dat` mục "Phím tắt" (`shortcuts` trong cài đặt giao diện).

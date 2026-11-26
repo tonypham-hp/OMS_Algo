@@ -11,10 +11,11 @@ import { povAdjust } from './povAdjust'
 import { putThroughAfterHours } from './putThroughAfterHours'
 import { restrictedAuction } from './restrictedAuction'
 import { stopToIceberg } from './stopToIceberg'
+import { workspaceDealer } from './workspaceDealer'
 
 /**
  * 6 kịch bản E2E theo docs/test-cases/TC-E2E.md (Scenario 1 → 6), 3 kịch bản luật KRX của Đợt 8A (7 → 9)
- * và 3 kịch bản phiên đặc biệt của Đợt 8B (10 → 12).
+ * 3 kịch bản phiên đặc biệt của Đợt 8B (10 → 12) và kịch bản Bàn làm việc của Đợt 10A (13).
  */
 export const SCENARIOS: ReadonlyArray<Scenario> = [
   icebergSuccess,
@@ -29,6 +30,7 @@ export const SCENARIOS: ReadonlyArray<Scenario> = [
   restrictedAuction,
   haltResume,
   putThroughAfterHours,
+  workspaceDealer,
 ]
 
 export function getScenario(id: string): Scenario | undefined {

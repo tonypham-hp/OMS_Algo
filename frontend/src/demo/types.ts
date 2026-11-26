@@ -47,8 +47,22 @@ export interface PlaceOrderParams {
   expectError?: boolean
 }
 
+/**
+ * Thao tác trên Bàn làm việc (Đợt 10A, kịch bản 13). Phần giao diện đi qua cầu nối của trang (src/workspace/demoBridge.ts);
+ * phần dữ liệu (đặt lệnh) vẫn qua engine như mọi kịch bản. Phím tắt không bao giờ gửi lệnh: `submitTicket` là bước
+ * "bấm Đặt lệnh rồi Xác nhận".
+ */
+export type WorkspaceDemoOp =
+  | { op: 'preset'; preset: 'basic' | 'pro'; symbol: string }
+  | { op: 'selectSymbol'; symbol: string }
+  | { op: 'openTicket'; side: Side }
+  | { op: 'fillTicket'; strategy_type: StrategyType; total_qty: number; limit_price: number }
+  | { op: 'submitTicket'; order: PlaceOrderParams }
+  | { op: 'openOrder'; order: string }
+
 export type DemoAction =
   | { type: 'note' }
+  | { type: 'workspace'; params: WorkspaceDemoOp }
   | { type: 'placeOrder'; params: PlaceOrderParams }
   /** Một hoặc nhiều lần khớp của thị trường; giữa các lần tua `everySeconds` giây. */
   | { type: 'trade'; params: { symbol: string; price: number; qty: number; repeat?: number; everySeconds?: number } }

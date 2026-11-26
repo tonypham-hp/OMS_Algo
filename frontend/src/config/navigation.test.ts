@@ -43,6 +43,7 @@ describe('getNavSections', () => {
   it('thẻ đăng nhập ghi các màn mở được, không tính mục Sắp có', () => {
     expect(getAccessibleLabels('CUSTOMER')).toEqual([
       'Trung tâm lệnh',
+      'Bàn làm việc',
       'Đặt lệnh',
       'Sổ lệnh',
       'Mẫu chiến lược',

@@ -10,6 +10,7 @@ import { LAYOUT } from '@/config/theme'
 import { canUseDemo } from '@/demo/access'
 import { NARROW_SCREEN_QUERY, useMediaQuery } from '@/hooks/useMediaQuery'
 import { useMarketStream } from '@/hooks/useMarketStream'
+import { ShortcutSheet } from '@/hotkeys/ShortcutSheet'
 import { TourOverlay } from '@/tour/TourOverlay'
 import { useNotificationSync } from '@/hooks/useNotificationSync'
 import { useAuthStore } from '@/store/auth.store'
@@ -62,6 +63,7 @@ export function AppLayout() {
         </main>
       </div>
       <CommandPalette />
+      <ShortcutSheet />
       <TourOverlay />
       {canUseDemo(role) && (
         <Suspense fallback={null}>

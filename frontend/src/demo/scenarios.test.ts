@@ -11,9 +11,9 @@ function runHeadless(scenarioIndex: number) {
   return { result: runner.getResult(), data: orderDataFingerprint(env), snapshot: runner.getSnapshot() }
 }
 
-describe('12 kịch bản Demo chạy headless', () => {
-  it('đủ 12 kịch bản (6 E2E + 3 luật KRX 8A + 3 phiên đặc biệt 8B), đánh số 1 → 12, mỗi kịch bản có mã TC và ít nhất 5 bước có chú thích', () => {
-    expect(SCENARIOS.map((scenario) => scenario.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+describe('13 kịch bản Demo chạy headless', () => {
+  it('đủ 13 kịch bản (6 E2E + 3 luật KRX 8A + 3 phiên đặc biệt 8B + Bàn làm việc 10A), đánh số 1 → 13, mỗi kịch bản có mã TC và ít nhất 5 bước có chú thích', () => {
+    expect(SCENARIOS.map((scenario) => scenario.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
     for (const scenario of SCENARIOS) {
       expect(scenario.tcRefs.length).toBeGreaterThan(0)
       expect(scenario.steps.length).toBeGreaterThanOrEqual(5)

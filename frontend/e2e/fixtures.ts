@@ -64,7 +64,10 @@ export async function prepare(page: Page, options: E2eOptions = {}) {
   await page.clock.install({ time: FIXED_NOW })
   if (!options.showTour) {
     await page.addInitScript(() => {
-      for (const role of ['CUSTOMER', 'DEALER', 'OPS']) window.localStorage.setItem(`oms-tour-${role}`, 'done')
+      for (const role of ['CUSTOMER', 'DEALER', 'OPS']) {
+        window.localStorage.setItem(`oms-tour-${role}`, 'done')
+        window.localStorage.setItem(`oms-tour-workspace-${role}`, 'done')
+      }
     })
   }
 }

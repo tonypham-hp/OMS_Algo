@@ -27,6 +27,7 @@ export type SearchTarget =
   | { kind: 'navigate'; path: string; symbol?: string; scrollTo?: string }
   | { kind: 'demo' }
   | { kind: 'toggle-theme' }
+  | { kind: 'shortcuts' }
 
 export interface SearchItem {
   /** Duy nhất trong chỉ mục, cũng là khóa lưu "mở gần đây". */
@@ -36,6 +37,8 @@ export interface SearchItem {
   subtitle?: string
   /** Các chuỗi được tìm, ngoài tiêu đề. */
   keywords: string[]
+  /** Phím tắt tương ứng (hiện bên phải mục). */
+  shortcut?: string
   target: SearchTarget
 }
 
@@ -160,6 +163,25 @@ export function buildSearchIndex({ user, orders, symbols, templates, canDemo, co
       keywords: ['đặt lệnh', 'lệnh mới', 'mua', 'bán'],
       target: { kind: 'navigate', path: '/dat-lenh' },
     })
+    // Bàn làm việc: mở phiếu như phím B / S (chỉ mở phiếu, vẫn phải Xác nhận mới gửi).
+    items.push(
+      {
+        id: 'action:ws-buy',
+        group: 'ACTION',
+        title: 'Mở phiếu Mua trên Bàn làm việc',
+        keywords: ['mua', 'phiếu mua', 'bàn làm việc', 'workspace', 'buy'],
+        shortcut: 'B',
+        target: { kind: 'navigate', path: '/ban-lam-viec?phieu=mua' },
+      },
+      {
+        id: 'action:ws-sell',
+        group: 'ACTION',
+        title: 'Mở phiếu Bán trên Bàn làm việc',
+        keywords: ['bán', 'phiếu bán', 'bàn làm việc', 'workspace', 'sell'],
+        shortcut: 'S',
+        target: { kind: 'navigate', path: '/ban-lam-viec?phieu=ban' },
+      },
+    )
     for (const template of templates) {
       items.push({
         id: `action:template:${template.id}`,
@@ -214,6 +236,15 @@ export function buildSearchIndex({ user, orders, symbols, templates, canDemo, co
     subtitle: 'Sáng/tối, tương phản cao, mù màu, mật độ, cỡ chữ',
     keywords: ['cài đặt', 'giao diện', 'settings', 'tương phản cao', 'mù màu'],
     target: { kind: 'navigate', path: '/cai-dat' },
+  })
+  items.push({
+    id: 'action:shortcuts',
+    group: 'ACTION',
+    title: 'Bảng phím tắt',
+    subtitle: 'B, S, O, D, N, Alt+1…9',
+    keywords: ['phím tắt', 'shortcut', 'hotkey', 'bàn phím', 'keyboard'],
+    shortcut: '?',
+    target: { kind: 'shortcuts' },
   })
   items.push({
     id: 'action:toggle-theme',
