@@ -50,6 +50,10 @@
   --status-danger-bg: #FAEFEF;
   --chart-actual: #1D4ED8;
   --chart-plan: #C2410C;
+  --link-1: #B45309;
+  --link-2: #1D4ED8;
+  --link-3: #7E22CE;
+  --link-4: #BE185D;
 }
 
 [data-theme="dark"] {
@@ -99,6 +103,10 @@
   --status-danger-bg: #372738;
   --chart-actual: #3987E5;
   --chart-plan: #D95926;
+  --link-1: #FB923C;
+  --link-2: #60A5FA;
+  --link-3: #C084FC;
+  --link-4: #F472B6;
 }
 
 [data-theme="hc-dark"] {
@@ -148,6 +156,10 @@
   --status-danger-bg: #231718;
   --chart-actual: #7DB4FF;
   --chart-plan: #FF9A5C;
+  --link-1: #FDBA74;
+  --link-2: #93C5FD;
+  --link-3: #D8B4FE;
+  --link-4: #F9A8D4;
 }
 
 [data-theme="hc-light"] {
@@ -197,6 +209,10 @@
   --status-danger-bg: #FFFFFF;
   --chart-actual: #1E3A8A;
   --chart-plan: #9A3412;
+  --link-1: #7C2D12;
+  --link-2: #1E3A8A;
+  --link-3: #6B21A8;
+  --link-4: #9D174D;
 }
 
 [data-theme="light"][data-palette="cvd"] {

@@ -38,6 +38,8 @@ export interface PanelParams {
   symbol?: string
   /** Lệnh riêng của panel Chi tiết "Không nhóm". */
   orderId?: string | null
+  /** Phiếu lệnh: "Khóa mã" – không đổi theo nhóm liên kết. */
+  locked?: boolean
 }
 
 /** Id panel mới, không trùng với panel đang có: `<loại>-<n>`. */

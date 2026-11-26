@@ -82,9 +82,11 @@ function buildDefaults(accountNo: string, symbol: string, strategyType: Strategy
 interface OrderTicketProps {
   /** Trong Bàn làm việc: tiêu đề là h2 "Phiếu lệnh" (trang đã có h1), không viền thẻ riêng. */
   embedded?: boolean
+  /** Bàn làm việc: báo phiếu đang có bản nháp (người dùng đã nhập hoặc vừa điền theo mẫu), để không xóa trắng khi nhóm đổi mã. */
+  onDraftChange?: (hasDraft: boolean) => void
 }
 
-export function OrderTicket({ embedded = false }: OrderTicketProps = {}) {
+export function OrderTicket({ embedded = false, onDraftChange }: OrderTicketProps = {}) {
   const user = useAuthStore((state) => state.user)
   const accounts = user?.accounts ?? []
   // Mã đang chọn: store toàn cục ở màn Đặt lệnh, nhóm liên kết của panel ở Bàn làm việc.
@@ -107,6 +109,8 @@ export function OrderTicket({ embedded = false }: OrderTicketProps = {}) {
     defaultValues: buildDefaults(accounts[0] ?? '', selectedSymbol, defaultStrategy),
   })
   const { control, getValues, handleSubmit, reset, setValue, trigger } = form
+  // Đọc trong lúc vẽ để react-hook-form theo dõi trạng thái "đã sửa".
+  const { isDirty } = form.formState
   const values = useWatch({ control })
   const strategyType = values.strategy_type ?? 'STOP_LIMIT'
   const strategy = STRATEGIES[strategyType]
@@ -130,6 +134,8 @@ export function OrderTicket({ embedded = false }: OrderTicketProps = {}) {
     templates.some((item) => item.id === requestedTemplate) ? requestedTemplate : null,
   )
   const activeTemplate = templates.find((item) => item.id === templateId && item.strategy_type === strategyType) ?? null
+  const hasDraft = isDirty || activeTemplate !== null
+  useEffect(() => onDraftChange?.(hasDraft), [hasDraft, onDraftChange])
 
   /** Điền giá trị của mẫu vào form (không đổi mẫu đang chọn). */
   const fillFromTemplate = useCallback(

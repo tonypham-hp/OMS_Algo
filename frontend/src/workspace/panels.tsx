@@ -1,7 +1,8 @@
 /* eslint-disable react-refresh/only-export-components -- registry: bảng tra loại panel → component, không phải module component */
 import type { DockviewPanelApi, IDockviewPanelProps } from 'dockview-react'
 import { MousePointerClick } from 'lucide-react'
-import { useMemo, useState, type FunctionComponent, type ReactNode } from 'react'
+import { Lock } from 'lucide-react'
+import { useCallback, useMemo, useState, type FunctionComponent, type ReactNode } from 'react'
 import { NotificationList } from '@/components/layout/NotificationList'
 import { OrderBook3 } from '@/components/OrderBook3'
 import { EmptyState } from '@/components/states'
@@ -11,11 +12,13 @@ import { OrderBlotter } from '@/pages/OrderBook/OrderBlotter'
 import { OrderDetailView } from '@/pages/OrderDetail/OrderDetailView'
 import { OrderTicket } from '@/pages/PlaceOrder/OrderTicket'
 import { PriceBoardTable } from '@/pages/PlaceOrder/PriceBoard'
+import { DraftDialog } from '@/pages/Workspace/DraftDialog'
 import { PanelFrame } from '@/pages/Workspace/PanelFrame'
 import { useMarketStore } from '@/store/market.store'
 import { useWorkspaceStore } from '@/store/workspace.store'
 import { PANEL_KIND_ORDER, type LinkGroup, type PanelKind, type PanelParams } from './panelTypes'
 import { SymbolScopeContext, useSymbolScope, type SymbolScope } from './symbolScope'
+import { resolveTicketSymbolChange } from './ticketSymbol'
 import { useWorkspaceActions } from './workspaceContext'
 
 const FALLBACK_SYMBOL = 'FPT'
@@ -59,6 +62,108 @@ function PanelScope({ panelApi, params, children }: { panelApi: DockviewPanelApi
   }, [actions, group, linked, groupSymbol, groupOrder, groupPicked, setGroupSymbol, pickGroupPrice, params, panelApi, ownPicked])
 
   return <SymbolScopeContext.Provider value={scope}>{children}</SymbolScopeContext.Provider>
+}
+
+/**
+ * Phiếu lệnh trong Bàn làm việc: mã đi theo nhóm liên kết, nhưng KHÔNG xóa trắng bản nháp.
+ * - Phiếu trống: đổi mã theo nhóm ngay.
+ * - Đang nhập dở: hỏi "Giữ bản nháp cho mã cũ / Chuyển sang mã mới" (panel đang ẩn sau tab khác thì tự giữ bản nháp).
+ * - "Khóa mã": bỏ qua thay đổi của nhóm.
+ * Đổi mã ngay trên phiếu thì cả nhóm đổi theo (trừ khi đang khóa mã).
+ */
+function TicketBody({ panelApi, params }: { panelApi: DockviewPanelApi; params: PanelParams }) {
+  const outer = useSymbolScope()
+  const locked = params.locked === true
+  const [ticketSymbol, setTicketSymbol] = useState(outer.symbol)
+  const [hasDraft, setHasDraft] = useState(false)
+  /** Đổi key để dựng lại phiếu trống (bỏ bản nháp). */
+  const [epoch, setEpoch] = useState(0)
+  /** Mã nhóm đang chờ người dùng trả lời hộp hỏi. */
+  const [asking, setAsking] = useState<string | null>(null)
+  /** Mã nhóm hiện tại khi phiếu đang giữ bản nháp cho mã cũ. */
+  const [held, setHeld] = useState<string | null>(null)
+
+  // Xét lại mỗi khi mã của nhóm đổi hoặc bật/tắt khóa (điều chỉnh state ngay lúc vẽ, theo cách React khuyên,
+  // thay vì effect). Bản nháp đổi trạng thái không tự kéo phiếu sang mã khác.
+  const groupSymbol = outer.symbol
+  const [seen, setSeen] = useState({ groupSymbol, locked })
+  if (seen.groupSymbol !== groupSymbol || seen.locked !== locked) {
+    setSeen({ groupSymbol, locked })
+    const decision = resolveTicketSymbolChange({ current: ticketSymbol, next: groupSymbol, dirty: hasDraft, locked })
+    if (decision === 'follow') {
+      setTicketSymbol(groupSymbol)
+      setHeld(null)
+    } else if (decision === 'ask') {
+      if (panelApi.isVisible) setAsking(groupSymbol)
+      else setHeld(groupSymbol)
+    } else if (decision === 'none') {
+      setHeld(null)
+    }
+  }
+  // Gửi lệnh xong (phiếu trống lại) mà nhóm đã sang mã khác: theo nhóm.
+  if (!hasDraft && held && !locked) {
+    setTicketSymbol(held)
+    setHeld(null)
+  }
+
+  const { setSymbol: setGroupSymbol } = outer
+  const scope = useMemo<SymbolScope>(
+    () => ({
+      ...outer,
+      symbol: ticketSymbol,
+      setSymbol: (symbol) => {
+        setTicketSymbol(symbol)
+        if (!locked) setGroupSymbol(symbol)
+      },
+    }),
+    [outer, ticketSymbol, locked, setGroupSymbol],
+  )
+  const onDraftChange = useCallback((draft: boolean) => setHasDraft(draft), [])
+  const lockId = `lock-${panelApi.id}`
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id={lockId}
+            checked={locked}
+            onCheckedChange={(state) => panelApi.updateParameters({ ...params, locked: state === true })}
+            aria-labelledby={`${lockId}-label`}
+          />
+          <Label id={`${lockId}-label`} htmlFor={lockId} className="flex items-center gap-1">
+            <Lock className="size-3.5" aria-hidden /> Khóa mã {ticketSymbol}
+          </Label>
+        </div>
+        {held && (
+          <p role="status" className="bg-status-warning-bg text-status-warning flex items-center gap-2 rounded px-2 py-0.5 text-xs" data-testid="draft-held">
+            Bản nháp {ticketSymbol} · nhóm đang ở {held}
+            <button type="button" className="underline" onClick={() => setAsking(held)}>
+              Chuyển sang {held}
+            </button>
+          </p>
+        )}
+      </div>
+      <SymbolScopeContext.Provider value={scope}>
+        <OrderTicket key={epoch} embedded onDraftChange={onDraftChange} />
+      </SymbolScopeContext.Provider>
+      <DraftDialog
+        from={ticketSymbol}
+        to={asking}
+        onKeep={() => {
+          setHeld(asking)
+          setAsking(null)
+        }}
+        onSwitch={() => {
+          if (asking) setTicketSymbol(asking)
+          setEpoch((value) => value + 1)
+          setHasDraft(false)
+          setHeld(null)
+          setAsking(null)
+        }}
+      />
+    </div>
+  )
 }
 
 /** Sổ lệnh 3 mức của mã đang chọn trong nhóm; bấm một mức thì phiếu lệnh cùng nhóm điền giá đó. */
@@ -118,12 +223,13 @@ function NotificationsBody() {
 }
 
 /** Nội dung từng loại panel: component có sẵn của các màn, không viết lại. */
-function PanelBody({ kind, panelId }: { kind: PanelKind; panelId: string }) {
+function PanelBody({ kind, panelApi, params }: { kind: PanelKind; panelApi: DockviewPanelApi; params: PanelParams }) {
+  const panelId = panelApi.id
   switch (kind) {
     case 'watchlist':
       return <PriceBoardTable />
     case 'ticket':
-      return <OrderTicket embedded />
+      return <TicketBody panelApi={panelApi} params={params} />
     case 'depth':
       return <DepthBody />
     case 'blotter':
@@ -142,7 +248,7 @@ function makePanel(kind: PanelKind): FunctionComponent<IDockviewPanelProps<Panel
     return (
       <PanelFrame kind={kind} panelId={api.id}>
         <PanelScope panelApi={api} params={params}>
-          <PanelBody kind={kind} panelId={api.id} />
+          <PanelBody kind={kind} panelApi={api} params={params} />
         </PanelScope>
       </PanelFrame>
     )
