@@ -5,6 +5,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { addWorkspacePanel } from '@/workspace/presets'
@@ -34,6 +35,7 @@ export function GroupActions({ containerApi, group }: IDockviewHeaderActionsProp
                 <span>{PANEL_KINDS[kind].title}</span>
                 <span className="text-muted-foreground text-xs">{PANEL_KINDS[kind].description}</span>
               </span>
+              {PANEL_KINDS[kind].hotkey && <DropdownMenuShortcut>{PANEL_KINDS[kind].hotkey}</DropdownMenuShortcut>}
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>

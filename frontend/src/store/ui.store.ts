@@ -38,6 +38,9 @@ interface UiState {
   /** Tour hướng dẫn đang chạy (mở lại từ menu tài khoản). */
   tourOpen: boolean
   setTourOpen: (open: boolean) => void
+  /** Bảng phím tắt (? hoặc /) đang mở. */
+  shortcutsOpen: boolean
+  setShortcutsOpen: (open: boolean) => void
 }
 
 export const useUiStore = create<UiState>()((set, get) => ({
@@ -48,6 +51,8 @@ export const useUiStore = create<UiState>()((set, get) => ({
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
   tourOpen: false,
   setTourOpen: (tourOpen) => set({ tourOpen }),
+  shortcutsOpen: false,
+  setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   pickPrice: (price) => set({ pickedPrice: { price, nonce: (get().pickedPrice?.nonce ?? 0) + 1 } }),
   sidebarCollapsed: readCollapsed(),
   toggleSidebar: () => {

@@ -15,16 +15,18 @@ export interface PanelKindInfo {
   demoId: string
   /** Panel có dùng mã đang chọn của nhóm không (để menu nhóm liên kết có ý nghĩa). */
   linkable: boolean
+  /** Phím tắt tới panel này trên Bàn làm việc (hiện trong menu "+ Thêm panel"). */
+  hotkey?: string
 }
 
 export const PANEL_KINDS: Record<PanelKind, PanelKindInfo> = {
   watchlist: { title: 'Danh mục theo dõi', description: 'Bảng giá thu gọn, chọn mã cho cả nhóm', demoId: 'ws-watchlist', linkable: true },
-  ticket: { title: 'Phiếu lệnh', description: 'Đặt lệnh, luôn qua bước xác nhận', demoId: 'ws-ticket', linkable: true },
-  depth: { title: 'Sổ lệnh 3 mức', description: '3 mức giá mua, bán tốt nhất của mã', demoId: 'ws-depth', linkable: true },
-  blotter: { title: 'Sổ lệnh', description: 'Lệnh cha, tiến độ, thao tác Sửa/Hủy/Tạm dừng', demoId: 'ws-blotter', linkable: true },
+  ticket: { title: 'Phiếu lệnh', description: 'Đặt lệnh, luôn qua bước xác nhận', demoId: 'ws-ticket', linkable: true, hotkey: 'B / S' },
+  depth: { title: 'Sổ lệnh 3 mức', description: '3 mức giá mua, bán tốt nhất của mã', demoId: 'ws-depth', linkable: true, hotkey: 'D' },
+  blotter: { title: 'Sổ lệnh', description: 'Lệnh cha, tiến độ, thao tác Sửa/Hủy/Tạm dừng', demoId: 'ws-blotter', linkable: true, hotkey: 'O' },
   'order-detail': { title: 'Chi tiết lệnh', description: 'Lệnh con, khớp, giải thích, HUNT', demoId: 'ws-order-detail', linkable: true },
   algos: { title: 'Thuật toán đang chạy', description: 'Lệnh thuật toán đang hoạt động', demoId: 'ws-algos', linkable: true },
-  notifications: { title: 'Thông báo', description: 'Thông báo lệnh, bấm để mở chi tiết', demoId: 'ws-notifications', linkable: true },
+  notifications: { title: 'Thông báo', description: 'Thông báo lệnh, bấm để mở chi tiết', demoId: 'ws-notifications', linkable: true, hotkey: 'N' },
 }
 
 export const PANEL_KIND_ORDER: ReadonlyArray<PanelKind> = ['watchlist', 'ticket', 'depth', 'blotter', 'order-detail', 'algos', 'notifications']

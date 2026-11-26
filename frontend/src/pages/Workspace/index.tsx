@@ -1,8 +1,13 @@
 import 'dockview-react/dist/styles/dockview.css'
 import '@/styles/workspace.css'
 import { DockviewReact, type DockviewApi, type DockviewReadyEvent, type DockviewTheme } from 'dockview-react'
-import { X } from 'lucide-react'
+import { Keyboard, X } from 'lucide-react'
 import { useCallback, useMemo, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { Button } from '@/components/ui/button'
+import { useWorkspaceHotkeys } from '@/hotkeys/useWorkspaceHotkeys'
+import { useUiStore } from '@/store/ui.store'
+import { openTicket } from '@/workspace/commands'
 import { LAYOUT } from '@/config/theme'
 import { useAuthStore } from '@/store/auth.store'
 import { useWorkspaceStore } from '@/store/workspace.store'
@@ -29,13 +34,27 @@ export default function Workspace() {
   const apiRef = useRef<DockviewApi | null>(null)
   const layouts = useWorkspaceLayouts(apiRef, username, role)
   const { initialize } = layouts
+  const setShortcutsOpen = useUiStore((state) => state.setShortcutsOpen)
+  const [searchParams, setSearchParams] = useSearchParams()
+  useWorkspaceHotkeys(apiRef)
 
   // Khôi phục bố cục đã lưu của tài khoản (hỏng thì dùng mẫu theo vai trò, kèm câu báo nhẹ).
+  // Mở từ Ctrl+K "Mở phiếu Mua/Bán" (?phieu=mua|ban): mở phiếu ngay khi bàn làm việc sẵn sàng, rồi bỏ tham số.
+  const requestedSide = searchParams.get('phieu')
   const onReady = useCallback(
     (event: DockviewReadyEvent) => {
       apiRef.current = event.api
       initialize(event.api)
+      if (requestedSide === 'mua' || requestedSide === 'ban') {
+        openTicket(event.api, requestedSide === 'mua' ? 'BUY' : 'SELL')
+        setSearchParams((params) => {
+          params.delete('phieu')
+          return params
+        }, { replace: true })
+      }
     },
+    // Chỉ chạy một lần lúc dockview sẵn sàng.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [initialize],
   )
 
@@ -82,6 +101,16 @@ export default function Workspace() {
           onMessage={layouts.setNotice}
           filename={`ban-lam-viec-${username ?? 'demo'}.json`}
         />
+        <Button
+          variant="ghost"
+          size="sm"
+          className="ml-auto"
+          onClick={() => setShortcutsOpen(true)}
+          title="Bảng phím tắt (? hoặc /)"
+          aria-keyshortcuts="Shift+/ /"
+        >
+          <Keyboard aria-hidden /> Phím tắt
+        </Button>
       </div>
       {layouts.notice && (
         <div role="status" className="bg-status-warning-bg text-status-warning flex items-center justify-between gap-2 rounded-md px-3 py-1.5 text-sm">

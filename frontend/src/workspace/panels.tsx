@@ -119,6 +119,8 @@ function TicketBody({ panelApi, params }: { panelApi: DockviewPanelApi; params: 
     [outer, ticketSymbol, locked, setGroupSymbol],
   )
   const onDraftChange = useCallback((draft: boolean) => setHasDraft(draft), [])
+  // Phím B/S nhắm vào đúng panel phiếu này.
+  const ticketRequest = useWorkspaceStore((state) => (state.ticketRequest?.panelId === panelApi.id ? state.ticketRequest : null))
   const lockId = `lock-${panelApi.id}`
 
   return (
@@ -145,7 +147,7 @@ function TicketBody({ panelApi, params }: { panelApi: DockviewPanelApi; params: 
         )}
       </div>
       <SymbolScopeContext.Provider value={scope}>
-        <OrderTicket key={epoch} embedded onDraftChange={onDraftChange} />
+        <OrderTicket key={epoch} embedded onDraftChange={onDraftChange} sideRequest={ticketRequest} />
       </SymbolScopeContext.Provider>
       <DraftDialog
         from={ticketSymbol}

@@ -1,4 +1,4 @@
-import { RotateCcw } from 'lucide-react'
+import { Keyboard, RotateCcw } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,6 +8,7 @@ import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useAppearanceStore } from '@/store/appearance.store'
 import { useAuthStore } from '@/store/auth.store'
+import { useUiStore } from '@/store/ui.store'
 import {
   DEFAULT_APPEARANCE,
   resolveAppearance,
@@ -197,6 +198,7 @@ export default function Settings() {
   const settings = useAppearanceStore((state) => state.settings)
   const env = useAppearanceStore((state) => state.env)
   const update = useAppearanceStore((state) => state.update)
+  const setShortcutsOpen = useUiStore((state) => state.setShortcutsOpen)
   const themeFor = (patch: Partial<AppearanceSettings>) => resolveAppearance({ ...settings, ...patch }, env).theme
 
   return (
@@ -290,6 +292,23 @@ export default function Settings() {
             onChange={(hideSensitive) => update({ hideSensitive })}
           />
           <AppearancePreview showSensitive />
+        </div>
+      </Section>
+
+      <Section title="Phím tắt" description="Phím tắt của Bàn làm việc (B, S, O, D, N, Alt+1…9) và bảng phím tắt (? hoặc /).">
+        <div className="flex flex-col gap-3">
+          <Toggle
+            id="shortcuts"
+            label="Bật phím tắt"
+            hint="Không phím nào gửi lệnh: B/S chỉ mở phiếu. Phím tắt không chạy khi đang gõ trong ô nhập, khi có hộp thoại mở hoặc khi đang chạy Demo."
+            checked={settings.shortcuts}
+            onChange={(shortcuts) => update({ shortcuts })}
+          />
+          <div>
+            <Button variant="outline" size="sm" onClick={() => setShortcutsOpen(true)}>
+              <Keyboard aria-hidden /> Xem bảng phím tắt
+            </Button>
+          </div>
         </div>
       </Section>
     </div>

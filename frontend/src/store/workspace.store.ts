@@ -16,6 +16,12 @@ interface WorkspaceState {
   setGroupSymbol: (group: GroupId, symbol: string) => void
   setGroupOrder: (group: GroupId, orderId: string | null) => void
   pickGroupPrice: (group: GroupId, price: number) => void
+  /**
+   * Yêu cầu Phiếu lệnh (phím B/S): đặt chiều Mua/Bán. Chỉ mở phiếu, không bao giờ gửi lệnh.
+   * `nonce` tăng mỗi lần để bấm B hai lần vẫn được xử lý.
+   */
+  ticketRequest: { panelId: string; side: 'BUY' | 'SELL'; nonce: number } | null
+  requestTicket: (panelId: string, side: 'BUY' | 'SELL') => void
   /** Khôi phục trạng thái nhóm (mã, lệnh) theo bố cục đã lưu. */
   loadGroups: (groups: Partial<Record<GroupId, { symbol?: string; orderId?: string | null }>>) => void
 }
@@ -34,6 +40,9 @@ export const initialGroups = (): Record<GroupId, GroupState> =>
  */
 export const useWorkspaceStore = create<WorkspaceState>()((set) => ({
   groups: initialGroups(),
+  ticketRequest: null,
+  requestTicket: (panelId, side) =>
+    set((state) => ({ ticketRequest: { panelId, side, nonce: (state.ticketRequest?.nonce ?? 0) + 1 } })),
   setGroupSymbol: (group, symbol) =>
     set((state) =>
       state.groups[group].symbol === symbol ? state : { groups: { ...state.groups, [group]: { ...state.groups[group], symbol } } },

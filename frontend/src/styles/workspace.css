@@ -4,6 +4,8 @@
  * Biến không phải màu (cỡ chữ, bo góc, chiều cao thanh tab) lấy theo cỡ của app.
  */
 .dockview-theme-oms {
+  /* Ngữ cảnh xếp lớp riêng: z-index bên trong dockview (vạch chia, nhóm nổi) không nổi lên trên hộp thoại của app. */
+  isolation: isolate;
   color-scheme: inherit;
   --dv-paneview-active-outline-color: var(--focus-ring);
   --dv-tabs-and-actions-container-font-size: 0.8125rem;

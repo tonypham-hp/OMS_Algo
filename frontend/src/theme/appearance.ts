@@ -18,6 +18,8 @@ export interface AppearanceSettings {
   flash: boolean
   /** Ẩn số tiền, bps và số tài khoản khi trình chiếu. */
   hideSensitive: boolean
+  /** Phím tắt của Bàn làm việc và bảng phím tắt (Đợt 10A). */
+  shortcuts: boolean
 }
 
 /** Mặc định: Tối (chưa có lựa chọn đã lưu, hoặc localStorage lỗi). */
@@ -29,6 +31,7 @@ export const DEFAULT_APPEARANCE: AppearanceSettings = {
   fontScale: 100,
   flash: true,
   hideSensitive: false,
+  shortcuts: true,
 }
 
 export interface MediaEnvironment {
@@ -65,6 +68,7 @@ export function parseAppearance(raw: unknown): AppearanceSettings {
     fontScale: pick(value.fontScale, [90, 100, 110] as const, DEFAULT_APPEARANCE.fontScale),
     flash: typeof value.flash === 'boolean' ? value.flash : DEFAULT_APPEARANCE.flash,
     hideSensitive: typeof value.hideSensitive === 'boolean' ? value.hideSensitive : DEFAULT_APPEARANCE.hideSensitive,
+    shortcuts: typeof value.shortcuts === 'boolean' ? value.shortcuts : DEFAULT_APPEARANCE.shortcuts,
   }
 }
 

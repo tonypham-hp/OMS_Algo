@@ -6,6 +6,7 @@ import { canUseDemo } from '@/demo/access'
 import { useOrders } from '@/hooks/useOrders'
 import { useOrderRules } from '@/hooks/useSystemConfig'
 import { cn } from '@/lib/utils'
+import { Kbd } from '@/hotkeys/ShortcutSheet'
 import { useAppearanceStore } from '@/store/appearance.store'
 import { useAuthStore } from '@/store/auth.store'
 import { useDemoStore } from '@/store/demo.store'
@@ -50,6 +51,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   const demoActive = useDemoStore((state) => state.snapshot !== null)
   const colorScheme = useAppearanceStore((state) => state.resolved.colorScheme)
   const toggleMode = useAppearanceStore((state) => state.toggleMode)
+  const setShortcutsOpen = useUiStore((state) => state.setShortcutsOpen)
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
   const [recent] = useState(() => readRecent())
@@ -93,6 +95,10 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
     }
     if (target.kind === 'toggle-theme') {
       toggleMode()
+      return
+    }
+    if (target.kind === 'shortcuts') {
+      setShortcutsOpen(true)
       return
     }
     if (target.symbol) setSelectedSymbol(target.symbol)
@@ -169,6 +175,11 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
                     <span className="truncate">{item.title}</span>
                     {item.subtitle && <span className="text-muted-foreground truncate text-xs">{item.subtitle}</span>}
                   </span>
+                  {'shortcut' in item && item.shortcut && (
+                    <span className="ml-auto shrink-0">
+                      <Kbd>{item.shortcut}</Kbd>
+                    </span>
+                  )}
                 </div>
               )
             })}
