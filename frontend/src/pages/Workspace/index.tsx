@@ -1,11 +1,14 @@
 import 'dockview-react/dist/styles/dockview.css'
 import '@/styles/workspace.css'
-import { DockviewReact, type DockviewReadyEvent, type DockviewTheme } from 'dockview-react'
-import { useCallback } from 'react'
+import { DockviewReact, type DockviewApi, type DockviewReadyEvent, type DockviewTheme } from 'dockview-react'
+import { useCallback, useMemo, useRef } from 'react'
 import { LAYOUT } from '@/config/theme'
 import { useAuthStore } from '@/store/auth.store'
+import { useWorkspaceStore } from '@/store/workspace.store'
+import type { PanelParams } from '@/workspace/panelTypes'
 import { PANEL_COMPONENTS } from '@/workspace/panels'
-import { applyPreset } from '@/workspace/presets'
+import { addWorkspacePanel, applyPreset, panelKind } from '@/workspace/presets'
+import { WorkspaceActionsContext, type WorkspaceActions } from '@/workspace/workspaceContext'
 import { GroupActions } from './GroupActions'
 import { PanelTab } from './PanelTab'
 
@@ -18,10 +21,36 @@ const OMS_DOCK_THEME: DockviewTheme = { name: 'oms', className: 'dockview-theme-
  */
 export default function Workspace() {
   const role = useAuthStore((state) => state.user?.role)
+  const apiRef = useRef<DockviewApi | null>(null)
 
   const onReady = useCallback(
-    (event: DockviewReadyEvent) => applyPreset(event.api, role === 'CUSTOMER' ? 'basic' : 'pro'),
+    (event: DockviewReadyEvent) => {
+      apiRef.current = event.api
+      applyPreset(event.api, role === 'CUSTOMER' ? 'basic' : 'pro')
+    },
     [role],
+  )
+
+  const actions = useMemo<WorkspaceActions>(
+    () => ({
+      openOrder: (group, orderId, fromPanelId) => {
+        const api = apiRef.current
+        if (!api) return
+        if (group !== 'none') useWorkspaceStore.getState().setGroupOrder(group, orderId)
+        const detail = api.panels.find(
+          (panel) => panelKind(panel) === 'order-detail' && (panel.params as PanelParams | undefined)?.group === group,
+        )
+        if (detail) {
+          if (group === 'none') detail.api.updateParameters({ ...(detail.params as PanelParams), orderId })
+          detail.api.setActive()
+          return
+        }
+        // Chưa có panel Chi tiết cùng nhóm: mở thêm bên phải panel vừa bấm.
+        const added = addWorkspacePanel(api, 'order-detail', { referencePanel: fromPanelId, direction: 'right' }, { group })
+        if (group === 'none') added.api.updateParameters({ group, orderId })
+      },
+    }),
+    [],
   )
 
   return (
@@ -35,14 +64,16 @@ export default function Workspace() {
         <h1 className="text-lg font-semibold">Bàn làm việc</h1>
       </div>
       <div className="border-border min-h-0 flex-1 overflow-hidden rounded-lg border">
-        <DockviewReact
-          theme={OMS_DOCK_THEME}
-          components={PANEL_COMPONENTS}
-          defaultTabComponent={PanelTab}
-          rightHeaderActionsComponent={GroupActions}
-          onReady={onReady}
-          floatingGroupBounds="boundedWithinViewport"
-        />
+        <WorkspaceActionsContext.Provider value={actions}>
+          <DockviewReact
+            theme={OMS_DOCK_THEME}
+            components={PANEL_COMPONENTS}
+            defaultTabComponent={PanelTab}
+            rightHeaderActionsComponent={GroupActions}
+            onReady={onReady}
+            floatingGroupBounds="boundedWithinViewport"
+          />
+        </WorkspaceActionsContext.Provider>
       </div>
     </div>
   )

@@ -26,6 +26,8 @@ interface ConfirmDialogProps {
   errorMessage: string | undefined
   onConfirm: () => void
   onClose: () => void
+  /** Bàn làm việc: mở lệnh vừa tạo ở panel Chi tiết lệnh thay vì chuyển trang. */
+  onOpenOrder?: (orderId: string) => void
 }
 
 /** Ngay sau khi đặt lệnh HUNT: hiện khung quét từng mức, tự cập nhật khi giá về mức săn. */
@@ -61,6 +63,7 @@ export function ConfirmDialog({
   errorMessage,
   onConfirm,
   onClose,
+  onOpenOrder,
 }: ConfirmDialogProps) {
   return (
     <Dialog open={values !== null} onOpenChange={(open) => !open && onClose()}>
@@ -79,9 +82,22 @@ export function ConfirmDialog({
             </div>
             {createdOrder.strategy_type === 'HUNT' && <CreatedHuntSweep order={createdOrder} />}
             <DialogFooter>
-              <Button variant="outline" asChild>
-                <Link to={`/so-lenh/${createdOrder.parent_order_id}`}>Xem chi tiết lệnh</Link>
-              </Button>
+              {onOpenOrder ? (
+                // Bàn làm việc: mở ở panel Chi tiết lệnh cùng nhóm, không rời bàn làm việc.
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    onOpenOrder(createdOrder.parent_order_id)
+                    onClose()
+                  }}
+                >
+                  Xem chi tiết lệnh
+                </Button>
+              ) : (
+                <Button variant="outline" asChild>
+                  <Link to={`/so-lenh/${createdOrder.parent_order_id}`}>Xem chi tiết lệnh</Link>
+                </Button>
+              )}
               <Button onClick={onClose}>Đóng</Button>
             </DialogFooter>
           </>

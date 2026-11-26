@@ -33,23 +33,53 @@ interface OrderRowProps {
   onCancel: (order: ParentOrder) => void
   onPause: (order: ParentOrder) => void
   onResume: (order: ParentOrder) => void
+  /** Bàn làm việc: bấm mã lệnh mở ở panel Chi tiết lệnh cùng nhóm thay vì chuyển trang. */
+  onOpenOrder?: (orderId: string) => void
+  /** Lệnh đang mở ở panel Chi tiết cùng nhóm: đánh dấu dòng. */
+  selected?: boolean
 }
 
 /**
  * Một dòng của Sổ lệnh. memo + chỉ theo dõi giá của đúng mã của dòng: nhịp giá của mã khác không vẽ lại dòng này,
  * còn lời giải thích trạng thái (phụ thuộc phiên và giá) vẫn cập nhật khi giá của mã đó đổi.
  */
-const OrderRow = memo(function OrderRow({ order, showAccount, isBusy, role, onEdit, onCancel, onPause, onResume }: OrderRowProps) {
+const OrderRow = memo(function OrderRow({
+  order,
+  showAccount,
+  isBusy,
+  role,
+  onEdit,
+  onCancel,
+  onPause,
+  onResume,
+  onOpenOrder,
+  selected = false,
+}: OrderRowProps) {
   const market = useBriefMarket(order.symbol)
   // Chỉ chọn trạng thái (chuỗi) để dòng không vẽ lại mỗi nhịp giá.
   const tradingStatus = useMarketStore((state) => state.quotes.find((quote) => quote.symbol === order.symbol)?.trading_status)
   const haltStatus = useMarketStore((state) => state.quotes.find((quote) => quote.symbol === order.symbol)?.halt?.status)
   return (
-    <TableRow data-order-id={order.parent_order_id} data-demo-id={`order-row-${order.parent_order_id}`}>
+    <TableRow
+      data-order-id={order.parent_order_id}
+      data-demo-id={`order-row-${order.parent_order_id}`}
+      data-state={selected ? 'selected' : undefined}
+    >
       <TableCell>
-        <Link to={`/so-lenh/${order.parent_order_id}`} className="font-mono text-xs hover:underline">
-          {order.parent_order_id}
-        </Link>
+        {onOpenOrder ? (
+          <button
+            type="button"
+            onClick={() => onOpenOrder(order.parent_order_id)}
+            aria-pressed={selected}
+            className="font-mono text-xs hover:underline"
+          >
+            {order.parent_order_id}
+          </button>
+        ) : (
+          <Link to={`/so-lenh/${order.parent_order_id}`} className="font-mono text-xs hover:underline">
+            {order.parent_order_id}
+          </Link>
+        )}
       </TableCell>
       {showAccount && <TableCell className="tabular-nums"><SensitiveAccount value={order.account_no} /></TableCell>}
       <TableCell className="font-semibold">
@@ -107,9 +137,22 @@ interface OrderTableProps {
   onResume: (order: ParentOrder) => void
   /** Nội dung khi không có dòng nào (chưa có lệnh, hoặc bộ lọc không ra kết quả). */
   empty: ReactNode
+  onOpenOrder?: (orderId: string) => void
+  selectedOrderId?: string | null
 }
 
-export function OrderTable({ orders, showAccount, isBusy, onEdit, onCancel, onPause, onResume, empty }: OrderTableProps) {
+export function OrderTable({
+  orders,
+  showAccount,
+  isBusy,
+  onEdit,
+  onCancel,
+  onPause,
+  onResume,
+  empty,
+  onOpenOrder,
+  selectedOrderId = null,
+}: OrderTableProps) {
   const columnCount = showAccount ? 11 : 10
   const role = useAuthStore((state) => state.user?.role ?? 'CUSTOMER')
 
@@ -149,6 +192,8 @@ export function OrderTable({ orders, showAccount, isBusy, onEdit, onCancel, onPa
             onCancel={onCancel}
             onPause={onPause}
             onResume={onResume}
+            onOpenOrder={onOpenOrder}
+            selected={order.parent_order_id === selectedOrderId}
           />
         ))}
       </TableBody>

@@ -1,4 +1,4 @@
-import type { AddPanelPositionOptions, DockviewApi } from 'dockview-react'
+import type { AddPanelPositionOptions, DockviewApi, IDockviewPanel } from 'dockview-react'
 import { PANEL_KINDS, nextPanelId, type LinkGroup, type PanelKind, type PanelParams } from './panelTypes'
 
 export type PresetId = 'basic' | 'pro'
@@ -61,4 +61,9 @@ export function applyPreset(api: DockviewApi, preset: PresetId) {
     blotter.group.api.setSize({ height: 320 })
   }
   watchlist.api.setActive()
+}
+
+/** Loại panel (tên component dockview) của một panel đang mở. */
+export function panelKind(panel: IDockviewPanel): string {
+  return panel.view.contentComponent
 }

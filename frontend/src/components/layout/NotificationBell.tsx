@@ -10,11 +10,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { formatDateTime } from '@/lib/format'
-import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth.store'
 import { selectItems, useNotificationStore } from '@/store/notification.store'
 import { countUnread } from '@/utils/notifications'
+import { NotificationItemContent } from './NotificationList'
 
 /** Chuông: badge số chưa đọc, danh sách thông báo; bấm một mục thì đánh dấu đã đọc và mở lệnh. */
 export function NotificationBell() {
@@ -75,17 +74,7 @@ export function NotificationBell() {
                   navigate(`/so-lenh/${item.parent_order_id}`)
                 }}
               >
-                <span
-                  className={cn('mt-1.5 size-2 shrink-0 rounded-full', item.read ? 'bg-transparent' : 'bg-primary')}
-                  aria-hidden
-                />
-                <span className="flex min-w-0 flex-col">
-                  <span className={cn('text-sm whitespace-normal', !item.read && 'font-semibold')}>
-                    {item.message}
-                    {!item.read && <span className="sr-only"> (chưa đọc)</span>}
-                  </span>
-                  <span className="text-muted-foreground text-xs tabular-nums">{formatDateTime(item.time)}</span>
-                </span>
+                <NotificationItemContent item={item} />
               </DropdownMenuItem>
             ))}
           </div>
