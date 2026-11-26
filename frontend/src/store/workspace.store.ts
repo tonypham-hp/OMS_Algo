@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { OrderFormValues } from '@/pages/PlaceOrder/orderSchema'
 import { LINK_GROUPS } from '@/workspace/panelTypes'
 
 export type GroupId = (typeof LINK_GROUPS)[number]
@@ -22,6 +23,12 @@ interface WorkspaceState {
    */
   ticketRequest: { panelId: string; side: 'BUY' | 'SELL'; nonce: number } | null
   requestTicket: (panelId: string, side: 'BUY' | 'SELL') => void
+  /** Chế độ Demo (kịch bản 13): điền sẵn phiếu lệnh (chưa gửi). */
+  ticketFill: { panelId: string; values: Partial<OrderFormValues>; nonce: number } | null
+  requestFill: (panelId: string, values: Partial<OrderFormValues>) => void
+  /** Chế độ Demo: làm trống phiếu lệnh sau khi lệnh đã được đặt. */
+  ticketReset: { panelId: string; nonce: number } | null
+  requestReset: (panelId: string) => void
   /** Khôi phục trạng thái nhóm (mã, lệnh) theo bố cục đã lưu. */
   loadGroups: (groups: Partial<Record<GroupId, { symbol?: string; orderId?: string | null }>>) => void
 }
@@ -41,6 +48,10 @@ export const initialGroups = (): Record<GroupId, GroupState> =>
 export const useWorkspaceStore = create<WorkspaceState>()((set) => ({
   groups: initialGroups(),
   ticketRequest: null,
+  ticketFill: null,
+  requestFill: (panelId, values) => set((state) => ({ ticketFill: { panelId, values, nonce: (state.ticketFill?.nonce ?? 0) + 1 } })),
+  ticketReset: null,
+  requestReset: (panelId) => set((state) => ({ ticketReset: { panelId, nonce: (state.ticketReset?.nonce ?? 0) + 1 } })),
   requestTicket: (panelId, side) =>
     set((state) => ({ ticketRequest: { panelId, side, nonce: (state.ticketRequest?.nonce ?? 0) + 1 } })),
   setGroupSymbol: (group, symbol) =>

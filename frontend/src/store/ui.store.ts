@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { TourKind } from '@/tour/tourState'
 
 /** Chỉ có trong trình duyệt; trong Node (test) trả undefined thay vì đụng tới localStorage thử nghiệm của Node. */
 const browserStorage = (): Storage | undefined => (typeof window === 'undefined' ? undefined : window.localStorage)
@@ -37,7 +38,9 @@ interface UiState {
   setPaletteOpen: (open: boolean) => void
   /** Tour hướng dẫn đang chạy (mở lại từ menu tài khoản). */
   tourOpen: boolean
-  setTourOpen: (open: boolean) => void
+  /** Tour nào đang mở: tour chung lần đầu đăng nhập, hoặc 1 bước giới thiệu Bàn làm việc (Đợt 10A). */
+  tourKind: TourKind
+  setTourOpen: (open: boolean, kind?: TourKind) => void
   /** Bảng phím tắt (? hoặc /) đang mở. */
   shortcutsOpen: boolean
   setShortcutsOpen: (open: boolean) => void
@@ -50,7 +53,8 @@ export const useUiStore = create<UiState>()((set, get) => ({
   paletteOpen: false,
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
   tourOpen: false,
-  setTourOpen: (tourOpen) => set({ tourOpen }),
+  tourKind: 'main',
+  setTourOpen: (tourOpen, tourKind = 'main') => set({ tourOpen, tourKind }),
   shortcutsOpen: false,
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   pickPrice: (price) => set({ pickedPrice: { price, nonce: (get().pickedPrice?.nonce ?? 0) + 1 } }),

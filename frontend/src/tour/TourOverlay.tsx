@@ -6,7 +6,7 @@ import { useAuthStore } from '@/store/auth.store'
 import { useDemoStore } from '@/store/demo.store'
 import { useUiStore } from '@/store/ui.store'
 import { markTourDone, shouldStartTour } from './tourState'
-import { TOUR_STEPS } from './tourSteps'
+import { TOUR_STEPS, WORKSPACE_TOUR_STEPS } from './tourSteps'
 
 interface Box {
   top: number
@@ -62,6 +62,8 @@ export function TourOverlay() {
   const demoActive = useDemoStore((state) => state.snapshot !== null)
   const open = useUiStore((state) => state.tourOpen)
   const setOpen = useUiStore((state) => state.setTourOpen)
+  const kind = useUiStore((state) => state.tourKind)
+  const steps = kind === 'workspace' ? WORKSPACE_TOUR_STEPS : TOUR_STEPS
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const [step, setStep] = useState(0)
@@ -82,14 +84,14 @@ export function TourOverlay() {
     if (demoActive && open) setOpen(false)
   }, [demoActive, open, setOpen])
 
-  const current = TOUR_STEPS[step]
+  const current = steps[step]
   const isVisible = open && !demoActive && role !== undefined && current !== undefined
 
   const finish = useCallback(() => {
-    if (role) markTourDone(role)
+    if (role) markTourDone(role, undefined, kind)
     setOpen(false)
     setStep(0)
-  }, [role, setOpen])
+  }, [role, setOpen, kind])
 
   useEffect(() => {
     if (!isVisible || !current.path || pathname === current.path) return
@@ -147,7 +149,7 @@ export function TourOverlay() {
   }, [isVisible, finish])
 
   if (!isVisible) return null
-  const isLast = step === TOUR_STEPS.length - 1
+  const isLast = step === steps.length - 1
   const card = placeCard(box, cardHeight)
 
   return createPortal(
@@ -179,7 +181,7 @@ export function TourOverlay() {
         style={{ top: card.top, left: card.left, width: card.width }}
       >
         <p className="text-muted-foreground text-xs" data-demo-id="tour-progress">
-          Bước {step + 1}/{TOUR_STEPS.length}
+          Bước {step + 1}/{steps.length}
         </p>
         <h2 id="tour-title" className="font-semibold">
           {current.title}

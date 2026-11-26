@@ -2,19 +2,22 @@ import 'dockview-react/dist/styles/dockview.css'
 import '@/styles/workspace.css'
 import { DockviewReact, type DockviewApi, type DockviewReadyEvent, type DockviewTheme } from 'dockview-react'
 import { Keyboard, X } from 'lucide-react'
-import { useCallback, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { useWorkspaceHotkeys } from '@/hotkeys/useWorkspaceHotkeys'
+import { useDemoStore } from '@/store/demo.store'
 import { useUiStore } from '@/store/ui.store'
-import { openTicket } from '@/workspace/commands'
+import { shouldStartTour } from '@/tour/tourState'
+import { focusPanel, openTicket } from '@/workspace/commands'
+import { setWorkspaceDemoBridge } from '@/workspace/demoBridge'
 import { LAYOUT } from '@/config/theme'
 import { useAuthStore } from '@/store/auth.store'
 import { useWorkspaceStore } from '@/store/workspace.store'
 import type { PanelParams } from '@/workspace/panelTypes'
 import { PANEL_COMPONENTS } from '@/workspace/panels'
 import { nextLayoutName } from '@/workspace/layouts'
-import { addWorkspacePanel, panelKind } from '@/workspace/presets'
+import { addWorkspacePanel, applyPreset, panelKind } from '@/workspace/presets'
 import { useWorkspaceLayouts } from '@/workspace/useWorkspaceLayouts'
 import { WorkspaceActionsContext, type WorkspaceActions } from '@/workspace/workspaceContext'
 import { GroupActions } from './GroupActions'
@@ -38,26 +41,6 @@ export default function Workspace() {
   const [searchParams, setSearchParams] = useSearchParams()
   useWorkspaceHotkeys(apiRef)
 
-  // Khôi phục bố cục đã lưu của tài khoản (hỏng thì dùng mẫu theo vai trò, kèm câu báo nhẹ).
-  // Mở từ Ctrl+K "Mở phiếu Mua/Bán" (?phieu=mua|ban): mở phiếu ngay khi bàn làm việc sẵn sàng, rồi bỏ tham số.
-  const requestedSide = searchParams.get('phieu')
-  const onReady = useCallback(
-    (event: DockviewReadyEvent) => {
-      apiRef.current = event.api
-      initialize(event.api)
-      if (requestedSide === 'mua' || requestedSide === 'ban') {
-        openTicket(event.api, requestedSide === 'mua' ? 'BUY' : 'SELL')
-        setSearchParams((params) => {
-          params.delete('phieu')
-          return params
-        }, { replace: true })
-      }
-    },
-    // Chỉ chạy một lần lúc dockview sẵn sàng.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [initialize],
-  )
-
   const actions = useMemo<WorkspaceActions>(
     () => ({
       openOrder: (group, orderId, fromPanelId) => {
@@ -78,6 +61,60 @@ export default function Workspace() {
       },
     }),
     [],
+  )
+
+  // Lần đầu mở Bàn làm việc (mỗi vai trò): 1 bước tour giới thiệu. Không chạy khi đang Demo hay đang xem tour chung.
+  const demoActive = useDemoStore((state) => state.snapshot !== null)
+  useEffect(() => {
+    if (useUiStore.getState().tourOpen) return
+    if (shouldStartTour(role, demoActive, undefined, 'workspace')) useUiStore.getState().setTourOpen(true, 'workspace')
+    // Chỉ xét lúc mở màn.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Cầu nối cho Chế độ Demo (kịch bản 13): đăng ký khi dockview sẵn sàng, gỡ khi rời trang.
+  useEffect(() => () => setWorkspaceDemoBridge(null), [])
+  const registerDemoBridge = useCallback(
+    (api: DockviewApi) => {
+      const groupTicket = () => api.panels.find((panel) => panelKind(panel) === 'ticket' && (panel.params as PanelParams | undefined)?.group === '1')
+      setWorkspaceDemoBridge({
+        preset: (preset) => applyPreset(api, preset),
+        openTicket: (side) => openTicket(api, side),
+        fillTicket: (values) => {
+          const ticket = groupTicket()
+          if (!ticket) return
+          useWorkspaceStore.getState().requestFill(ticket.id, values)
+          focusPanel(ticket)
+        },
+        resetTicket: () => {
+          const ticket = groupTicket()
+          if (ticket) useWorkspaceStore.getState().requestReset(ticket.id)
+        },
+        openOrder: (orderId) => actions.openOrder('1', orderId, api.panels[0]?.id ?? ''),
+      })
+    },
+    [actions],
+  )
+
+  // Khôi phục bố cục đã lưu của tài khoản (hỏng thì dùng mẫu theo vai trò, kèm câu báo nhẹ).
+  // Mở từ Ctrl+K "Mở phiếu Mua/Bán" (?phieu=mua|ban): mở phiếu ngay khi bàn làm việc sẵn sàng, rồi bỏ tham số.
+  const requestedSide = searchParams.get('phieu')
+  const onReady = useCallback(
+    (event: DockviewReadyEvent) => {
+      apiRef.current = event.api
+      initialize(event.api)
+      registerDemoBridge(event.api)
+      if (requestedSide === 'mua' || requestedSide === 'ban') {
+        openTicket(event.api, requestedSide === 'mua' ? 'BUY' : 'SELL')
+        setSearchParams((params) => {
+          params.delete('phieu')
+          return params
+        }, { replace: true })
+      }
+    },
+    // Chỉ chạy một lần lúc dockview sẵn sàng.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [initialize, registerDemoBridge],
   )
 
   return (
@@ -120,7 +157,7 @@ export default function Workspace() {
           </button>
         </div>
       )}
-      <div className="border-border min-h-0 flex-1 overflow-hidden rounded-lg border">
+      <div className="border-border min-h-0 flex-1 overflow-hidden rounded-lg border" data-demo-id="workspace-dock">
         <WorkspaceActionsContext.Provider value={actions}>
           <DockviewReact
             theme={OMS_DOCK_THEME}

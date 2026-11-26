@@ -7,6 +7,18 @@ export interface TourStep {
   body: string
 }
 
+/**
+ * 1 bước giới thiệu Bàn làm việc, hiện lần đầu mở /ban-lam-viec (Đợt 10A). Tô sáng cả vùng các panel.
+ */
+export const WORKSPACE_TOUR_STEPS: ReadonlyArray<TourStep> = [
+  {
+    targets: ['workspace-dock'],
+    path: '/ban-lam-viec',
+    title: 'Bàn làm việc',
+    body: 'Kéo tab để dock trái, phải, trên, dưới hoặc gộp tab; kéo viền để đổi kích thước. Chấm màu "Nhóm 1–4" là nhóm liên kết: chọn mã ở Danh mục thì panel cùng nhóm đổi theo. Bấm B hoặc S để mở phiếu, ? để xem phím tắt; bố cục tự lưu.',
+  },
+]
+
 /** Tour 5 bước cho lần đầu đăng nhập. Mỗi bước 1–2 câu, dùng các data-demo-id có sẵn. */
 export const TOUR_STEPS: ReadonlyArray<TourStep> = [
   {

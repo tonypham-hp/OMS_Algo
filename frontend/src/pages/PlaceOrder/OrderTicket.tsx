@@ -86,9 +86,11 @@ interface OrderTicketProps {
   onDraftChange?: (hasDraft: boolean) => void
   /** Bàn làm việc, phím B/S: đặt chiều Mua/Bán của phiếu (chỉ mở phiếu, không gửi lệnh). `nonce` đổi mỗi lần bấm. */
   sideRequest?: { side: Side; nonce: number } | null
+  /** Chế độ Demo trên Bàn làm việc: điền sẵn các ô (chưa gửi; vẫn phải Đặt lệnh rồi Xác nhận). */
+  fillRequest?: { values: Partial<OrderFormValues>; nonce: number } | null
 }
 
-export function OrderTicket({ embedded = false, onDraftChange, sideRequest = null }: OrderTicketProps = {}) {
+export function OrderTicket({ embedded = false, onDraftChange, sideRequest = null, fillRequest = null }: OrderTicketProps = {}) {
   const user = useAuthStore((state) => state.user)
   const accounts = user?.accounts ?? []
   // Mã đang chọn: store toàn cục ở màn Đặt lệnh, nhóm liên kết của panel ở Bàn làm việc.
@@ -194,6 +196,16 @@ export function OrderTicket({ embedded = false, onDraftChange, sideRequest = nul
   useEffect(() => {
     if (sideNonce !== undefined && requestedSide) setValue('side', requestedSide, { shouldValidate: true })
   }, [sideNonce, requestedSide, setValue])
+
+  // Demo: điền sẵn phiếu như người dùng gõ (giữ giá trị mặc định ban đầu nên phiếu được tính là bản nháp).
+  const fillNonce = fillRequest?.nonce
+  const fillValues = fillRequest?.values
+  useEffect(() => {
+    if (fillNonce === undefined || !fillValues) return
+    reset({ ...getValues(), ...fillValues }, { keepDefaultValues: true })
+    // Chỉ chạy khi có yêu cầu điền mới.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fillNonce])
 
   // Bấm vào bảng giá thì ticket đổi theo mã vừa chọn.
   useEffect(() => {
