@@ -49,7 +49,7 @@ export function NotificationList({ onOpen }: { onOpen: (orderId: string) => void
       {items.length === 0 ? (
         <EmptyState icon={BellOff} title="Chưa có thông báo nào." description="Lệnh bị từ chối, tạm dừng hay khớp xong sẽ báo ở đây." />
       ) : (
-        <ul className="flex flex-col" aria-label="Danh sách thông báo">
+        <ul className="flex flex-col" aria-label="Danh sách thông báo" data-grid-list>
           {items.map((item) => (
             <li key={item.id}>
               <button

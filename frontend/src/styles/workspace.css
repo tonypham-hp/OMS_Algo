@@ -73,3 +73,13 @@
   outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
 }
+
+/* Ô đang focus trong bảng của panel (điều hướng lưới bằng mũi tên): vòng focus rõ ràng, kể cả khi focus vào ô (không phải nút). */
+[data-ws-panel] td:focus-visible,
+[data-ws-panel] th:focus-visible,
+[data-ws-panel] li:focus-visible,
+[data-ws-panel] td :focus-visible,
+[data-ws-panel] li :focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
