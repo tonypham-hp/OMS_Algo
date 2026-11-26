@@ -94,3 +94,35 @@ Cờ test e2e (`src/testing/e2eHooks.ts`, handler làm lỗi API) nằm sau `imp
   UNKNOWN): đều có tooltip giải thích tiếng Việt.
 - `npm audit` báo một số cảnh báo ở thư viện; chưa xử lý trong đợt này (không thêm hay nâng gói nào ngoài `@playwright/test`).
 - Vite báo `advancedChunks` sắp bị bỏ, nên đổi sang `codeSplitting` ở đợt sau.
+
+## 5. Hiệu năng Bàn làm việc (Đợt 10A, v0.4.0)
+
+Ngày đo: 26/11/2026 · nhánh `feat/fe-workspace` · Windows 10, Chrome bản cài sẵn, khung 1440×900.
+
+**Cách đo** (`e2e/perf-workspace.spec.ts`):
+- Bố cục Chuyên nghiệp, 7 panel, 6 panel đang hiện. Giá tua **x60**, đo **30 giây** thật.
+- `PerformanceObserver('long-animation-frame')` đếm khung hình dài hơn 50 ms.
+- Một vòng `requestAnimationFrame` đo khoảng cách giữa các khung hình.
+
+**Kết quả trên bản build production** (`npm run perf:workspace`: build rồi `vite preview`):
+
+| Chỉ số | Kết quả |
+|---|---|
+| Số khung hình | 1.877 (≈ 62,6 khung/giây) |
+| Khoảng cách khung: trung vị / p95 / lớn nhất | 16 ms / 18 ms / 25 ms |
+| Khung hình dài > 50 ms (long-animation-frame) | **0** |
+
+**Bản dev (`npm run dev`) chậm hơn nhiều**, do React dev build và StrictMode vẽ hai lần. Đo 15 giây ở x60 để so sánh:
+
+| Màn | Khung > 50 ms | Dài nhất |
+|---|---|---|
+| Đặt lệnh (có từ trước) | 15 | 60 ms |
+| Sổ lệnh (có từ trước) | 4 | 58 ms |
+| Bàn làm việc, 7 panel | 25 | 109 ms |
+
+- Ở bản dev, Bàn làm việc xấp xỉ tổng của các màn nó ghép lại, không có chi phí riêng của khung dock.
+- Tick giá chỉ vẽ lại phần đọc đúng mã đó:
+  - hàng bảng giá `memo` theo mã;
+  - phiếu lệnh chỉ đọc quote của mã đang chọn;
+  - nhóm liên kết đọc store theo khóa nhóm, nên đổi mã ở Nhóm 1 không vẽ lại Nhóm 2.
+- Panel ẩn sau tab khác không được vẽ, trừ Phiếu lệnh: Phiếu lệnh giữ nội dung để không mất bản nháp.
