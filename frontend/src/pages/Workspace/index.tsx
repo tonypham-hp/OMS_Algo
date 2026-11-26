@@ -1,15 +1,19 @@
 import 'dockview-react/dist/styles/dockview.css'
 import '@/styles/workspace.css'
 import { DockviewReact, type DockviewApi, type DockviewReadyEvent, type DockviewTheme } from 'dockview-react'
+import { X } from 'lucide-react'
 import { useCallback, useMemo, useRef } from 'react'
 import { LAYOUT } from '@/config/theme'
 import { useAuthStore } from '@/store/auth.store'
 import { useWorkspaceStore } from '@/store/workspace.store'
 import type { PanelParams } from '@/workspace/panelTypes'
 import { PANEL_COMPONENTS } from '@/workspace/panels'
-import { addWorkspacePanel, applyPreset, panelKind } from '@/workspace/presets'
+import { nextLayoutName } from '@/workspace/layouts'
+import { addWorkspacePanel, panelKind } from '@/workspace/presets'
+import { useWorkspaceLayouts } from '@/workspace/useWorkspaceLayouts'
 import { WorkspaceActionsContext, type WorkspaceActions } from '@/workspace/workspaceContext'
 import { GroupActions } from './GroupActions'
+import { LayoutMenu } from './LayoutMenu'
 import { PanelTab } from './PanelTab'
 
 /** Theme dockview riêng: biến --dv-* trỏ về token (src/styles/workspace.css), tự theo 4 theme và bảng màu mù màu. */
@@ -21,14 +25,18 @@ const OMS_DOCK_THEME: DockviewTheme = { name: 'oms', className: 'dockview-theme-
  */
 export default function Workspace() {
   const role = useAuthStore((state) => state.user?.role)
+  const username = useAuthStore((state) => state.user?.username)
   const apiRef = useRef<DockviewApi | null>(null)
+  const layouts = useWorkspaceLayouts(apiRef, username, role)
+  const { initialize } = layouts
 
+  // Khôi phục bố cục đã lưu của tài khoản (hỏng thì dùng mẫu theo vai trò, kèm câu báo nhẹ).
   const onReady = useCallback(
     (event: DockviewReadyEvent) => {
       apiRef.current = event.api
-      applyPreset(event.api, role === 'CUSTOMER' ? 'basic' : 'pro')
+      initialize(event.api)
     },
-    [role],
+    [initialize],
   )
 
   const actions = useMemo<WorkspaceActions>(
@@ -62,7 +70,27 @@ export default function Workspace() {
     >
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="text-lg font-semibold">Bàn làm việc</h1>
+        <LayoutMenu
+          menu={layouts.menu}
+          suggestedName={nextLayoutName(layouts.menu.names)}
+          onSwitch={layouts.switchTo}
+          onSaveAs={layouts.saveAs}
+          onRemove={layouts.remove}
+          onTemplate={layouts.applyTemplate}
+          onExport={layouts.exportJson}
+          onImport={layouts.importJson}
+          onMessage={layouts.setNotice}
+          filename={`ban-lam-viec-${username ?? 'demo'}.json`}
+        />
       </div>
+      {layouts.notice && (
+        <div role="status" className="bg-status-warning-bg text-status-warning flex items-center justify-between gap-2 rounded-md px-3 py-1.5 text-sm">
+          <span>{layouts.notice}</span>
+          <button type="button" aria-label="Đóng thông báo" onClick={() => layouts.setNotice(null)} className="rounded p-0.5">
+            <X className="size-4" aria-hidden />
+          </button>
+        </div>
+      )}
       <div className="border-border min-h-0 flex-1 overflow-hidden rounded-lg border">
         <WorkspaceActionsContext.Provider value={actions}>
           <DockviewReact
