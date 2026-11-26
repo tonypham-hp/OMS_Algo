@@ -1,0 +1,73 @@
+/*
+ * Theme của dockview cho Bàn làm việc (Đợt 10A): mọi biến --dv-* trỏ về token Đợt 9 (src/config/theme.ts),
+ * nên tự đổi theo 4 theme và bảng màu mù màu. KHÔNG có mã màu ở đây (scripts/check-colors.mjs kiểm).
+ * Biến không phải màu (cỡ chữ, bo góc, chiều cao thanh tab) lấy theo cỡ của app.
+ */
+.dockview-theme-oms {
+  color-scheme: inherit;
+  --dv-paneview-active-outline-color: var(--focus-ring);
+  --dv-tabs-and-actions-container-font-size: 0.8125rem;
+  --dv-tabs-and-actions-container-height: 2.25rem;
+  --dv-drag-over-background-color: color-mix(in srgb, var(--accent) 22%, transparent);
+  --dv-drag-over-border-color: var(--accent);
+  --dv-drag-over-border: 2px dashed var(--accent);
+  --dv-edge-dock-indicator-color: var(--accent);
+  --dv-edge-drop-strip-size: 8px;
+  --dv-tabs-container-scrollbar-color: var(--border-strong);
+  --dv-scrollbar-background-color: var(--border-strong);
+  --dv-icon-hover-background-color: var(--surface-hover);
+  --dv-floating-box-shadow: 0 8px 32px var(--overlay);
+  --dv-floating-border: 1px solid var(--border-strong);
+  --dv-floating-group-border: 1px solid var(--border-strong);
+  --dv-floating-titlebar-height: 22px;
+  --dv-floating-titlebar-background-color: var(--surface-panel);
+  --dv-floating-titlebar-border-bottom: 1px solid var(--border);
+  --dv-floating-group-dragging-opacity: 0.8;
+  --dv-overlay-z-index: 40;
+  --dv-tab-font-size: inherit;
+  --dv-border-radius: 0.5rem;
+  --dv-tab-margin: 0;
+  --dv-sash-color: transparent;
+  --dv-active-sash-color: var(--accent);
+  --dv-active-sash-transition-duration: 0.1s;
+  --dv-active-sash-transition-delay: 0.3s;
+  --dv-spacing-padding: 0px;
+  --dv-tab-border-radius: 0px;
+  --dv-sash-border-radius: 0px;
+  --dv-dropdown-border-radius: 0.375rem;
+  --dv-tab-close-icon-size: inherit;
+
+  --dv-group-view-background-color: var(--surface);
+  --dv-tabs-and-actions-container-background-color: var(--surface-panel);
+  --dv-activegroup-visiblepanel-tab-background-color: var(--surface);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--surface-panel);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--surface);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--surface-panel);
+  --dv-tab-divider-color: var(--border);
+  /* Chữ tab: cùng cặp đã kiểm tương phản (text / text-muted trên surface, surface-panel). */
+  --dv-activegroup-visiblepanel-tab-color: var(--text);
+  --dv-activegroup-hiddenpanel-tab-color: var(--text-muted);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--text);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--text-muted);
+  --dv-separator-border: var(--border);
+  --dv-paneview-header-border-color: var(--border);
+  --dv-context-menu-background-color: var(--surface);
+  --dv-context-menu-color: var(--text);
+}
+
+/* Panel đang hoạt động: gạch nhấn dưới tab (không chỉ dựa vào màu nền). */
+.dockview-theme-oms .dv-tab.dv-active-tab {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+/* Vạch chia giữa các nhóm luôn thấy được, rê vào thì nhấn. */
+.dockview-theme-oms .dv-split-view-container > .dv-sash-container > .dv-sash {
+  background-color: var(--border);
+}
+
+/* Focus bàn phím trong panel và trên tab: vòng focus của theme. */
+.dockview-theme-oms .dv-tab:focus-visible,
+.dockview-theme-oms [data-ws-panel]:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
