@@ -113,8 +113,9 @@ export function OrderTicket({ embedded = false, onDraftChange, sideRequest = nul
     defaultValues: buildDefaults(accounts[0] ?? '', selectedSymbol, defaultStrategy),
   })
   const { control, getValues, handleSubmit, reset, setValue, trigger } = form
-  // Đọc trong lúc vẽ để react-hook-form theo dõi trạng thái "đã sửa".
-  const { isDirty } = form.formState
+  // Bản nháp = có ô người dùng đã sửa. Đọc dirtyFields trong lúc vẽ để react-hook-form theo dõi; không dùng isDirty vì
+  // cờ đó có thể bật sau setValue của chương trình (đồng bộ mã, kiểm tra lại) dù giá trị vẫn bằng mặc định.
+  const isDirty = Object.keys(form.formState.dirtyFields).length > 0
   const values = useWatch({ control })
   const strategyType = values.strategy_type ?? 'STOP_LIMIT'
   const strategy = STRATEGIES[strategyType]
