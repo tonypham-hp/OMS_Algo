@@ -42,6 +42,8 @@ export interface PanelParams {
   orderId?: string | null
   /** Phiếu lệnh: "Khóa mã" – không đổi theo nhóm liên kết. */
   locked?: boolean
+  /** Màn hình đã chọn khi tách ra cửa sổ riêng (Đợt 10B): nhãn và vị trí, dùng khi mở lại. */
+  screen?: { label: string; left: number; top: number; width: number; height: number }
 }
 
 /** Id panel mới, không trùng với panel đang có: `<loại>-<n>`. */

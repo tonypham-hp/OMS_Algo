@@ -1,4 +1,4 @@
-import { Ellipsis, ExternalLink, PanelLeftClose, PictureInPicture2, X } from 'lucide-react'
+import { Ellipsis, ExternalLink, Monitor, PanelLeftClose, PictureInPicture2, X } from 'lucide-react'
 import type { IDockviewPanelHeaderProps } from 'dockview-react'
 import { useRef, type PointerEvent } from 'react'
 import { PortalContainerContext } from '@/components/ui/portalContainer'
@@ -104,6 +104,16 @@ export function PanelTab({ api, containerApi, params }: IDockviewPanelHeaderProp
               <ExternalLink aria-hidden />
               Tách ra cửa sổ riêng
               {blockedReason && <span className="text-muted-foreground ml-auto text-xs">Demo</span>}
+            </DropdownMenuItem>
+          )}
+          {!inPopout && workspace?.canPlaceOnScreen && (
+            <DropdownMenuItem
+              disabled={blockedReason !== null}
+              onSelect={() => workspace.popoutToScreen(api.id)}
+              data-testid="ws-popout-screen"
+            >
+              <Monitor aria-hidden />
+              Mở trên màn hình khác…
             </DropdownMenuItem>
           )}
           <DropdownMenuSeparator />

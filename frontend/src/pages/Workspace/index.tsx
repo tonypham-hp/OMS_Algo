@@ -2,7 +2,7 @@ import 'dockview-react/dist/styles/dockview.css'
 import '@/styles/workspace.css'
 import { DockviewReact, type DockviewApi, type DockviewReadyEvent, type DockviewTheme } from 'dockview-react'
 import { ExternalLink, Keyboard, X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { useWorkspaceHotkeys } from '@/hotkeys/useWorkspaceHotkeys'
@@ -22,6 +22,9 @@ import { addWorkspacePanel, applyPreset, panelKind } from '@/workspace/presets'
 import { useWorkspaceLayouts } from '@/workspace/useWorkspaceLayouts'
 import { popoutPanel, trackPopoutWindows } from '@/workspace/popout'
 import { closeAllWindows, popoutBlockedReason, useWindowsStore } from '@/workspace/windows'
+import { placeOnScreen, requestScreens, screenLabel, supportsScreenDetails, type ScreenInfo } from '@/workspace/screens'
+import { PopupBlockedDialog } from './PopupBlockedDialog'
+import { ScreenPickerDialog } from './ScreenPickerDialog'
 import { WorkspaceActionsContext, type WorkspaceActions } from '@/workspace/workspaceContext'
 import { GroupActions } from './GroupActions'
 import { LayoutMenu } from './LayoutMenu'
@@ -44,8 +47,23 @@ export default function Workspace() {
   const [searchParams, setSearchParams] = useSearchParams()
   useWorkspaceHotkeys(apiRef)
 
+  // Đợt 10B: chọn màn hình (Window Management API) và báo khi trình duyệt chặn cửa sổ bật lên.
+  const [screenPick, setScreenPick] = useState<{ panelId: string; title: string; screens: ScreenInfo[]; current: ScreenInfo } | null>(null)
+  const [popupBlocked, setPopupBlocked] = useState(false)
+
   const actions = useMemo<WorkspaceActions>(
     () => ({
+      canPlaceOnScreen: supportsScreenDetails(),
+      popoutToScreen: (panelId) => {
+        if (popoutBlockedReason({ demoActive: useDemoStore.getState().snapshot !== null })) return
+        // Hỏi quyền, lấy danh sách màn hình; không được thì mở bình thường (không báo lỗi).
+        void requestScreens().then((details) => {
+          const api = apiRef.current
+          if (!api) return
+          if (!details) void popoutPanel(api, panelId)
+          else setScreenPick({ panelId, title: api.getPanel(panelId)?.title ?? '', screens: details.screens, current: details.currentScreen })
+        })
+      },
       openOrder: (group, orderId, fromPanelId) => {
         const api = apiRef.current
         if (!api) return
@@ -80,12 +98,26 @@ export default function Workspace() {
     [],
   )
 
+  /** Mở cửa sổ tách trên màn hình đã chọn và nhớ lựa chọn trong bố cục (params của panel). Bấm "Mở" là thao tác của người dùng. */
+  function openOnScreen(screen: ScreenInfo, index: number) {
+    const api = apiRef.current
+    const pick = screenPick
+    setScreenPick(null)
+    if (!api || !pick) return
+    const box = placeOnScreen(screen)
+    const panel = api.getPanel(pick.panelId)
+    panel?.api.updateParameters({ ...(panel.params as PanelParams), screen: { label: screenLabel(screen, index), ...box } })
+    void popoutPanel(api, pick.panelId, box)
+  }
+
   /** Mở lại MỘT cửa sổ tách đã được đưa về khi tải lại trang (mỗi cú bấm chỉ mở được một cửa sổ). */
   const reopenNext = () => {
     const api = apiRef.current
     const [next, ...rest] = layouts.returned
     if (!api || !next) return
-    void popoutPanel(api, next.panelId, next.position ?? undefined)
+    // Ưu tiên màn hình đã chọn trước đây (nhớ trong params của panel), không có thì vị trí lúc lưu.
+    const saved = (api.getPanel(next.panelId)?.params as PanelParams | undefined)?.screen
+    void popoutPanel(api, next.panelId, saved ?? next.position ?? undefined)
     layouts.setReturned(rest)
   }
 
@@ -129,6 +161,10 @@ export default function Workspace() {
     (event: DockviewReadyEvent) => {
       apiRef.current = event.api
       trackPopoutWindows(event.api)
+      // Popup bị chặn: dockview đã đưa panel về lưới; hiện hướng dẫn cho phép popup.
+      event.api.onDidOpenPopoutWindowFail((failure) => {
+        if (failure.reason === 'blocked') setPopupBlocked(true)
+      })
       initialize(event.api)
       registerDemoBridge(event.api)
       if (requestedSide === 'mua' || requestedSide === 'ban') {
@@ -200,6 +236,14 @@ export default function Workspace() {
           </span>
         </div>
       )}
+      <ScreenPickerDialog
+        key={screenPick?.panelId ?? 'none'}
+        screens={screenPick}
+        panelTitle={screenPick?.title ?? ''}
+        onClose={() => setScreenPick(null)}
+        onPick={openOnScreen}
+      />
+      <PopupBlockedDialog open={popupBlocked} onClose={() => setPopupBlocked(false)} />
       <div className="border-border min-h-0 flex-1 overflow-hidden rounded-lg border" data-demo-id="workspace-dock">
         <WorkspaceActionsContext.Provider value={actions}>
           <WindowHotkeys apiRef={apiRef} />
