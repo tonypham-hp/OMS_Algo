@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { useWorkspaceHotkeys } from '@/hotkeys/useWorkspaceHotkeys'
+import { WindowHotkeys } from '@/hotkeys/WindowHotkeys'
 import { useDemoStore } from '@/store/demo.store'
 import { useUiStore } from '@/store/ui.store'
 import { shouldStartTour } from '@/tour/tourState'
@@ -201,6 +202,7 @@ export default function Workspace() {
       )}
       <div className="border-border min-h-0 flex-1 overflow-hidden rounded-lg border" data-demo-id="workspace-dock">
         <WorkspaceActionsContext.Provider value={actions}>
+          <WindowHotkeys apiRef={apiRef} />
           <DockviewReact
             theme={OMS_DOCK_THEME}
             components={PANEL_COMPONENTS}

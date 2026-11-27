@@ -41,6 +41,27 @@ export function closeAllWindows(windows: ReadonlyArray<Pick<WorkspaceWindow, 'wi
   }
 }
 
+/**
+ * An toàn (Đợt 10B): đăng xuất ở cửa sổ chính, hoặc bắt đầu Demo, thì đóng mọi cửa sổ phụ.
+ * Nhận hàm subscribe của store để test được; trả hàm gỡ.
+ */
+export function installWindowSafety({
+  onLogout,
+  onDemoStart,
+  close = () => closeAllWindows(),
+}: {
+  onLogout: (listener: () => void) => () => void
+  onDemoStart: (listener: () => void) => () => void
+  close?: () => void
+}) {
+  const stopLogout = onLogout(close)
+  const stopDemo = onDemoStart(close)
+  return () => {
+    stopLogout()
+    stopDemo()
+  }
+}
+
 /** Có được tách cửa sổ lúc này không (Demo đang chạy thì khóa: Demo điều khiển màn hình và dữ liệu riêng). */
 export function popoutBlockedReason({ demoActive }: { demoActive: boolean }): string | null {
   return demoActive ? 'Đang chạy Demo: không tách cửa sổ' : null
