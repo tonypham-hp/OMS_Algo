@@ -4,7 +4,7 @@ Hệ thống quản lý lệnh nâng cao (Advanced Order Management System) cho 
 Khách hàng và dealer đặt lệnh thuật toán (Stop, Stop Limit, Take Profit, Trailing Stop, OCO, Bracket, Iceberg, TWAP,
 VWAP, POV, HUNT). OMS tự chia thành lệnh con, gửi xuống Core, theo dõi khớp, xử lý lỗi và đối soát.
 
-> **Trạng thái:** bản demo frontend **v0.4.0** ([CHANGELOG](CHANGELOG.md)): 12 màn hình, Bàn làm việc dock được, 4 theme, Chế độ Demo, kiểm thử Vitest và
+> **Trạng thái:** bản demo frontend **v0.4.1** ([CHANGELOG](CHANGELOG.md)): 12 màn hình, Bàn làm việc dock được và tách cửa sổ, 4 theme, Chế độ Demo, kiểm thử Vitest và
 > Playwright ([báo cáo chất lượng](docs/quality-report.md)). Chạy độc lập bằng dữ liệu giả lập (MSW và bộ giả lập thị
 > trường trong trình duyệt), có ghi chú "Dữ liệu demo" trên header. Backend (FastAPI) và simulators chưa có code.
 
@@ -102,6 +102,11 @@ VWAP, POV, HUNT). OMS tự chia thành lệnh con, gửi xuống Core, theo dõi
     hỏi giữ bản nháp, không xóa trắng; có "Khóa mã".
   - Phím tắt B / S (mở phiếu, không bao giờ gửi lệnh), O / D / N, Alt+1…9; "?" mở bảng phím tắt; tắt được trong Cài đặt.
   - Bảng trong panel đi bằng mũi tên theo mẫu Grid.
+  - **Đa cửa sổ** (Đợt 10B, [frontend-spec mục 24](docs/frontend-spec.md)):
+    - tách panel ra cửa sổ trình duyệt riêng; theme và nhóm liên kết đồng bộ ngay; hộp thoại, menu mở trong đúng cửa sổ;
+    - đặt cửa sổ lên màn hình khác (Chrome/Edge);
+    - phiếu lệnh mini luôn nổi trên cùng (Document Picture-in-Picture);
+    - đóng hết khi đăng xuất, khóa khi Demo.
 - **Chế độ Demo**: app tự chạy 6 kịch bản E2E (Iceberg, Stop → Iceberg, POV, HUNT, Core mất ACK, OMS sập) và 3 kịch bản
   luật KRX (sửa lệnh mất/giữ ưu tiên, lô lẻ khớp trong ATC, mã HNX sang HOSE ngày 28/12/2026), 3 kịch bản phiên đặc
   biệt (mã hạn chế khớp định kỳ 15 phút, tạm ngừng và giao dịch lại, thỏa thuận sau giờ 14:45–15:00) và kịch bản 13
@@ -188,6 +193,7 @@ Lệnh khác trong `frontend/`:
 | `npm run screenshots:dot9` | Chụp lại 11 ảnh theme (5 biến thể × 2 màn, trang Cài đặt) vào `docs/screenshots/dot9/` |
 | `npm run tokens` | Sinh lại `src/styles/tokens.css` từ `src/config/theme.ts` (sau khi sửa màu) |
 | `npm run screenshots:dot10a` | Chụp lại 6 ảnh Bàn làm việc vào `docs/screenshots/dot10a/` |
+| `npm run screenshots:dot10b` | Chụp lại ảnh đa cửa sổ (bàn làm việc + cửa sổ tách, phiếu mini) vào `docs/screenshots/dot10b/` |
 | `npm run perf:workspace` | Build production rồi đo khung hình của Bàn làm việc (giá x60, 30 giây); ghi số đo vào `test-results/` |
 
 Cấu hình qua biến môi trường: xem `frontend/.env.example` (`VITE_API_BASE_URL`, `VITE_USE_MOCK`, `VITE_DEMO_MODE`).
@@ -277,4 +283,4 @@ khi cần người duyệt thứ hai.
 - [docs/demo-checklist.md](docs/demo-checklist.md): checklist 10 mục trước buổi demo.
 - [docs/theme.md](docs/theme.md): theme, token màu, tỷ lệ tương phản đã kiểm, cách thêm màu mới.
 - [docs/licenses.md](docs/licenses.md): giấy phép các gói thêm từ Đợt 9 (dockview-react, react-hotkeys-hook, @axe-core/playwright).
-- [CHANGELOG.md](CHANGELOG.md): thay đổi theo phiên bản, Đợt 1–10A.
+- [CHANGELOG.md](CHANGELOG.md): thay đổi theo phiên bản, Đợt 1–10B.

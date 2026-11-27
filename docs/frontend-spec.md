@@ -882,3 +882,60 @@ Ctrl+K và tooltip.
   - có hộp thoại đang mở;
   - đang chạy Demo (Demo có phím riêng: Space, →, Esc);
   - đã tắt ở `/cai-dat` mục "Phím tắt" (`shortcuts` trong cài đặt giao diện).
+
+## 24. Đa cửa sổ (Đợt 10B)
+
+Tách panel của Bàn làm việc ra cửa sổ trình duyệt riêng, đặt lên màn hình thứ hai, và có phiếu lệnh mini luôn nổi trên
+cùng. Không thêm gói; không viết lại engine; vẫn chỉ một engine mô phỏng chạy ở cửa sổ chính.
+
+### Cách hoạt động
+- **Tách cửa sổ:** menu "⋯" của panel → "Tách ra cửa sổ riêng".
+  - Dùng module `PopoutWindow` (bản MIT, có sẵn) của dockview: `api.addPopoutGroup`, mở trang trống cùng origin
+    `public/popout.html` rồi chuyển DOM của panel sang.
+  - Trong cửa sổ tách, mục này thành "Đưa về bàn làm việc". Đóng cửa sổ thì panel về đúng vị trí cũ.
+- **Chung một cây React:** dockview-react vẽ panel bằng `ReactDOM.createPortal`, nên panel ở cửa sổ tách vẫn chạy trong
+  cây React và realm JS của cửa sổ chính.
+  - Store (thị trường, lệnh, nhóm liên kết, cài đặt giao diện) và React Query dùng chung theo tham chiếu, nên không cần
+    BroadcastChannel.
+  - Đổi mã ở cửa sổ chính thì panel tách cùng nhóm vẽ lại ngay (test yêu cầu < 500 ms).
+  - Lệnh đặt từ cửa sổ tách đi đúng `orderResolver` (luật) và hộp Xác nhận như ở cửa sổ chính.
+- **Theme và style** (`src/workspace/windowMirror.ts`):
+  - dockview chỉ chép stylesheet một lần, nên app phản chiếu thêm mọi `data-*` của `<html>` (theme, bảng màu, mật độ,
+    cỡ chữ, nhấp nháy), `lang`, `color-scheme`, và các `<style>`/`<link>` thêm vào sau.
+  - Đổi ở cửa sổ chính thì cửa sổ tách đổi ngay.
+  - `popout.html` chép theme từ `window.opener` ngay khi mở để không nháy sai màu.
+- **Overlay** (`src/components/ui/portalContainer.ts`):
+  - Dialog, DropdownMenu, Select gắn portal vào body của cửa sổ chứa panel, nhờ `PanelFrame`, tab và nút "+" cung cấp
+    `container`. Tooltip tự viết dùng `ownerDocument` của phần tử kích hoạt.
+  - Hộp Xác nhận, menu, ô chọn vì vậy hiện ở cửa sổ người dùng đang thao tác. App chưa có Popover và Toast.
+- **Phím tắt:** `WindowHotkeys` gắn bộ phím của Bàn làm việc vào document của từng cửa sổ tách (react-hotkeys-hook, option
+  `document`). Bấm "?" ở cửa sổ tách thì bảng phím tắt mở tại đó.
+- **Tải lại cửa sổ chính:**
+  - Cửa sổ tách đang mở được lưu trong bố cục (`popoutGroups`).
+  - Trình duyệt không cho mở cửa sổ khi người dùng không thao tác, nên khi tải lại, panel được đưa về bàn làm việc, kèm
+    băng báo và nút **"Mở lại cửa sổ tách"** (mỗi cú bấm mở một cửa sổ).
+- **Màn hình thứ hai** (`src/workspace/screens.ts`):
+  - Có Window Management API thì menu có "Mở trên màn hình khác…": hỏi quyền (`getScreenDetails`), chọn màn hình, cửa sổ
+    đặt giữa màn đã chọn.
+  - Lựa chọn nhớ trong params của panel (đi theo bố cục), dùng khi mở lại.
+  - Không có API hoặc bị từ chối quyền: mở bình thường, không báo lỗi.
+- **Popup bị chặn:** dockview để panel ở lại lưới; app hiện hộp hướng dẫn cho phép popup bằng tiếng Việt.
+- **Phiếu mini nổi trên cùng:** nút trên panel Phiếu lệnh, dùng Document Picture-in-Picture.
+  - Phiếu mini là `OrderTicket` sẵn có: cùng kiểm tra luật, cùng bước Xác nhận, cùng nhóm liên kết, cùng giữ bản nháp.
+  - Không có API thì ẩn nút, không giả lập.
+- **An toàn:**
+  - Chỉ mở cửa sổ khi người dùng bấm.
+  - Đang chạy Demo thì khóa tách cửa sổ.
+  - Bắt đầu Demo, đăng xuất ở cửa sổ chính hoặc rời Bàn làm việc thì đóng mọi cửa sổ tách và phiếu mini.
+
+### Hỗ trợ trình duyệt
+
+| Tính năng | Chrome / Edge | Firefox | Safari |
+|---|---|---|---|
+| Tách panel ra cửa sổ riêng | có | có | có |
+| Đặt lên màn hình khác (Window Management API) | có, hỏi quyền | không: mở cửa sổ thường | không: mở cửa sổ thường |
+| Phiếu mini nổi trên cùng (Document Picture-in-Picture) | có (116+) | không: ẩn nút | không: ẩn nút |
+
+Ghi chú: khi đóng cửa sổ tách, Chrome có thể phát thông báo "ResizeObserver loop completed with undelivered
+notifications" lúc dockview dựng lại nhóm vừa trả về. Đây là thông báo vô hại của trình duyệt, không phải lỗi console;
+Vite dev có in ra log của server.

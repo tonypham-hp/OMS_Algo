@@ -67,3 +67,12 @@ describe('danh sách phím tắt', () => {
     expect(new Set(keys).size).toBe(keys.length)
   })
 })
+
+describe('đa cửa sổ (Đợt 10B): hộp thoại xét theo cửa sổ nhận phím', () => {
+  it('phím gõ ở cửa sổ tách đang mở hộp thoại: bỏ qua; ở cửa sổ khác không có hộp thoại: chạy', () => {
+    const inPopupWithDialog = { ...element('section'), ownerDocument: withDialog } as unknown as HTMLElement
+    const inMainWithout = { ...element('section'), ownerDocument: noDialog } as unknown as HTMLElement
+    expect(shouldIgnoreHotkey({ target: inPopupWithDialog })).toBe(true)
+    expect(shouldIgnoreHotkey({ target: inMainWithout })).toBe(false)
+  })
+})
