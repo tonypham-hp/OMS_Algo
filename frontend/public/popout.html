@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>ALGO OMS · cửa sổ tách</title>
+    <!--
+      Trang trống cho panel tách khỏi Bàn làm việc (Đợt 10B). dockview mở trang này (cùng origin), chép stylesheet của cửa sổ
+      chính sang rồi chuyển DOM của panel vào; panel vẫn chạy trong cây React của cửa sổ chính.
+      Script dưới chép ngay theme (data-theme, data-palette…) từ cửa sổ chính để không nháy sai màu trong lúc chờ;
+      cửa sổ chính tiếp tục phản chiếu mỗi khi đổi (src/workspace/windowMirror.ts).
+    -->
+    <script>
+      ;(function () {
+        try {
+          var source = window.opener && window.opener.document.documentElement
+          if (!source) return
+          var root = document.documentElement
+          for (var i = 0; i < source.attributes.length; i++) {
+            var attribute = source.attributes[i]
+            if (attribute.name.indexOf('data-') === 0 || attribute.name === 'lang') root.setAttribute(attribute.name, attribute.value)
+          }
+          root.style.colorScheme = source.style.colorScheme
+        } catch (error) {
+          // Không đọc được cửa sổ chính: dùng theme mặc định cho tới khi cửa sổ chính phản chiếu.
+        }
+      })()
+    </script>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body></body>
+</html>

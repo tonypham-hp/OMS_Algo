@@ -1,7 +1,7 @@
 import 'dockview-react/dist/styles/dockview.css'
 import '@/styles/workspace.css'
 import { DockviewReact, type DockviewApi, type DockviewReadyEvent, type DockviewTheme } from 'dockview-react'
-import { Keyboard, X } from 'lucide-react'
+import { ExternalLink, Keyboard, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
@@ -19,6 +19,8 @@ import { PANEL_COMPONENTS } from '@/workspace/panels'
 import { nextLayoutName } from '@/workspace/layouts'
 import { addWorkspacePanel, applyPreset, panelKind } from '@/workspace/presets'
 import { useWorkspaceLayouts } from '@/workspace/useWorkspaceLayouts'
+import { popoutPanel, trackPopoutWindows } from '@/workspace/popout'
+import { closeAllWindows, popoutBlockedReason, useWindowsStore } from '@/workspace/windows'
 import { WorkspaceActionsContext, type WorkspaceActions } from '@/workspace/workspaceContext'
 import { GroupActions } from './GroupActions'
 import { LayoutMenu } from './LayoutMenu'
@@ -59,9 +61,32 @@ export default function Workspace() {
         const added = addWorkspacePanel(api, 'order-detail', { referencePanel: fromPanelId, direction: 'right' }, { group })
         if (group === 'none') added.api.updateParameters({ group, orderId })
       },
+      // Tách panel ra cửa sổ riêng (Đợt 10B): chỉ từ thao tác bấm menu; khóa khi đang Demo.
+      popout: (panelId) => {
+        const api = apiRef.current
+        if (!api || popoutBlockedReason({ demoActive: useDemoStore.getState().snapshot !== null })) return
+        void popoutPanel(api, panelId)
+      },
     }),
     [],
   )
+
+  // Rời Bàn làm việc: đóng mọi cửa sổ tách (dockview cũng đóng khi huỷ, đóng thêm cho chắc), xoá sổ đăng ký.
+  useEffect(
+    () => () => {
+      closeAllWindows(useWindowsStore.getState().windows.filter((item) => item.kind === 'popout'))
+    },
+    [],
+  )
+
+  /** Mở lại MỘT cửa sổ tách đã được đưa về khi tải lại trang (mỗi cú bấm chỉ mở được một cửa sổ). */
+  const reopenNext = () => {
+    const api = apiRef.current
+    const [next, ...rest] = layouts.returned
+    if (!api || !next) return
+    void popoutPanel(api, next.panelId, next.position ?? undefined)
+    layouts.setReturned(rest)
+  }
 
   // Lần đầu mở Bàn làm việc (mỗi vai trò): 1 bước tour giới thiệu. Không chạy khi đang Demo hay đang xem tour chung.
   const demoActive = useDemoStore((state) => state.snapshot !== null)
@@ -102,6 +127,7 @@ export default function Workspace() {
   const onReady = useCallback(
     (event: DockviewReadyEvent) => {
       apiRef.current = event.api
+      trackPopoutWindows(event.api)
       initialize(event.api)
       registerDemoBridge(event.api)
       if (requestedSide === 'mua' || requestedSide === 'ban') {
@@ -155,6 +181,22 @@ export default function Workspace() {
           <button type="button" aria-label="Đóng thông báo" onClick={() => layouts.setNotice(null)} className="rounded p-0.5">
             <X className="size-4" aria-hidden />
           </button>
+        </div>
+      )}
+      {layouts.returned.length > 0 && (
+        <div role="status" className="bg-nav-active flex flex-wrap items-center justify-between gap-2 rounded-md px-3 py-1.5 text-sm" data-testid="ws-returned">
+          <span>
+            {layouts.returned.length} panel đang ở cửa sổ tách đã được đưa về bàn làm việc khi tải lại trang (trình duyệt không tự mở
+            lại cửa sổ).
+          </span>
+          <span className="flex items-center gap-1">
+            <Button size="sm" variant="outline" onClick={reopenNext} disabled={demoActive}>
+              <ExternalLink aria-hidden /> Mở lại cửa sổ tách{layouts.returned.length > 1 ? ` (còn ${layouts.returned.length})` : ''}
+            </Button>
+            <button type="button" aria-label="Bỏ qua, để panel ở bàn làm việc" onClick={() => layouts.setReturned([])} className="rounded p-0.5">
+              <X className="size-4" aria-hidden />
+            </button>
+          </span>
         </div>
       )}
       <div className="border-border min-h-0 flex-1 overflow-hidden rounded-lg border" data-demo-id="workspace-dock">

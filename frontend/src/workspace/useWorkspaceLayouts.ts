@@ -12,6 +12,8 @@ import {
   type SavedGroups,
   type SavedLayout,
   type WorkspaceFile,
+  splitPopouts,
+  type PendingPopout,
 } from './layouts'
 import { applyPreset, type PresetId } from './presets'
 
@@ -29,9 +31,30 @@ function snapshot(api: DockviewApi): SavedLayout {
 }
 
 /** Dựng lại một bố cục đã lưu. Ném lỗi nếu dockview không đọc được (để nơi gọi dùng bố cục mặc định). */
-function restore(api: DockviewApi, layout: SavedLayout) {
-  api.fromJSON(layout.dock)
+/**
+ * Dựng lại một bố cục đã lưu. Ném lỗi nếu dockview không đọc được (để nơi gọi dùng bố cục mặc định).
+ * Panel đang ở cửa sổ tách lúc lưu được đưa về lưới (mỗi cửa sổ thành một nhóm ở mép phải) và trả về để người dùng
+ * bấm "Mở lại cửa sổ tách": trình duyệt chặn mở cửa sổ khi không có thao tác.
+ */
+function restore(api: DockviewApi, layout: SavedLayout): ReturnedPopout[] {
+  const { dock, pending } = splitPopouts(layout.dock)
+  api.fromJSON(dock)
   useWorkspaceStore.getState().loadGroups(layout.groups)
+  return pending.map((popout) => {
+    const [first, ...others] = popout.panels
+    const head = api.addPanel({ id: first.id, component: first.contentComponent, title: first.title, params: first.params, position: { direction: 'right' } })
+    for (const panel of others) {
+      api.addPanel({ id: panel.id, component: panel.contentComponent, title: panel.title, params: panel.params, position: { referencePanel: head, direction: 'within' } })
+    }
+    return { panelId: first.id, position: popout.position }
+  })
+}
+
+/** Cửa sổ tách đã được đưa về bàn làm việc khi khôi phục bố cục, chờ người dùng mở lại. */
+export interface ReturnedPopout {
+  /** Một panel của nhóm (tách cả nhóm chứa panel này). */
+  panelId: string
+  position: PendingPopout['position']
 }
 
 export interface LayoutMenuState {
@@ -49,6 +72,13 @@ export function useWorkspaceLayouts(apiRef: RefObject<DockviewApi | null>, usern
   const timer = useRef<number | null>(null)
   const [menu, setMenu] = useState<LayoutMenuState>({ names: [DEFAULT_LAYOUT_NAME], active: DEFAULT_LAYOUT_NAME })
   const [notice, setNotice] = useState<string | null>(null)
+  const [returned, setReturned] = useState<ReturnedPopout[]>([])
+  /** Khôi phục bố cục; panel từng ở cửa sổ tách thì ghi vào danh sách chờ mở lại. */
+  const restoreLayout = useCallback((api: DockviewApi, layout: SavedLayout) => {
+    const back = restore(api, layout)
+    setReturned(back)
+    return back
+  }, [])
 
   const syncMenu = useCallback(() => {
     const file = fileRef.current
@@ -78,7 +108,7 @@ export function useWorkspaceLayouts(apiRef: RefObject<DockviewApi | null>, usern
       let message = loaded.notice
       if (file) {
         try {
-          restore(api, file.layouts[file.active])
+          restoreLayout(api, file.layouts[file.active])
         } catch {
           file = null
           message = 'Bố cục đã lưu bị hỏng nên Bàn làm việc dùng bố cục mặc định.'
@@ -94,7 +124,7 @@ export function useWorkspaceLayouts(apiRef: RefObject<DockviewApi | null>, usern
       syncMenu()
       api.onDidLayoutChange(scheduleSave)
     },
-    [username, role, syncMenu, scheduleSave],
+    [username, role, syncMenu, scheduleSave, restoreLayout],
   )
 
   // Đổi mã / lệnh của nhóm cũng là một phần của bố cục.
@@ -110,7 +140,7 @@ export function useWorkspaceLayouts(apiRef: RefObject<DockviewApi | null>, usern
       flush()
       file.active = name
       try {
-        restore(api, file.layouts[name])
+        restoreLayout(api, file.layouts[name])
       } catch {
         applyPreset(api, defaultPresetFor(role))
         setNotice(`Bố cục "${name}" bị hỏng nên đã thay bằng bố cục mặc định.`)
@@ -118,7 +148,7 @@ export function useWorkspaceLayouts(apiRef: RefObject<DockviewApi | null>, usern
       flush()
       syncMenu()
     },
-    [apiRef, flush, role, syncMenu],
+    [apiRef, flush, role, syncMenu, restoreLayout],
   )
 
   const saveAs = useCallback(
@@ -146,12 +176,12 @@ export function useWorkspaceLayouts(apiRef: RefObject<DockviewApi | null>, usern
         const next = Object.keys(file.layouts)[0]
         file.active = next
         const api = apiRef.current
-        if (api) restore(api, file.layouts[next])
+        if (api) restoreLayout(api, file.layouts[next])
       }
       flush()
       syncMenu()
     },
-    [apiRef, flush, syncMenu],
+    [apiRef, flush, syncMenu, restoreLayout],
   )
 
   /** Áp bố cục mẫu vào bố cục đang mở (Về mặc định = mẫu theo vai trò, mã các nhóm về mặc định). */
@@ -189,7 +219,7 @@ export function useWorkspaceLayouts(apiRef: RefObject<DockviewApi | null>, usern
       }
       file.active = opened
       try {
-        restore(api, file.layouts[opened])
+        restoreLayout(api, file.layouts[opened])
       } catch {
         applyPreset(api, defaultPresetFor(role))
       }
@@ -198,8 +228,8 @@ export function useWorkspaceLayouts(apiRef: RefObject<DockviewApi | null>, usern
       const count = Object.keys(result.file.layouts).length
       return { ok: true, message: `Đã nhập ${count} bố cục, đang mở "${opened}".` }
     },
-    [apiRef, flush, role, syncMenu],
+    [apiRef, flush, role, syncMenu, restoreLayout],
   )
 
-  return { initialize, menu, notice, setNotice, switchTo, saveAs, remove, applyTemplate, exportJson, importJson }
+  return { initialize, menu, notice, setNotice, switchTo, saveAs, remove, applyTemplate, exportJson, importJson, returned, setReturned }
 }
