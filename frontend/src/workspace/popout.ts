@@ -1,4 +1,5 @@
 import type { DockviewApi } from 'dockview-react'
+import { mirrorDocument } from './windowMirror'
 import { POPOUT_URL, useWindowsStore } from './windows'
 
 export interface PopoutBox {
@@ -21,16 +22,27 @@ export function popoutPanel(api: DockviewApi, panelId: string, position?: Popout
   return api.addPopoutGroup(item, { popoutUrl: POPOUT_URL, ...(position ? { position } : {}) })
 }
 
-/** Ghi cửa sổ tách vào sổ đăng ký khi mở, gỡ khi đóng. Gọi một lần trong onReady của dockview. */
+/**
+ * Ghi cửa sổ tách vào sổ đăng ký khi mở (kèm phản chiếu theme, style từ cửa sổ chính), gỡ khi đóng.
+ * Gọi một lần trong onReady của dockview.
+ */
 export function trackPopoutWindows(api: DockviewApi) {
   const { addWindow, removeWindow } = useWindowsStore.getState()
-  const added = api.onDidAddPopoutGroup((event) => addWindow({ id: event.group.id, kind: 'popout', window: event.window }))
+  const stops = new Map<Window, () => void>()
+  const added = api.onDidAddPopoutGroup((event) => {
+    addWindow({ id: event.group.id, kind: 'popout', window: event.window })
+    stops.set(event.window, mirrorDocument(document, event.window.document))
+  })
   const closing = api.onWillClosePopoutWindow((event) => {
+    stops.get(event.window)?.()
+    stops.delete(event.window)
     const entry = useWindowsStore.getState().windows.find((item) => item.window === event.window)
     if (entry) removeWindow(entry.id)
   })
   return () => {
     added.dispose()
     closing.dispose()
+    for (const stop of stops.values()) stop()
+    stops.clear()
   }
 }
