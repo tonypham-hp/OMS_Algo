@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.4.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -19,6 +19,7 @@
     "screenshots:dot8b": "playwright test e2e/screenshots-dot8b.spec.ts --project=desktop-1440",
     "screenshots:dot9": "playwright test e2e/screenshots-dot9.spec.ts --project=desktop-1440",
     "screenshots:dot10a": "playwright test e2e/screenshots-dot10a.spec.ts --project=desktop-1440",
+    "screenshots:dot10b": "playwright test e2e/screenshots-dot10b.spec.ts --project=desktop-1440",
     "perf:workspace": "node scripts/perf-workspace.mjs"
   },
   "dependencies": {

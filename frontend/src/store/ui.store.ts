@@ -43,7 +43,9 @@ interface UiState {
   setTourOpen: (open: boolean, kind?: TourKind) => void
   /** Bảng phím tắt (? hoặc /) đang mở. */
   shortcutsOpen: boolean
-  setShortcutsOpen: (open: boolean) => void
+  /** Cửa sổ mở bảng phím tắt (body của cửa sổ tách, Đợt 10B); undefined: cửa sổ chính. */
+  shortcutsContainer: HTMLElement | undefined
+  setShortcutsOpen: (open: boolean, container?: HTMLElement) => void
 }
 
 export const useUiStore = create<UiState>()((set, get) => ({
@@ -56,7 +58,8 @@ export const useUiStore = create<UiState>()((set, get) => ({
   tourKind: 'main',
   setTourOpen: (tourOpen, tourKind = 'main') => set({ tourOpen, tourKind }),
   shortcutsOpen: false,
-  setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
+  shortcutsContainer: undefined,
+  setShortcutsOpen: (shortcutsOpen, shortcutsContainer) => set({ shortcutsOpen, shortcutsContainer }),
   pickPrice: (price) => set({ pickedPrice: { price, nonce: (get().pickedPrice?.nonce ?? 0) + 1 } }),
   sidebarCollapsed: readCollapsed(),
   toggleSidebar: () => {

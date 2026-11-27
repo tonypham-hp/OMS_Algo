@@ -1,4 +1,7 @@
+import type { DockviewPanelApi } from 'dockview-react'
 import { useRef, type ReactNode } from 'react'
+import { PortalContainerContext } from '@/components/ui/portalContainer'
+import { usePortalTarget } from '@/workspace/useOwnerDocument'
 import { useGridKeyboard } from '@/hooks/useGridKeyboard'
 import { PANEL_KINDS, type PanelKind } from '@/workspace/panelTypes'
 
@@ -16,9 +19,14 @@ function GridArea({ children }: { children: ReactNode }) {
  * Khung chung của mọi panel: vùng có tên (aria-label) để trình đọc màn hình và Alt+1..9 tìm tới,
  * cuộn riêng trong panel, data-demo-id riêng theo loại panel (không trùng id của component bên trong).
  */
-export function PanelFrame({ kind, panelId, children }: { kind: PanelKind; panelId: string; children: ReactNode }) {
+export function PanelFrame({ kind, api, children }: { kind: PanelKind; api: DockviewPanelApi; children: ReactNode }) {
+  const panelId = api.id
+  const ref = useRef<HTMLElement>(null)
+  // Đợt 10B: panel ở cửa sổ tách thì hộp thoại, menu, ô chọn của nó hiện trong chính cửa sổ đó.
+  const portalTarget = usePortalTarget(ref, api)
   return (
     <section
+      ref={ref}
       aria-label={PANEL_KINDS[kind].title}
       data-ws-panel={panelId}
       data-ws-kind={kind}
@@ -26,7 +34,9 @@ export function PanelFrame({ kind, panelId, children }: { kind: PanelKind; panel
       tabIndex={-1}
       className="bg-surface text-text h-full overflow-auto p-2"
     >
-      {GRID_PANELS.has(kind) ? <GridArea>{children}</GridArea> : children}
+      <PortalContainerContext.Provider value={portalTarget}>
+        {GRID_PANELS.has(kind) ? <GridArea>{children}</GridArea> : children}
+      </PortalContainerContext.Provider>
     </section>
   )
 }

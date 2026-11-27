@@ -1,4 +1,7 @@
 import { Plus } from 'lucide-react'
+import { useRef } from 'react'
+import { PortalContainerContext } from '@/components/ui/portalContainer'
+import { usePortalTarget } from '@/workspace/useOwnerDocument'
 import type { IDockviewHeaderActionsProps } from 'dockview-react'
 import {
   DropdownMenu,
@@ -12,9 +15,12 @@ import { addWorkspacePanel } from '@/workspace/presets'
 import { PANEL_KIND_ORDER, PANEL_KINDS } from '@/workspace/panelTypes'
 
 /** Nút "+ Thêm panel" bên phải thanh tab của mỗi nhóm: thêm panel mới vào nhóm đó (một loại mở được nhiều lần). */
-export function GroupActions({ containerApi, group }: IDockviewHeaderActionsProps) {
+export function GroupActions({ containerApi, group, api }: IDockviewHeaderActionsProps) {
+  const ref = useRef<HTMLDivElement>(null)
+  const portalTarget = usePortalTarget(ref, api)
   return (
-    <div className="flex h-full items-center px-1">
+    <PortalContainerContext.Provider value={portalTarget}>
+    <div ref={ref} className="flex h-full items-center px-1">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
@@ -41,5 +47,6 @@ export function GroupActions({ containerApi, group }: IDockviewHeaderActionsProp
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
+    </PortalContainerContext.Provider>
   )
 }

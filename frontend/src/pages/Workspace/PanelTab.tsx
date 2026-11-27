@@ -1,6 +1,7 @@
-import { Ellipsis, ExternalLink, PictureInPicture2, X } from 'lucide-react'
+import { Ellipsis, ExternalLink, Monitor, PanelLeftClose, PictureInPicture2, X } from 'lucide-react'
 import type { IDockviewPanelHeaderProps } from 'dockview-react'
-import type { PointerEvent } from 'react'
+import { useRef, type PointerEvent } from 'react'
+import { PortalContainerContext } from '@/components/ui/portalContainer'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,7 +13,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { useDemoStore } from '@/store/demo.store'
 import { useWorkspaceStore } from '@/store/workspace.store'
+import { popoutBlockedReason } from '@/workspace/windows'
+import { closePopoutOf, useInPopout, usePortalTarget } from '@/workspace/useOwnerDocument'
+import { useWorkspaceActions } from '@/workspace/workspaceContext'
 import { LINK_GROUP_CLASSES, LINK_GROUP_LABELS, LINK_GROUP_OPTIONS, changePanelGroup } from '@/workspace/linkGroups'
 import type { LinkGroup, PanelParams } from '@/workspace/panelTypes'
 
@@ -31,14 +36,22 @@ export function LinkGroupBadge({ group, compact = false }: { group: LinkGroup; c
 const stop = (event: PointerEvent) => event.stopPropagation()
 
 /**
- * Tab của panel: tiêu đề, menu "⋯" (thả nổi, tách cửa sổ – khóa đến Đợt 10B) và nút đóng.
+ * Tab của panel: tiêu đề, menu "⋯" (nhóm liên kết, thả nổi, tách ra cửa sổ riêng / đưa về) và nút đóng.
  * Kéo tab để dock trái/phải/trên/dưới hoặc gộp vào nhóm tab khác (dockview lo phần kéo thả).
  */
 export function PanelTab({ api, containerApi, params }: IDockviewPanelHeaderProps<PanelParams>) {
   const title = api.title ?? ''
+  const workspace = useWorkspaceActions()
+  const demoActive = useDemoStore((state) => state.snapshot !== null)
+  const blockedReason = popoutBlockedReason({ demoActive })
+  const inPopout = useInPopout(api)
   const group: LinkGroup = params?.group ?? '1'
+  const ref = useRef<HTMLDivElement>(null)
+  // Đợt 10B: tab ở cửa sổ tách thì menu "⋯" hiện trong chính cửa sổ đó.
+  const portalTarget = usePortalTarget(ref, api)
   return (
-    <div className="flex h-full items-center gap-1.5 pr-1 pl-3 text-[0.8125rem]" data-ws-tab={api.id}>
+    <PortalContainerContext.Provider value={portalTarget}>
+    <div ref={ref} className="flex h-full items-center gap-1.5 pr-1 pl-3 text-[0.8125rem]" data-ws-tab={api.id}>
       <LinkGroupBadge group={group} />
       <span className="truncate">{title}</span>
       <DropdownMenu>
@@ -76,10 +89,33 @@ export function PanelTab({ api, containerApi, params }: IDockviewPanelHeaderProp
             <PictureInPicture2 aria-hidden />
             Thả nổi
           </DropdownMenuItem>
-          <DropdownMenuItem disabled>
-            <ExternalLink aria-hidden />
-            Tách cửa sổ (Đợt 10B)
-          </DropdownMenuItem>
+          {inPopout ? (
+            <DropdownMenuItem onSelect={() => closePopoutOf(api)} data-testid="ws-dock-back">
+              <PanelLeftClose aria-hidden />
+              Đưa về bàn làm việc
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem
+              disabled={blockedReason !== null}
+              title={blockedReason ?? undefined}
+              onSelect={() => workspace?.popout(api.id)}
+              data-testid="ws-popout"
+            >
+              <ExternalLink aria-hidden />
+              Tách ra cửa sổ riêng
+              {blockedReason && <span className="text-muted-foreground ml-auto text-xs">Demo</span>}
+            </DropdownMenuItem>
+          )}
+          {!inPopout && workspace?.canPlaceOnScreen && (
+            <DropdownMenuItem
+              disabled={blockedReason !== null}
+              onSelect={() => workspace.popoutToScreen(api.id)}
+              data-testid="ws-popout-screen"
+            >
+              <Monitor aria-hidden />
+              Mở trên màn hình khác…
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => api.close()}>
             <X aria-hidden />
@@ -98,5 +134,6 @@ export function PanelTab({ api, containerApi, params }: IDockviewPanelHeaderProp
         <X className="size-3.5" aria-hidden />
       </button>
     </div>
+    </PortalContainerContext.Provider>
   )
 }

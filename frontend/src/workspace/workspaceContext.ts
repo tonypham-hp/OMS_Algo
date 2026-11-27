@@ -5,6 +5,12 @@ import type { LinkGroup } from './panelTypes'
 export interface WorkspaceActions {
   /** Mở lệnh ở panel Chi tiết lệnh cùng nhóm; chưa có panel đó thì mở thêm một panel. */
   openOrder: (group: LinkGroup, orderId: string, fromPanelId: string) => void
+  /** Tách panel ra cửa sổ trình duyệt riêng (Đợt 10B). Chỉ gọi từ thao tác của người dùng (bấm menu). */
+  popout: (panelId: string) => void
+  /** Tách panel ra cửa sổ riêng trên màn hình khác (Window Management API; có hỏi quyền, chọn màn hình). */
+  popoutToScreen: (panelId: string) => void
+  /** Trình duyệt có Window Management API không (ẩn mục "Mở trên màn hình khác…" nếu không). */
+  canPlaceOnScreen: boolean
 }
 
 export const WorkspaceActionsContext = createContext<WorkspaceActions | null>(null)

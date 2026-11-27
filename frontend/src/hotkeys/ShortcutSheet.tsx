@@ -1,5 +1,6 @@
 import { useHotkeys } from 'react-hotkeys-hook'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { PortalContainerContext } from '@/components/ui/portalContainer'
 import { useUiStore } from '@/store/ui.store'
 import { SHORTCUT_GROUPS, SHORTCUTS } from './shortcuts'
 import { useHotkeyOptions } from './useHotkeyOptions'
@@ -16,13 +17,15 @@ export function Kbd({ children }: { children: string }) {
 export function ShortcutSheet() {
   const open = useUiStore((state) => state.shortcutsOpen)
   const setOpen = useUiStore((state) => state.setShortcutsOpen)
+  const container = useUiStore((state) => state.shortcutsContainer)
   const options = useHotkeyOptions('global')
   // "?" là Shift + "/" trên bàn phím Mỹ: khớp cả hai cho chắc chắn, và cả "/" đơn.
   useHotkeys('shift+slash, slash', () => setOpen(true), options)
   useHotkeys('?', () => setOpen(true), { ...options, useKey: true })
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <PortalContainerContext.Provider value={container}>
+    <Dialog open={open} onOpenChange={(next) => setOpen(next)}>
       <DialogContent className="sm:max-w-lg" data-testid="shortcut-sheet">
         <DialogHeader>
           <DialogTitle>Phím tắt</DialogTitle>
@@ -53,5 +56,6 @@ export function ShortcutSheet() {
         </div>
       </DialogContent>
     </Dialog>
+    </PortalContainerContext.Provider>
   )
 }

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { DemoTopBar } from '@/components/demo/DemoTopBar'
 import { NotificationBell } from '@/components/layout/NotificationBell'
@@ -16,6 +16,7 @@ import { useNotificationSync } from '@/hooks/useNotificationSync'
 import { useAuthStore } from '@/store/auth.store'
 import { useDemoStore } from '@/store/demo.store'
 import { useUiStore } from '@/store/ui.store'
+import { installWindowSafety } from '@/workspace/windows'
 
 /** Phần chạy Chế độ Demo: chỉ tải khi vai trò được dùng Demo. */
 const DemoLayer = lazy(() => import('@/components/demo/DemoLayer'))
@@ -28,6 +29,15 @@ export function AppLayout() {
   useMarketStream()
   useNotificationSync()
   usePaletteHotkey()
+  // Đợt 10B: đăng xuất hoặc bắt đầu Demo thì đóng mọi cửa sổ tách, phiếu mini.
+  useEffect(
+    () =>
+      installWindowSafety({
+        onLogout: (close) => useAuthStore.subscribe((state, previous) => previous.user && !state.user && close()),
+        onDemoStart: (close) => useDemoStore.subscribe((state, previous) => !previous.snapshot && state.snapshot && close()),
+      }),
+    [],
+  )
   const role = useAuthStore((state) => state.user?.role)
   const savedCollapsed = useUiStore((state) => state.sidebarCollapsed)
   const toggleSaved = useUiStore((state) => state.toggleSidebar)

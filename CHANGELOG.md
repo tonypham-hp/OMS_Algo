@@ -4,6 +4,42 @@ Ghi các thay đổi đáng chú ý của frontend OMS Algo theo từng đợt p
 [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/), đánh số phiên bản theo [SemVer](https://semver.org/lang/vi/).
 Bản 0.x là bản demo chạy với dữ liệu giả lập, chưa có backend.
 
+## [0.4.1] – 2026-11-27 · Đợt 10B: Đa cửa sổ, màn hình thứ hai, phiếu lệnh mini nổi
+
+Không thêm gói, không đổi engine: vẫn một engine mô phỏng ở cửa sổ chính. Chi tiết: frontend-spec mục 24.
+
+### Thêm
+- **Tách panel ra cửa sổ riêng:** menu "⋯" → "Tách ra cửa sổ riêng" (popout miễn phí của dockview, trang
+  `public/popout.html`).
+  - "Đưa về bàn làm việc" hoặc đóng cửa sổ thì panel về đúng chỗ cũ.
+  - Panel tách vẫn chạy trong cây React của cửa sổ chính, nên dữ liệu và nhóm liên kết cập nhật ngay (< 500 ms) và lệnh
+    đặt từ cửa sổ tách vẫn qua kiểm tra luật và Xác nhận.
+- **Phản chiếu theme và style:** theme, bảng màu, mật độ, cỡ chữ, nhấp nháy và style thêm sau được phản chiếu sang cửa
+  sổ tách; đổi ở cửa sổ chính thì cửa sổ tách đổi theo.
+- **Phím tắt trong cửa sổ tách:** B/S/O/D/N, Alt+1…9, "?" chạy theo panel của cửa sổ đó.
+- **Tải lại cửa sổ chính:** panel đang tách về bàn làm việc, kèm nút "Mở lại cửa sổ tách". Trình duyệt chặn mở cửa sổ
+  khi không có thao tác, nên mỗi cú bấm mở một cửa sổ.
+- **Màn hình thứ hai:** "Mở trên màn hình khác…" (Window Management API, Chrome/Edge) hỏi quyền, chọn màn hình, nhớ lựa
+  chọn trong bố cục. Không hỗ trợ thì mở cửa sổ thường.
+- **Popup bị chặn:** hộp hướng dẫn cho phép popup bằng tiếng Việt.
+- **Phiếu lệnh mini nổi trên cùng** (Document Picture-in-Picture):
+  - cùng `OrderTicket`, kiểm tra luật, Xác nhận, nhóm liên kết, giữ bản nháp;
+  - trình duyệt không hỗ trợ thì ẩn nút.
+- **An toàn:**
+  - đăng xuất, bắt đầu Demo hoặc rời Bàn làm việc thì đóng mọi cửa sổ phụ;
+  - đang Demo thì khóa tách cửa sổ;
+  - không mở cửa sổ nào khi không có thao tác.
+- **Test:**
+  - Vitest: phản chiếu theme (DOM giả), sổ đăng ký cửa sổ, màn hình và khi không có API, `splitPopouts`, guard theo
+    `ownerDocument`.
+  - Playwright `multiwindow.spec` (18 test): trang tách, đồng bộ < 500 ms, Dialog/Select/menu đúng trang, theme, phím
+    tắt, đóng / tải lại / đăng xuất, Demo khóa, màn hình giả lập, không có API, chặn popup, phiếu mini.
+- **Ảnh:** [docs/screenshots/dot10b/](docs/screenshots/dot10b/).
+
+### Sửa
+- **Overlay đúng cửa sổ:** Dialog, DropdownMenu, Select, Tooltip gắn portal vào cửa sổ chứa phần tử. Trước đây hộp
+  thoại của panel ở cửa sổ khác hiện ở cửa sổ chính.
+
 ## [0.4.0] – 2026-11-26 · Đợt 10A: Bàn làm việc, nhóm liên kết màu, phím tắt
 
 Màn mới cho dealer và vận hành, ghép từ component có sẵn. Không đổi nghiệp vụ, không đổi engine. Tách cửa sổ / màn hình

@@ -1,11 +1,12 @@
 import 'dockview-react/dist/styles/dockview.css'
 import '@/styles/workspace.css'
 import { DockviewReact, type DockviewApi, type DockviewReadyEvent, type DockviewTheme } from 'dockview-react'
-import { Keyboard, X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { ExternalLink, Keyboard, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { useWorkspaceHotkeys } from '@/hotkeys/useWorkspaceHotkeys'
+import { WindowHotkeys } from '@/hotkeys/WindowHotkeys'
 import { useDemoStore } from '@/store/demo.store'
 import { useUiStore } from '@/store/ui.store'
 import { shouldStartTour } from '@/tour/tourState'
@@ -19,9 +20,15 @@ import { PANEL_COMPONENTS } from '@/workspace/panels'
 import { nextLayoutName } from '@/workspace/layouts'
 import { addWorkspacePanel, applyPreset, panelKind } from '@/workspace/presets'
 import { useWorkspaceLayouts } from '@/workspace/useWorkspaceLayouts'
+import { popoutPanel, trackPopoutWindows } from '@/workspace/popout'
+import { closeAllWindows, popoutBlockedReason, useWindowsStore } from '@/workspace/windows'
+import { placeOnScreen, requestScreens, screenLabel, supportsScreenDetails, type ScreenInfo } from '@/workspace/screens'
+import { PopupBlockedDialog } from './PopupBlockedDialog'
+import { ScreenPickerDialog } from './ScreenPickerDialog'
 import { WorkspaceActionsContext, type WorkspaceActions } from '@/workspace/workspaceContext'
 import { GroupActions } from './GroupActions'
 import { LayoutMenu } from './LayoutMenu'
+import { MiniTicketHost } from './MiniTicketWindow'
 import { PanelTab } from './PanelTab'
 
 /** Theme dockview riêng: biến --dv-* trỏ về token (src/styles/workspace.css), tự theo 4 theme và bảng màu mù màu. */
@@ -41,8 +48,23 @@ export default function Workspace() {
   const [searchParams, setSearchParams] = useSearchParams()
   useWorkspaceHotkeys(apiRef)
 
+  // Đợt 10B: chọn màn hình (Window Management API) và báo khi trình duyệt chặn cửa sổ bật lên.
+  const [screenPick, setScreenPick] = useState<{ panelId: string; title: string; screens: ScreenInfo[]; current: ScreenInfo } | null>(null)
+  const [popupBlocked, setPopupBlocked] = useState(false)
+
   const actions = useMemo<WorkspaceActions>(
     () => ({
+      canPlaceOnScreen: supportsScreenDetails(),
+      popoutToScreen: (panelId) => {
+        if (popoutBlockedReason({ demoActive: useDemoStore.getState().snapshot !== null })) return
+        // Hỏi quyền, lấy danh sách màn hình; không được thì mở bình thường (không báo lỗi).
+        void requestScreens().then((details) => {
+          const api = apiRef.current
+          if (!api) return
+          if (!details) void popoutPanel(api, panelId)
+          else setScreenPick({ panelId, title: api.getPanel(panelId)?.title ?? '', screens: details.screens, current: details.currentScreen })
+        })
+      },
       openOrder: (group, orderId, fromPanelId) => {
         const api = apiRef.current
         if (!api) return
@@ -59,9 +81,46 @@ export default function Workspace() {
         const added = addWorkspacePanel(api, 'order-detail', { referencePanel: fromPanelId, direction: 'right' }, { group })
         if (group === 'none') added.api.updateParameters({ group, orderId })
       },
+      // Tách panel ra cửa sổ riêng (Đợt 10B): chỉ từ thao tác bấm menu; khóa khi đang Demo.
+      popout: (panelId) => {
+        const api = apiRef.current
+        if (!api || popoutBlockedReason({ demoActive: useDemoStore.getState().snapshot !== null })) return
+        void popoutPanel(api, panelId)
+      },
     }),
     [],
   )
+
+  // Rời Bàn làm việc: đóng mọi cửa sổ tách (dockview cũng đóng khi huỷ, đóng thêm cho chắc), xoá sổ đăng ký.
+  useEffect(
+    () => () => {
+      closeAllWindows(useWindowsStore.getState().windows.filter((item) => item.kind === 'popout'))
+    },
+    [],
+  )
+
+  /** Mở cửa sổ tách trên màn hình đã chọn và nhớ lựa chọn trong bố cục (params của panel). Bấm "Mở" là thao tác của người dùng. */
+  function openOnScreen(screen: ScreenInfo, index: number) {
+    const api = apiRef.current
+    const pick = screenPick
+    setScreenPick(null)
+    if (!api || !pick) return
+    const box = placeOnScreen(screen)
+    const panel = api.getPanel(pick.panelId)
+    panel?.api.updateParameters({ ...(panel.params as PanelParams), screen: { label: screenLabel(screen, index), ...box } })
+    void popoutPanel(api, pick.panelId, box)
+  }
+
+  /** Mở lại MỘT cửa sổ tách đã được đưa về khi tải lại trang (mỗi cú bấm chỉ mở được một cửa sổ). */
+  const reopenNext = () => {
+    const api = apiRef.current
+    const [next, ...rest] = layouts.returned
+    if (!api || !next) return
+    // Ưu tiên màn hình đã chọn trước đây (nhớ trong params của panel), không có thì vị trí lúc lưu.
+    const saved = (api.getPanel(next.panelId)?.params as PanelParams | undefined)?.screen
+    void popoutPanel(api, next.panelId, saved ?? next.position ?? undefined)
+    layouts.setReturned(rest)
+  }
 
   // Lần đầu mở Bàn làm việc (mỗi vai trò): 1 bước tour giới thiệu. Không chạy khi đang Demo hay đang xem tour chung.
   const demoActive = useDemoStore((state) => state.snapshot !== null)
@@ -102,6 +161,11 @@ export default function Workspace() {
   const onReady = useCallback(
     (event: DockviewReadyEvent) => {
       apiRef.current = event.api
+      trackPopoutWindows(event.api)
+      // Popup bị chặn: dockview đã đưa panel về lưới; hiện hướng dẫn cho phép popup.
+      event.api.onDidOpenPopoutWindowFail((failure) => {
+        if (failure.reason === 'blocked') setPopupBlocked(true)
+      })
       initialize(event.api)
       registerDemoBridge(event.api)
       if (requestedSide === 'mua' || requestedSide === 'ban') {
@@ -157,8 +221,34 @@ export default function Workspace() {
           </button>
         </div>
       )}
+      {layouts.returned.length > 0 && (
+        <div role="status" className="bg-nav-active flex flex-wrap items-center justify-between gap-2 rounded-md px-3 py-1.5 text-sm" data-testid="ws-returned">
+          <span>
+            {layouts.returned.length} panel đang ở cửa sổ tách đã được đưa về bàn làm việc khi tải lại trang (trình duyệt không tự mở
+            lại cửa sổ).
+          </span>
+          <span className="flex items-center gap-1">
+            <Button size="sm" variant="outline" onClick={reopenNext} disabled={demoActive}>
+              <ExternalLink aria-hidden /> Mở lại cửa sổ tách{layouts.returned.length > 1 ? ` (còn ${layouts.returned.length})` : ''}
+            </Button>
+            <button type="button" aria-label="Bỏ qua, để panel ở bàn làm việc" onClick={() => layouts.setReturned([])} className="rounded p-0.5">
+              <X className="size-4" aria-hidden />
+            </button>
+          </span>
+        </div>
+      )}
+      <ScreenPickerDialog
+        key={screenPick?.panelId ?? 'none'}
+        screens={screenPick}
+        panelTitle={screenPick?.title ?? ''}
+        onClose={() => setScreenPick(null)}
+        onPick={openOnScreen}
+      />
+      <PopupBlockedDialog open={popupBlocked} onClose={() => setPopupBlocked(false)} />
       <div className="border-border min-h-0 flex-1 overflow-hidden rounded-lg border" data-demo-id="workspace-dock">
         <WorkspaceActionsContext.Provider value={actions}>
+          <WindowHotkeys apiRef={apiRef} />
+          <MiniTicketHost />
           <DockviewReact
             theme={OMS_DOCK_THEME}
             components={PANEL_COMPONENTS}

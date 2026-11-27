@@ -85,8 +85,71 @@ export function sanitizeDock(raw: unknown, renames: Record<string, PanelKind> = 
       return isObject(floating.data) && Array.isArray(floating.data.views) && floating.data.views.length > 0
     })
   }
-  delete dock.popoutGroups
+  // Cửa sổ tách (Đợt 10B): giữ lại, bỏ panel không hợp lệ; nhóm rỗng thì bỏ. Mở lại do splitPopouts + người dùng bấm.
+  if (Array.isArray(dock.popoutGroups)) {
+    dock.popoutGroups = dock.popoutGroups.filter((popout) => {
+      if (!isObject(popout)) return false
+      if (isObject(popout.data)) pruneViews({ type: 'leaf', data: popout.data }, keep)
+      if (isObject(popout.grid) && isObject(popout.grid.root)) pruneViews(popout.grid.root, keep)
+      return popoutViews(popout).length > 0
+    })
+  }
   return dock as unknown as SerializedDockview
+}
+
+/** Id các panel trong một cửa sổ tách đã lưu (dạng một nhóm `data` hoặc nhiều nhóm `grid`). */
+function popoutViews(popout: Record<string, unknown>): string[] {
+  const views: string[] = []
+  const walk = (node: unknown) => {
+    if (!isObject(node)) return
+    if (node.type === 'leaf' && isObject(node.data) && Array.isArray(node.data.views)) views.push(...(node.data.views as string[]))
+    else if (node.type === 'branch' && Array.isArray(node.data)) node.data.forEach(walk)
+  }
+  if (isObject(popout.data) && Array.isArray(popout.data.views)) views.push(...(popout.data.views as string[]))
+  if (isObject(popout.grid)) walk(popout.grid.root)
+  return views
+}
+
+/** Một cửa sổ tách đang mở lúc lưu bố cục, để mở lại khi người dùng bấm "Mở lại cửa sổ tách". */
+export interface PendingPopout {
+  panels: Array<{ id: string; contentComponent: string; title?: string; params?: Record<string, unknown> }>
+  /** Vị trí, kích thước cửa sổ lúc lưu (toạ độ màn hình). */
+  position: { left: number; top: number; width: number; height: number } | null
+}
+
+/**
+ * Tách các cửa sổ tách ra khỏi bố cục đã lưu. Trình duyệt chỉ cho mở cửa sổ khi người dùng thao tác, nên tải lại
+ * trang thì không tự mở lại: các panel đó được đưa về bàn làm việc, kèm danh sách để mở lại bằng một cú bấm.
+ * Trả bố cục KHÔNG còn cửa sổ tách và không còn các panel đó (trang thêm lại chúng vào lưới).
+ */
+export function splitPopouts(dock: SerializedDockview): { dock: SerializedDockview; pending: PendingPopout[] } {
+  const raw = dock as unknown as Record<string, unknown> & { panels: Record<string, Record<string, unknown>> }
+  const popouts = Array.isArray(raw.popoutGroups) ? (raw.popoutGroups as Array<Record<string, unknown>>) : []
+  if (popouts.length === 0) return { dock, pending: [] }
+  const rest = structuredClone(raw)
+  delete rest.popoutGroups
+  const pending: PendingPopout[] = []
+  for (const popout of popouts) {
+    const panels: PendingPopout['panels'] = []
+    for (const id of popoutViews(popout)) {
+      const state = raw.panels[id]
+      if (!state || typeof state.contentComponent !== 'string') continue
+      panels.push({
+        id,
+        contentComponent: state.contentComponent,
+        title: typeof state.title === 'string' ? state.title : undefined,
+        params: isObject(state.params) ? state.params : undefined,
+      })
+      delete rest.panels[id]
+    }
+    const box = popout.position
+    const position =
+      isObject(box) && [box.left, box.top, box.width, box.height].every((value) => typeof value === 'number')
+        ? { left: box.left as number, top: box.top as number, width: box.width as number, height: box.height as number }
+        : null
+    if (panels.length > 0) pending.push({ panels, position })
+  }
+  return { dock: rest as unknown as SerializedDockview, pending }
 }
 
 function sanitizeGroups(raw: unknown): SavedGroups {

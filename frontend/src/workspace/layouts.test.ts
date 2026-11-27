@@ -7,6 +7,7 @@ import {
   parseWorkspaceJson,
   sanitizeDock,
   saveWorkspace,
+  splitPopouts,
   workspaceKey,
   type WorkspaceFile,
 } from './layouts'
@@ -160,15 +161,35 @@ describe('migrate schema v1 → v2', () => {
 })
 
 describe('sanitizeDock và tên bố cục', () => {
-  it('bỏ nhóm tách cửa sổ (chưa hỗ trợ đến Đợt 10B) và nhóm nổi rỗng', () => {
+  it('giữ cửa sổ tách còn panel hợp lệ, bỏ cửa sổ tách và nhóm nổi rỗng', () => {
     const raw = {
-      ...dock({ 'watchlist-1': { component: 'watchlist' } }, [['watchlist-1'], []]),
-      popoutGroups: [{ data: { views: ['watchlist-1'] } }],
+      ...dock({ 'watchlist-1': { component: 'watchlist' }, 'depth-1': { component: 'depth' } }, [['watchlist-1'], []]),
+      popoutGroups: [{ data: { id: 'p1', views: ['depth-1'] }, position: null }, { data: { id: 'p2', views: ['ghost'] }, position: null }],
       floatingGroups: [{ data: { id: 'f', views: ['ghost'] }, position: {} }],
     }
-    const cleaned = sanitizeDock(raw) as unknown as Record<string, unknown>
-    expect(cleaned.popoutGroups).toBeUndefined()
+    const cleaned = sanitizeDock(raw) as unknown as { popoutGroups: Array<{ data: { views: string[] } }>; floatingGroups: unknown[] }
+    expect(cleaned.popoutGroups.map((popout) => popout.data.views)).toEqual([['depth-1']])
     expect(cleaned.floatingGroups).toEqual([])
+  })
+
+  it('tải lại: cửa sổ tách thành danh sách chờ mở lại, panel rời khỏi bố cục (trang thêm lại vào lưới)', () => {
+    const raw = {
+      ...dock({ 'watchlist-1': { component: 'watchlist' }, 'depth-1': { component: 'depth', group: '2' } }, [['watchlist-1'], []]),
+      popoutGroups: [{ data: { id: 'p1', views: ['depth-1'] }, position: { left: 1920, top: 0, width: 800, height: 600 } }],
+    }
+    const { dock: rest, pending } = splitPopouts(sanitizeDock(raw)!)
+    expect(pending).toEqual([
+      {
+        panels: [{ id: 'depth-1', contentComponent: 'depth', title: 'depth-1', params: { group: '2' } }],
+        position: { left: 1920, top: 0, width: 800, height: 600 },
+      },
+    ])
+    const restRaw = rest as unknown as Record<string, unknown> & { panels: Record<string, unknown> }
+    expect(restRaw.popoutGroups).toBeUndefined()
+    expect(Object.keys(restRaw.panels)).toEqual(['watchlist-1'])
+    // Không có cửa sổ tách: trả nguyên bố cục.
+    const plain = sanitizeDock(dock({ 'watchlist-1': { component: 'watchlist' } }, [['watchlist-1'], []]))!
+    expect(splitPopouts(plain)).toEqual({ dock: plain, pending: [] })
   })
 
   it('tên bố cục mới không trùng', () => {
