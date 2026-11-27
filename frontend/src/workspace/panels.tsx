@@ -1,7 +1,9 @@
 /* eslint-disable react-refresh/only-export-components -- registry: bảng tra loại panel → component, không phải module component */
 import type { DockviewPanelApi, IDockviewPanelProps } from 'dockview-react'
 import { MousePointerClick } from 'lucide-react'
-import { Lock } from 'lucide-react'
+import { Lock, PictureInPicture2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { openMiniTicket, supportsMiniTicket } from '@/pages/Workspace/MiniTicketWindow'
 import { useCallback, useMemo, useState, type FunctionComponent, type ReactNode } from 'react'
 import { NotificationList } from '@/components/layout/NotificationList'
 import { OrderBook3 } from '@/components/OrderBook3'
@@ -28,7 +30,10 @@ const FALLBACK_SYMBOL = 'FPT'
  * - thuộc nhóm 1–4: dùng chung trong store bàn làm việc (selector hẹp theo nhóm);
  * - "Không nhóm": mã riêng lưu trong params của panel (đi theo bố cục khi lưu).
  */
-function PanelScope({ panelApi, params, children }: { panelApi: DockviewPanelApi; params: PanelParams; children: ReactNode }) {
+/** Phần api panel mà PanelScope / TicketBody cần; phiếu mini (Đợt 10B) đưa một "chủ" riêng không phải panel dockview. */
+export type TicketHost = Pick<DockviewPanelApi, 'id' | 'isVisible' | 'updateParameters'>
+
+export function PanelScope({ panelApi, params, children }: { panelApi: TicketHost; params: PanelParams; children: ReactNode }) {
   const group: LinkGroup = params.group ?? '1'
   const linked = group !== 'none'
   const groupSymbol = useWorkspaceStore((state) => (linked ? state.groups[group].symbol : null))
@@ -71,7 +76,7 @@ function PanelScope({ panelApi, params, children }: { panelApi: DockviewPanelApi
  * - "Khóa mã": bỏ qua thay đổi của nhóm.
  * Đổi mã ngay trên phiếu thì cả nhóm đổi theo (trừ khi đang khóa mã).
  */
-function TicketBody({ panelApi, params }: { panelApi: DockviewPanelApi; params: PanelParams }) {
+export function TicketBody({ panelApi, params, mini = false }: { panelApi: TicketHost; params: PanelParams; mini?: boolean }) {
   const outer = useSymbolScope()
   const locked = params.locked === true
   const [ticketSymbol, setTicketSymbol] = useState(outer.symbol)
@@ -146,6 +151,18 @@ function TicketBody({ panelApi, params }: { panelApi: DockviewPanelApi; params: 
             <Lock className="size-3.5" aria-hidden /> Khóa mã {ticketSymbol}
           </Label>
         </div>
+        {!mini && supportsMiniTicket() && (
+          <Button
+            size="xs"
+            variant="outline"
+            className="ml-auto"
+            onClick={() => openMiniTicket(params.group ?? '1')}
+            title="Mở phiếu lệnh nhỏ luôn nổi trên các cửa sổ khác (Document Picture-in-Picture)"
+            data-testid="open-mini-ticket"
+          >
+            <PictureInPicture2 aria-hidden /> Phiếu mini nổi trên cùng
+          </Button>
+        )}
         {held && (
           <p role="status" className="bg-status-warning-bg text-status-warning flex items-center gap-2 rounded px-2 py-0.5 text-xs" data-testid="draft-held">
             Bản nháp {ticketSymbol} · nhóm đang ở {held}

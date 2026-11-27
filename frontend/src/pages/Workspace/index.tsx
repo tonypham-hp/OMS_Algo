@@ -28,6 +28,7 @@ import { ScreenPickerDialog } from './ScreenPickerDialog'
 import { WorkspaceActionsContext, type WorkspaceActions } from '@/workspace/workspaceContext'
 import { GroupActions } from './GroupActions'
 import { LayoutMenu } from './LayoutMenu'
+import { MiniTicketHost } from './MiniTicketWindow'
 import { PanelTab } from './PanelTab'
 
 /** Theme dockview riêng: biến --dv-* trỏ về token (src/styles/workspace.css), tự theo 4 theme và bảng màu mù màu. */
@@ -247,6 +248,7 @@ export default function Workspace() {
       <div className="border-border min-h-0 flex-1 overflow-hidden rounded-lg border" data-demo-id="workspace-dock">
         <WorkspaceActionsContext.Provider value={actions}>
           <WindowHotkeys apiRef={apiRef} />
+          <MiniTicketHost />
           <DockviewReact
             theme={OMS_DOCK_THEME}
             components={PANEL_COMPONENTS}
