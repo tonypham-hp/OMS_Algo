@@ -1,6 +1,15 @@
 import type { DockviewPanelApi } from 'dockview-react'
 import { useEffect, useState, type RefObject } from 'react'
 
+/**
+ * Nơi gắn overlay cho phần tử: body của cửa sổ chứa nó nếu là cửa sổ phụ (tách, phiếu mini); cửa sổ chính thì undefined
+ * (để Radix dùng mặc định). Dùng làm giá trị của PortalContainerContext.
+ */
+export function usePortalTarget(ref: RefObject<HTMLElement | null>, api?: Pick<DockviewPanelApi, 'onDidLocationChange'>): HTMLElement | undefined {
+  const owner = useOwnerDocument(ref, api)
+  return owner && owner !== document ? owner.body : undefined
+}
+
 /** Panel đang ở cửa sổ tách (dockview popout) hay không; cập nhật khi tách ra / đưa về. */
 export function useInPopout(api: Pick<DockviewPanelApi, 'location' | 'onDidLocationChange'>): boolean {
   const [inPopout, setInPopout] = useState(api.location.type === 'popout')

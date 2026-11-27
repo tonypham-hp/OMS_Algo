@@ -13,7 +13,9 @@ export function focusPanel(panel: IDockviewPanel, selector?: string) {
   panel.api.setActive()
   requestAnimationFrame(() =>
     requestAnimationFrame(() => {
-      const frame = document.querySelector<HTMLElement>(`[data-ws-panel="${CSS.escape(panel.id)}"]`)
+      // Panel có thể đang ở cửa sổ tách (Đợt 10B): tìm trong document chứa nhóm của nó.
+      const owner = panel.group.element.ownerDocument
+      const frame = owner.querySelector<HTMLElement>(`[data-ws-panel="${CSS.escape(panel.id)}"]`)
       const target = selector ? frame?.querySelector<HTMLElement>(selector) : null
       ;(target ?? frame)?.focus()
     }),

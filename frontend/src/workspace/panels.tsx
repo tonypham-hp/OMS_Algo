@@ -257,7 +257,7 @@ function PanelBody({ kind, panelApi, params }: { kind: PanelKind; panelApi: Dock
 function makePanel(kind: PanelKind): FunctionComponent<IDockviewPanelProps<PanelParams>> {
   function WorkspacePanel({ api, params }: IDockviewPanelProps<PanelParams>) {
     return (
-      <PanelFrame kind={kind} panelId={api.id}>
+      <PanelFrame kind={kind} api={api}>
         <PanelScope panelApi={api} params={params}>
           <PanelBody kind={kind} panelApi={api} params={params} />
         </PanelScope>

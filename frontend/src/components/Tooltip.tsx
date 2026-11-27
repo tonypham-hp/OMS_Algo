@@ -28,8 +28,13 @@ export function Tooltip({ content, children, focusable = true, className, conten
   const tipRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
+  /** document chứa phần tử (cửa sổ chính, cửa sổ tách, phiếu mini – Đợt 10B): tooltip gắn và nghe phím ở đúng cửa sổ đó. */
+  const [owner, setOwner] = useState<Document | null>(null)
 
-  const show = useCallback(() => setOpen(true), [])
+  const show = useCallback(() => {
+    setOwner(triggerRef.current?.ownerDocument ?? document)
+    setOpen(true)
+  }, [])
   const hide = useCallback(() => {
     setOpen(false)
     setPosition(null)
@@ -41,9 +46,10 @@ export function Tooltip({ content, children, focusable = true, className, conten
     const tip = tipRef.current?.getBoundingClientRect()
     if (!trigger || !tip) return
     const below = trigger.bottom + GAP
-    const top = below + tip.height + EDGE > window.innerHeight ? Math.max(trigger.top - GAP - tip.height, EDGE) : below
+    const view = triggerRef.current?.ownerDocument.defaultView ?? window
+    const top = below + tip.height + EDGE > view.innerHeight ? Math.max(trigger.top - GAP - tip.height, EDGE) : below
     const centered = trigger.left + trigger.width / 2 - tip.width / 2
-    const left = Math.min(Math.max(centered, EDGE), window.innerWidth - tip.width - EDGE)
+    const left = Math.min(Math.max(centered, EDGE), view.innerWidth - tip.width - EDGE)
     setPosition((previous) => (previous?.top === top && previous.left === left ? previous : { top, left }))
   }, [])
 
@@ -52,7 +58,9 @@ export function Tooltip({ content, children, focusable = true, className, conten
   }, [open, place])
 
   useEffect(() => {
-    if (!open) return
+    if (!open || !owner) return
+    const doc = owner
+    const view = doc.defaultView ?? window
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         // Chỉ đóng tooltip, không để Esc đóng luôn hộp thoại phía sau.
@@ -61,15 +69,15 @@ export function Tooltip({ content, children, focusable = true, className, conten
       }
     }
     // Tab tới phần tử ngoài màn hình làm trang cuộn: đặt lại vị trí thay vì đóng, để tooltip vẫn đọc được.
-    document.addEventListener('keydown', onKey, true)
-    window.addEventListener('scroll', place, true)
-    window.addEventListener('resize', place)
+    doc.addEventListener('keydown', onKey, true)
+    view.addEventListener('scroll', place, true)
+    view.addEventListener('resize', place)
     return () => {
-      document.removeEventListener('keydown', onKey, true)
-      window.removeEventListener('scroll', place, true)
-      window.removeEventListener('resize', place)
+      doc.removeEventListener('keydown', onKey, true)
+      view.removeEventListener('scroll', place, true)
+      view.removeEventListener('resize', place)
     }
-  }, [open, hide, place])
+  }, [open, owner, hide, place])
 
   return (
     <>
@@ -87,6 +95,7 @@ export function Tooltip({ content, children, focusable = true, className, conten
         {children}
       </span>
       {open &&
+        owner &&
         createPortal(
           <div
             ref={tipRef}
@@ -100,7 +109,7 @@ export function Tooltip({ content, children, focusable = true, className, conten
           >
             {content}
           </div>,
-          document.body,
+          owner.body,
         )}
     </>
   )

@@ -10,14 +10,16 @@ export function isDialogOpen(doc: Pick<Document, 'querySelector'> = document): b
 
 /**
  * Phím tắt có bị bỏ qua cho sự kiện này không: đang gõ trong ô nhập / textarea / select / contenteditable,
- * focus đang ở combobox, menu, danh sách chọn, hoặc đang có hộp thoại mở.
+ * focus đang ở combobox, menu, danh sách chọn, hoặc đang có hộp thoại mở – trong CHÍNH cửa sổ nhận phím
+ * (cửa sổ chính hay cửa sổ tách, Đợt 10B).
  */
-export function shouldIgnoreHotkey(event: Pick<KeyboardEvent, 'target'>, doc: Pick<Document, 'querySelector'> = document): boolean {
+export function shouldIgnoreHotkey(event: Pick<KeyboardEvent, 'target'>, doc?: Pick<Document, 'querySelector'>): boolean {
   const target = event.target as HTMLElement | null
+  const owner = doc ?? (target as Node | null)?.ownerDocument ?? document
   if (isEditableTarget(target)) return true
   const role = target?.getAttribute?.('role')
   if (role && TYPING_ROLES.has(role)) return true
-  return isDialogOpen(doc)
+  return isDialogOpen(owner)
 }
 
 /** Phím tắt chỉ bật khi người dùng không tắt trong Cài đặt và không đang chạy Demo (Demo có phím riêng). */
